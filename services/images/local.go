@@ -178,3 +178,27 @@ func (l *local) Delete(ctx context.Context, req *imagesapi.DeleteImageRequest, _
 
 	return &ptypes.Empty{}, nil
 }
+
+func (l *local) EncryptImage(ctx context.Context, req *imagesapi.EncryptImageRequest, _ ...grpc.CallOption) (*imagesapi.EncryptImageResponse, error) {
+	log.G(ctx).WithField("name", req.Name).Debugf("encrypt image")
+
+	var resp       imagesapi.EncryptImageResponse
+
+	encrypted, err := l.store.EncryptImage(ctx, req.Name, &images.EncryptConfig{
+		Recipients: req.Ec.Recipients,
+		GPGPubRingFile: req.Ec.Gpgpubkeyring,
+	})
+	if err != nil {
+		return nil, errdefs.ToGRPC(err)
+	}
+	resp.Image = imageToProto(&encrypted)
+
+	//if err := l.publisher.Publish(ctx, "/images/update", &eventstypes.ImageUpdate{
+	//	Name:   resp.Image.Name,
+	//	Labels: resp.Image.Labels,
+	//}); err != nil {
+	//	return nil, err
+	//}
+
+	return &resp, nil
+}
