@@ -82,3 +82,7 @@ func (s *service) Update(ctx context.Context, req *imagesapi.UpdateImageRequest)
 func (s *service) Delete(ctx context.Context, req *imagesapi.DeleteImageRequest) (*ptypes.Empty, error) {
 	return s.local.Delete(ctx, req)
 }
+
+func (s *service) EncryptImage(ctx context.Context, req *imagesapi.EncryptImageRequest) (*imagesapi.EncryptImageResponse, error) {
+	return s.local.EncryptImage(ctx, req)
+}
