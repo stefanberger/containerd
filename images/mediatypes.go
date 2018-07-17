@@ -22,8 +22,10 @@ package images
 // here for clarity.
 const (
 	MediaTypeDockerSchema2Layer            = "application/vnd.docker.image.rootfs.diff.tar"
+	MediaTypeDockerSchema2LayerPGP         = "application/vnd.docker.image.rootfs.diff.tar+pgp"
 	MediaTypeDockerSchema2LayerForeign     = "application/vnd.docker.image.rootfs.foreign.diff.tar"
 	MediaTypeDockerSchema2LayerGzip        = "application/vnd.docker.image.rootfs.diff.tar.gzip"
+	MediaTypeDockerSchema2LayerGzipPGP     = "application/vnd.docker.image.rootfs.diff.tar.gzip+pgp"
 	MediaTypeDockerSchema2LayerForeignGzip = "application/vnd.docker.image.rootfs.foreign.diff.tar.gzip"
 	MediaTypeDockerSchema2Config           = "application/vnd.docker.container.image.v1+json"
 	MediaTypeDockerSchema2Manifest         = "application/vnd.docker.distribution.manifest.v2+json"
