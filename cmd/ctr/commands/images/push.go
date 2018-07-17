@@ -18,6 +18,7 @@ package images
 
 import (
 	gocontext "context"
+	"fmt"
 	"os"
 	"sync"
 	"text/tabwriter"
@@ -58,6 +59,9 @@ var pushCommand = cli.Command{
 		Name:  "manifest-type",
 		Usage: "media type of manifest digest",
 		Value: ocispec.MediaTypeImageManifest,
+	}, cli.StringSliceFlag{
+		Name:  "recipient",
+		Usage: "Recipient of the image is the person who can decrypt it",
 	}),
 	Action: func(context *cli.Context) error {
 		var (
@@ -91,6 +95,23 @@ var pushCommand = cli.Command{
 				return errors.Wrap(err, "unable to resolve image to manifest")
 			}
 			desc = img.Target
+		}
+
+		var ec *images.EncryptConfig
+		if recipients := context.StringSlice("recipient"); len(recipients) > 0 {
+			gpgPubRingFile, err := images.ReadGPGPubRingFile()
+			if err != nil {
+				return err
+			}
+			ec = &images.EncryptConfig{
+				GPGPubRingFile: gpgPubRingFile,
+				Recipients:     recipients,
+			}
+			img, err := client.ImageService().EncryptImage(ctx, local, ec)
+			if err != nil {
+				return err
+			}
+			fmt.Printf("local: %s,  img.Name: %s", local, img.Name)
 		}
 
 		resolver, err := commands.GetResolver(ctx, context)

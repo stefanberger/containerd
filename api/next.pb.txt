@@ -2253,6 +2253,55 @@ file {
       json_name: "sync"
     }
   }
+  message_type {
+    name: "EncryptConfig"
+    field {
+      name: "recipients"
+      number: 1
+      label: LABEL_REPEATED
+      type: TYPE_STRING
+      json_name: "recipients"
+    }
+    field {
+      name: "gpgpubkeyring"
+      number: 2
+      label: LABEL_OPTIONAL
+      type: TYPE_BYTES
+      json_name: "gpgpubkeyring"
+    }
+  }
+  message_type {
+    name: "EncryptImageRequest"
+    field {
+      name: "name"
+      number: 1
+      label: LABEL_OPTIONAL
+      type: TYPE_STRING
+      json_name: "name"
+    }
+    field {
+      name: "ec"
+      number: 2
+      label: LABEL_OPTIONAL
+      type: TYPE_MESSAGE
+      type_name: ".containerd.services.images.v1.EncryptConfig"
+      json_name: "ec"
+    }
+  }
+  message_type {
+    name: "EncryptImageResponse"
+    field {
+      name: "image"
+      number: 1
+      label: LABEL_OPTIONAL
+      type: TYPE_MESSAGE
+      type_name: ".containerd.services.images.v1.Image"
+      options {
+        65001: 0
+      }
+      json_name: "image"
+    }
+  }
   service {
     name: "Images"
     method {
@@ -2279,6 +2328,11 @@ file {
       name: "Delete"
       input_type: ".containerd.services.images.v1.DeleteImageRequest"
       output_type: ".google.protobuf.Empty"
+    }
+    method {
+      name: "EncryptImage"
+      input_type: ".containerd.services.images.v1.EncryptImageRequest"
+      output_type: ".containerd.services.images.v1.EncryptImageResponse"
     }
   }
   options {

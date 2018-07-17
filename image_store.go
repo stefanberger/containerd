@@ -18,6 +18,7 @@ package containerd
 
 import (
 	"context"
+	"fmt"
 
 	imagesapi "github.com/containerd/containerd/api/services/images/v1"
 	"github.com/containerd/containerd/api/types"
@@ -47,6 +48,22 @@ func (s *remoteImages) Get(ctx context.Context, name string) (images.Image, erro
 	}
 
 	return imageFromProto(resp.Image), nil
+}
+
+func (s *remoteImages) EncryptImage(ctx context.Context, name string, ec *images.EncryptConfig) (images.Image, error) {
+	fmt.Printf("image_store.go: EncryptImage() name=%s\n", name);
+	resp, err := s.client.EncryptImage(ctx, &imagesapi.EncryptImageRequest{
+		Name: name,
+		Ec: &imagesapi.EncryptConfig{
+			Recipients   : ec.Recipients,
+			Gpgpubkeyring: ec.GPGPubRingFile,
+		},
+	});
+	if err != nil {
+		return images.Image{}, errdefs.FromGRPC(err)
+	}
+
+	return imageFromProto(&resp.Image), nil
 }
 
 func (s *remoteImages) List(ctx context.Context, filters ...string) ([]images.Image, error) {
