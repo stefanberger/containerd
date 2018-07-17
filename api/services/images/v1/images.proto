@@ -39,6 +39,9 @@ service Images {
 
 	// Delete deletes the image by name.
 	rpc Delete(DeleteImageRequest) returns (google.protobuf.Empty);
+
+	// Encyrpt an image given its name
+	rpc EncryptImage(EncryptImageRequest) returns (EncryptImageResponse);
 }
 
 message Image {
@@ -122,3 +125,19 @@ message DeleteImageRequest {
 	// Default is false
 	bool sync = 2;
 }
+
+message EncryptConfig {
+	repeated string recipients = 1;
+	bytes gpgpubkeyring = 2;
+}
+
+message EncryptImageRequest {
+	string name = 1;
+
+	EncryptConfig ec = 2;
+}
+
+message EncryptImageResponse {
+	Image image = 1 [(gogoproto.nullable) = false];
+}
+
