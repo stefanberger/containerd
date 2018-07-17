@@ -17,8 +17,10 @@
 package images
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"time"
 
@@ -27,6 +29,7 @@ import (
 	"github.com/containerd/containerd/log"
 	"github.com/containerd/containerd/platforms"
 	digest "github.com/opencontainers/go-digest"
+	specs "github.com/opencontainers/image-spec/specs-go"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 )
@@ -83,6 +86,8 @@ type Store interface {
 	Update(ctx context.Context, image Image, fieldpaths ...string) (Image, error)
 
 	Delete(ctx context.Context, name string, opts ...DeleteOpt) error
+
+	EncryptImage(ctx context.Context, name string, ec *EncryptConfig) (Image, error)
 }
 
 // TODO(stevvooe): Many of these functions make strong platform assumptions,
@@ -113,6 +118,7 @@ func (image *Image) RootFS(ctx context.Context, provider content.Provider, platf
 func (image *Image) Size(ctx context.Context, provider content.Provider, platform string) (int64, error) {
 	var size int64
 	return size, Walk(ctx, Handlers(HandlerFunc(func(ctx context.Context, desc ocispec.Descriptor) ([]ocispec.Descriptor, error) {
+		fmt.Printf("images/image: Size()")
 		if desc.Size < 0 {
 			return nil, errors.Errorf("invalid size %v in %v (%v)", desc.Size, desc.Digest, desc.MediaType)
 		}
@@ -309,6 +315,175 @@ func Check(ctx context.Context, provider content.Provider, image ocispec.Descrip
 	return true, required, present, missing, nil
 }
 
+// encryptLayer encryts a single layer and writes the encrypted layer back into storage
+func encryptLayer(ctx context.Context, provider content.Store, desc ocispec.Descriptor, ec *EncryptConfig) (ocispec.Descriptor, error) {
+	plain, err := content.ReadBlob(ctx, provider, desc);
+	if err != nil {
+		return ocispec.Descriptor{}, err
+	}
+	//fmt.Printf("   ... read %d bytes of layer %s data\n", len(p), desc.Digest)
+	// now we should encrypt
+
+	p, err := Encrypt(ec, plain)
+	if err != nil {
+		return ocispec.Descriptor{}, err
+	}
+
+	size := int64(len(p))
+	d := digest.FromBytes(p)
+
+	encDesc := ocispec.Descriptor{
+		Digest:   d,
+		Size:     size,
+		Platform: desc.Platform,
+	}
+	encDesc.Annotations = make(map[string]string)
+	encDesc.Annotations["org.opencontainers.image.pgp.keys"] = "foo-bar"
+
+	switch (desc.MediaType) {
+	case MediaTypeDockerSchema2LayerGzip:
+		encDesc.MediaType = MediaTypeDockerSchema2LayerGzipPGP
+	case MediaTypeDockerSchema2Layer:
+		encDesc.MediaType = MediaTypeDockerSchema2LayerPGP
+	default:
+		return ocispec.Descriptor{}, fmt.Errorf("Unsupporter layer MediaType: %s\n", desc.MediaType)
+	}
+
+	fmt.Printf("   ... writing layer %s in encrypted form as %s\n", desc.Digest, d)
+	ref := fmt.Sprintf("layer-%s", encDesc.Digest.String())
+	content.WriteBlob(ctx, provider, ref, bytes.NewReader(p), encDesc);
+
+	return encDesc, nil
+}
+
+// Encrypt all the Children of a given descriptor
+func encryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descriptor, ec *EncryptConfig) (ocispec.Descriptor, bool, error) {
+	//fmt.Printf("metadata/image.go EncryptChildren(): Getting Children of %s [%s]\n", desc.MediaType, desc.Digest)
+	children, err := Children(ctx, cs, desc)
+	if err != nil {
+		return ocispec.Descriptor{}, false, err
+	}
+	//fmt.Printf("metadata/image.go EncryptChildren(): got %d children\n", len(children))
+	var newLayers []ocispec.Descriptor
+	var config ocispec.Descriptor
+	modified := false;
+
+	for _, child := range children {
+		// we only encrypt child layers and have to update their parents if encyrption happened
+		//fmt.Printf("   child : %s\n", child.MediaType)
+		switch child.MediaType {
+		case MediaTypeDockerSchema2Config:
+			config = child
+		case MediaTypeDockerSchema2LayerGzip,MediaTypeDockerSchema2Layer:
+			//fmt.Printf("   ... a layer to encrypt\n")
+			nl, err := encryptLayer(ctx, cs, child, ec)
+			if err != nil {
+				return ocispec.Descriptor{}, false, err
+			}
+			modified = true
+			newLayers = append(newLayers, nl)
+		default:
+			return ocispec.Descriptor{}, false, fmt.Errorf("Bad/unhandled MediaType %s in encryptChildren\n", child.MediaType)
+		}
+	}
+
+	if len(newLayers) > 0 {
+		nM := ocispec.Manifest {
+			Versioned: specs.Versioned{
+				SchemaVersion: 2,
+			},
+			Config : config,
+			Layers: newLayers,
+		}
+
+		mb, err := json.MarshalIndent(nM, "", "   ")
+		if err != nil {
+			return ocispec.Descriptor{}, false, errors.Wrap(err, "failed to marshal image")
+		}
+
+		nDesc := ocispec.Descriptor{
+			MediaType: MediaTypeDockerSchema2Manifest,//ocispec.MediaTypeImageManifest,//MediaTypeDockerSchema2Manifest,
+			Size:      int64(len(mb)),
+			Digest:    digest.Canonical.FromBytes(mb),
+			Platform:  desc.Platform,
+		}
+		labels := map[string]string{}
+		labels["containerd.io/gc.ref.content.0"] = nM.Config.Digest.String()
+		for i, ch := range nM.Layers {
+			labels[fmt.Sprintf("containerd.io/gc.ref.content.%d", i+1)] = ch.Digest.String()
+		}
+
+		fmt.Printf("   old desc %s now written as %s\n", desc.Digest, nDesc.Digest)
+
+		ref := fmt.Sprintf("manifest-%s", nDesc.Digest.String())
+		//, content.WithLabels(labels)
+		if err := content.WriteBlob(ctx, cs, ref, bytes.NewReader(mb), nDesc, content.WithLabels(labels)); err != nil {
+			return ocispec.Descriptor{}, false, errors.Wrap(err, "failed to write config")
+		}
+		return nDesc, true, nil
+	}
+
+	return ocispec.Descriptor{}, modified, nil
+}
+
+// EncryptChildren encrypts the children of a top level manifest list
+func EncryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descriptor, ec *EncryptConfig) (ocispec.Descriptor, bool, error) {
+	if desc.MediaType != MediaTypeDockerSchema2ManifestList {
+		return ocispec.Descriptor{}, false, fmt.Errorf("Wrong media type %s passed. Need %s.\n", desc.MediaType, MediaTypeDockerSchema2ManifestList)
+	}
+	// read the index; if any layer is encrypted and any manifests change we will need to rewrite it
+	b, err := content.ReadBlob(ctx, cs, desc)
+	if err != nil {
+		return ocispec.Descriptor{}, false, err
+	}
+
+	var index ocispec.Index
+	if err := json.Unmarshal(b, &index); err != nil {
+		return ocispec.Descriptor{}, false, err
+	}
+
+	var newManifests []ocispec.Descriptor
+	modified := false
+	for _, manifest := range index.Manifests {
+		newManifest, m, err := encryptChildren(ctx, cs, manifest, ec)
+		if err != nil {
+			return ocispec.Descriptor{}, false, err
+		}
+		newManifests = append(newManifests, newManifest)
+		if m {
+			modified = true
+		}
+	}
+
+	if (modified) {
+		// we need to update the index
+		newIndex := ocispec.Index{
+			Versioned: index.Versioned,
+			Manifests: newManifests,
+		}
+		mb, err := json.MarshalIndent(newIndex, "", "   ")
+		if err != nil {
+			return ocispec.Descriptor{}, false, errors.Wrap(err, "failed to marshal index")
+		}
+
+		nDesc := ocispec.Descriptor{
+			MediaType: desc.MediaType,
+			Size:      int64(len(mb)),
+			Digest:    digest.Canonical.FromBytes(mb),
+		}
+		fmt.Printf("   old Index %s now written as %s\n", desc.Digest, nDesc.Digest)
+
+		ref := fmt.Sprintf("index-%s", nDesc.Digest.String())
+		if err := content.WriteBlob(ctx, cs, ref, bytes.NewReader(mb), nDesc); err != nil {
+			return ocispec.Descriptor{}, false, errors.Wrap(err, "failed to write index")
+		}
+		return nDesc, true, nil
+	}
+
+	return desc, false, nil
+}
+
+
 // Children returns the immediate children of content described by the descriptor.
 func Children(ctx context.Context, provider content.Provider, desc ocispec.Descriptor) ([]ocispec.Descriptor, error) {
 	var descs []ocispec.Descriptor
@@ -341,6 +516,7 @@ func Children(ctx context.Context, provider content.Provider, desc ocispec.Descr
 
 		descs = append(descs, index.Manifests...)
 	case MediaTypeDockerSchema2Layer, MediaTypeDockerSchema2LayerGzip,
+		MediaTypeDockerSchema2LayerPGP, MediaTypeDockerSchema2LayerGzipPGP,
 		MediaTypeDockerSchema2LayerForeign, MediaTypeDockerSchema2LayerForeignGzip,
 		MediaTypeDockerSchema2Config, ocispec.MediaTypeImageConfig,
 		ocispec.MediaTypeImageLayer, ocispec.MediaTypeImageLayerGzip,
@@ -378,7 +554,7 @@ func RootFS(ctx context.Context, provider content.Provider, configDesc ocispec.D
 func IsCompressedDiff(ctx context.Context, mediaType string) (bool, error) {
 	switch mediaType {
 	case ocispec.MediaTypeImageLayer, MediaTypeDockerSchema2Layer:
-	case ocispec.MediaTypeImageLayerGzip, MediaTypeDockerSchema2LayerGzip:
+	case ocispec.MediaTypeImageLayerGzip, MediaTypeDockerSchema2LayerGzip, MediaTypeDockerSchema2LayerGzipPGP:
 		return true, nil
 	default:
 		// Still apply all generic media types *.tar[.+]gzip and *.tar

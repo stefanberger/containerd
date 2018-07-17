@@ -45,6 +45,7 @@ func NewImageStore(db *DB) images.Store {
 }
 
 func (s *imageStore) Get(ctx context.Context, name string) (images.Image, error) {
+	fmt.Printf("metadata/images.go: Get() name=%s\n",name)
 	var image images.Image
 
 	namespace, err := namespaces.NamespaceRequired(ctx)
@@ -74,6 +75,92 @@ func (s *imageStore) Get(ctx context.Context, name string) (images.Image, error)
 	}
 
 	return image, nil
+}
+
+func (s *imageStore) EncryptImage(ctx context.Context, name string, ec *images.EncryptConfig) (images.Image, error) {
+	fmt.Printf("metadata/images.go: EncryptImage() name=%s\n", name)
+	var image images.Image
+
+	namespace, err := namespaces.NamespaceRequired(ctx)
+	if err != nil {
+		return images.Image{}, err
+	}
+
+	if err := view(ctx, s.db, func(tx *bolt.Tx) error {
+		bkt := getImagesBucket(tx, namespace)
+		if bkt == nil {
+			return errors.Wrapf(errdefs.ErrNotFound, "image %q", name)
+		}
+
+		ibkt := bkt.Bucket([]byte(name))
+		if ibkt == nil {
+			return errors.Wrapf(errdefs.ErrNotFound, "image %q", name)
+		}
+
+		image.Name = name
+		if err := readImage(&image, ibkt); err != nil {
+			return errors.Wrapf(err, "image %q", name)
+		}
+
+		return nil
+	}); err != nil {
+		return image, err
+	}
+
+	cs := s.db.ContentStore()
+	fmt.Printf("metadata/images.go: cs = %v\n",cs)
+	fmt.Printf("  high level image.Target is of MediaType %s\n", image.Target.MediaType)
+	newSpec, modified, err := images.EncryptChildren(ctx, cs, image.Target, ec)
+	if err != nil {
+		return image, err
+	}
+	if !modified {
+		return image, nil
+	}
+
+	image.Target = newSpec
+	fmt.Printf("newSpec.Digest: %s\n", newSpec.Digest)
+	image.UpdatedAt = time.Now().UTC()
+
+	if err := update(ctx, s.db, func(tx *bolt.Tx) error {
+		if err := validateImage(&image); err != nil {
+			return err
+		}
+
+		//bkt := getImagesBucket(tx, namespace)
+		//if bkt == nil {
+		//	return errors.Wrapf(errdefs.ErrNotFound, "image %q", name)
+		//}
+
+		//err = bkt.DeleteBucket([]byte(name))
+		//if err == bolt.ErrBucketNotFound {
+		//	return errors.Wrapf(errdefs.ErrNotFound, "image %q", name)
+		//}
+
+		bkt, err := createImagesBucket(tx, namespace)
+		if err != nil {
+			return err
+		}
+
+		name = image.Name + ".enc"
+		ibkt, err := bkt.CreateBucket([]byte(name))
+		if err != nil {
+			if err != bolt.ErrBucketExists {
+				return err
+			}
+
+			return errors.Wrapf(errdefs.ErrAlreadyExists, "image %q", image.Name)
+		}
+
+		//return nil
+		return writeImage(ibkt, &image)
+	}); err != nil {
+		return image, err
+	}
+	fmt.Printf("updated spec: %v, modified: %v\n", newSpec, modified)
+
+	return image, nil
+
 }
 
 func (s *imageStore) List(ctx context.Context, fs ...string) ([]images.Image, error) {
