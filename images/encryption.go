@@ -19,6 +19,7 @@ import (
 	"bytes"
 	"fmt"
         "io/ioutil"
+	"net/mail"
 	"strings"
 
 	"github.com/mitchellh/go-homedir"
@@ -59,17 +60,46 @@ func createEntityList(ec *EncryptConfig) (openpgp.EntityList, error) {
 		return nil, err
 	}
 
+	rSet := make(map[string]int)
+	for _, r := range ec.Recipients {
+		rSet[r] = 0
+	}
+
 	var filteredList openpgp.EntityList
 	for _, entity := range entityList {
 		for k, _ := range entity.Identities {
 			fmt.Printf("k = %s\n",k)
+			addr, err := mail.ParseAddress(k)
+			if err != nil {
+				return nil, err
+			}
 			for _, r := range ec.Recipients {
-				if strings.Contains(k, r) {
+				if strings.Compare(addr.Name, r) == 0 || strings.Compare(addr.Address, r) == 0 {
 					fmt.Printf(" TAKING key of %s\n", k)
 					filteredList = append(filteredList, entity)
+					rSet[r] = rSet[r] + 1
 				}
 			}
 		}
+	}
+
+	// make sure we found keys for all the Recipients...
+	var buffer bytes.Buffer
+	notFound := false;
+	buffer.WriteString("No key found for the following recipients: ")
+
+	for k, v := range rSet {
+		if v == 0 {
+			if notFound {
+				buffer.WriteString(", ")
+			}
+			buffer.WriteString(k)
+			notFound = true;
+		}
+	}
+
+	if notFound {
+		return nil, fmt.Errorf(buffer.String())
 	}
 
 	return filteredList, nil
@@ -80,6 +110,9 @@ func Encrypt(ec *EncryptConfig, data []byte) ([]byte, error) {
 	filteredList, err := createEntityList(ec)
 	if err != nil {
 		return nil, err
+	}
+	if len(filteredList) == 0 {
+		return nil, fmt.Errorf("No keys were found to encrypt message to.\n")
 	}
 
 	buf := new(bytes.Buffer)
