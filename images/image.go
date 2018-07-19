@@ -88,7 +88,7 @@ type Store interface {
 
 	Delete(ctx context.Context, name string, opts ...DeleteOpt) error
 
-	EncryptImage(ctx context.Context, name string, ec *EncryptConfig) (Image, error)
+	EncryptImage(ctx context.Context, name, newName string, ec *EncryptConfig) (Image, error)
 }
 
 // TODO(stevvooe): Many of these functions make strong platform assumptions,
@@ -119,7 +119,6 @@ func (image *Image) RootFS(ctx context.Context, provider content.Provider, platf
 func (image *Image) Size(ctx context.Context, provider content.Provider, platform platforms.MatchComparer) (int64, error) {
 	var size int64
 	return size, Walk(ctx, Handlers(HandlerFunc(func(ctx context.Context, desc ocispec.Descriptor) ([]ocispec.Descriptor, error) {
-		fmt.Printf("images/image: Size()")
 		if desc.Size < 0 {
 			return nil, errors.Errorf("invalid size %v in %v (%v)", desc.Size, desc.Digest, desc.MediaType)
 		}
