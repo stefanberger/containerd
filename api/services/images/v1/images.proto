@@ -133,8 +133,9 @@ message EncryptConfig {
 
 message EncryptImageRequest {
 	string name = 1;
+	string newName = 2;
 
-	EncryptConfig ec = 2;
+	EncryptConfig ec = 3;
 }
 
 message EncryptImageResponse {
