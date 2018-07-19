@@ -2280,8 +2280,15 @@ file {
       json_name: "name"
     }
     field {
-      name: "ec"
+      name: "newName"
       number: 2
+      label: LABEL_OPTIONAL
+      type: TYPE_STRING
+      json_name: "newName"
+    }
+    field {
+      name: "ec"
+      number: 3
       label: LABEL_OPTIONAL
       type: TYPE_MESSAGE
       type_name: ".containerd.services.images.v1.EncryptConfig"

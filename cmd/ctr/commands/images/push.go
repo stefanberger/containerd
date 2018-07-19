@@ -107,7 +107,7 @@ var pushCommand = cli.Command{
 				GPGPubRingFile: gpgPubRingFile,
 				Recipients:     recipients,
 			}
-			img, err := client.ImageService().EncryptImage(ctx, local, ec)
+			img, err := client.ImageService().EncryptImage(ctx, local, local, ec)
 			if err != nil {
 				return err
 			}

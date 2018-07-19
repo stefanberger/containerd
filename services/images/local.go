@@ -184,7 +184,7 @@ func (l *local) EncryptImage(ctx context.Context, req *imagesapi.EncryptImageReq
 
 	var resp       imagesapi.EncryptImageResponse
 
-	encrypted, err := l.store.EncryptImage(ctx, req.Name, &images.EncryptConfig{
+	encrypted, err := l.store.EncryptImage(ctx, req.Name, req.NewName, &images.EncryptConfig{
 		Recipients: req.Ec.Recipients,
 		GPGPubRingFile: req.Ec.Gpgpubkeyring,
 	})
