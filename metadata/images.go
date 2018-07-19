@@ -77,7 +77,7 @@ func (s *imageStore) Get(ctx context.Context, name string) (images.Image, error)
 	return image, nil
 }
 
-func (s *imageStore) EncryptImage(ctx context.Context, name string, ec *images.EncryptConfig) (images.Image, error) {
+func (s *imageStore) EncryptImage(ctx context.Context, name, newName string, ec *images.EncryptConfig) (images.Image, error) {
 	fmt.Printf("metadata/images.go: EncryptImage() name=%s\n", name)
 	var image images.Image
 
@@ -119,7 +119,9 @@ func (s *imageStore) EncryptImage(ctx context.Context, name string, ec *images.E
 	}
 
 	image.Target = newSpec
+	image.Name = newName
 	fmt.Printf("newSpec.Digest: %s\n", newSpec.Digest)
+	fmt.Printf("newName: %s\n", newName)
 	image.UpdatedAt = time.Now().UTC()
 
 	if err := update(ctx, s.db, func(tx *bolt.Tx) error {
@@ -142,8 +144,7 @@ func (s *imageStore) EncryptImage(ctx context.Context, name string, ec *images.E
 			return err
 		}
 
-		name = image.Name + ".enc"
-		ibkt, err := bkt.CreateBucket([]byte(name))
+		ibkt, err := bkt.CreateBucket([]byte(image.Name))
 		if err != nil {
 			if err != bolt.ErrBucketExists {
 				return err
