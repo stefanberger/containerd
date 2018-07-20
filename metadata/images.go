@@ -77,7 +77,9 @@ func (s *imageStore) Get(ctx context.Context, name string) (images.Image, error)
 	return image, nil
 }
 
-func (s *imageStore) EncryptImage(ctx context.Context, name, newName string, ec *images.EncryptConfig) (images.Image, error) {
+// cryptImage encrypts or decrypts an image with the given name and stores it either under the newName
+// or updates the existing one
+func (s *imageStore) cryptImage(ctx context.Context, name, newName string, cc *images.CryptoConfig, encrypt bool) (images.Image, error) {
 	fmt.Printf("metadata/images.go: EncryptImage() name=%s\n", name)
 	var image images.Image
 
@@ -110,7 +112,8 @@ func (s *imageStore) EncryptImage(ctx context.Context, name, newName string, ec 
 	cs := s.db.ContentStore()
 	fmt.Printf("metadata/images.go: cs = %v\n",cs)
 	fmt.Printf("  high level image.Target is of MediaType %s\n", image.Target.MediaType)
-	newSpec, modified, err := images.EncryptChildren(ctx, cs, image.Target, ec)
+	
+	newSpec, modified, err := images.CryptManifestList(ctx, cs, image.Target, cc, encrypt)
 	if err != nil {
 		return image, err
 	}
@@ -184,7 +187,14 @@ func (s *imageStore) EncryptImage(ctx context.Context, name, newName string, ec 
 	fmt.Printf("updated spec: %v, modified: %v\n", newSpec, modified)
 
 	return image, nil
+}
 
+func (s *imageStore) EncryptImage(ctx context.Context, name, newName string, cc *images.CryptoConfig) (images.Image, error) {
+	return s.cryptImage(ctx, name, newName, cc, true)
+}
+
+func (s *imageStore) DecryptImage(ctx context.Context, name, newName string, cc *images.CryptoConfig) (images.Image, error) {
+	return s.cryptImage(ctx, name, newName, cc, false)
 }
 
 func (s *imageStore) List(ctx context.Context, fs ...string) ([]images.Image, error) {
