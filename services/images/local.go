@@ -195,12 +195,12 @@ func (l *local) EncryptImage(ctx context.Context, req *imagesapi.EncryptImageReq
 	}
 	resp.Image = imageToProto(&encrypted)
 
-	//if err := l.publisher.Publish(ctx, "/images/update", &eventstypes.ImageUpdate{
-	//	Name:   resp.Image.Name,
-	//	Labels: resp.Image.Labels,
-	//}); err != nil {
-	//	return nil, err
-	//}
+	if err := l.publisher.Publish(ctx, "/images/update", &eventstypes.ImageUpdate{
+		Name:   resp.Image.Name,
+		Labels: resp.Image.Labels,
+	}); err != nil {
+		return nil, err
+	}
 
 	return &resp, nil
 }
