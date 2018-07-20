@@ -112,7 +112,7 @@ func (s *imageStore) cryptImage(ctx context.Context, name, newName string, cc *i
 	cs := s.db.ContentStore()
 	fmt.Printf("metadata/images.go: cs = %v\n",cs)
 	fmt.Printf("  high level image.Target is of MediaType %s\n", image.Target.MediaType)
-	
+
 	newSpec, modified, err := images.CryptManifestList(ctx, cs, image.Target, cc, encrypt)
 	if err != nil {
 		return image, err
@@ -198,7 +198,7 @@ func (s *imageStore) DecryptImage(ctx context.Context, name, newName string, cc 
 }
 
 func (s *imageStore) GetImageKeyIds(ctx context.Context, name string) ([]uint64, error) {
-	fmt.Printf("metadata/images.go: cryptImage() name=%s\n", name)
+	fmt.Printf("metadata/images.go: GetImageKeyIds() name=%s\n", name)
 	var image images.Image
 
 	namespace, err := namespaces.NamespaceRequired(ctx)
