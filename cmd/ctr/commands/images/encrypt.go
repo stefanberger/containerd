@@ -55,12 +55,11 @@ var encryptCommand = cli.Command{
 			return err
 		}
 		defer cancel()
-		img, err := client.ImageService().Get(ctx, local)
-		if err != nil {
-			return errors.Wrap(err, "unable to resolve image to manifest")
-		}
+		//img, err := client.ImageService().Get(ctx, local)
+		//if err != nil {
+		//	return errors.Wrap(err, "unable to resolve image to manifest")
+		//}
 
-		var ec *images.EncryptConfig
 		recipients := context.StringSlice("recipient")
 		if len(recipients) == 0 {
 			return errors.New("no recipients given -- nothing to do")			
@@ -70,11 +69,11 @@ var encryptCommand = cli.Command{
 		if err != nil {
 			return err
 		}
-		ec = &images.EncryptConfig{
+		cc := &images.CryptoConfig{
 			GPGPubRingFile: gpgPubRingFile,
 			Recipients:     recipients,
 		}
-		img, err = client.ImageService().EncryptImage(ctx, local, newName, ec)
+		_, err = client.ImageService().EncryptImage(ctx, local, newName, cc)
 		if err != nil {
 			return err
 		}
