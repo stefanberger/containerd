@@ -186,9 +186,32 @@ func (l *local) EncryptImage(ctx context.Context, req *imagesapi.EncryptImageReq
 
 	var resp       imagesapi.EncryptImageResponse
 
-	encrypted, err := l.store.EncryptImage(ctx, req.Name, req.NewName, &images.EncryptConfig{
-		Recipients: req.Ec.Recipients,
-		GPGPubRingFile: req.Ec.Gpgpubkeyring,
+	encrypted, err := l.store.EncryptImage(ctx, req.Name, req.NewName, &images.CryptoConfig{
+		Recipients: req.Cc.Recipients,
+		GPGPubRingFile: req.Cc.Gpgpubkeyring,
+	})
+	if err != nil {
+		return nil, errdefs.ToGRPC(err)
+	}
+	resp.Image = imageToProto(&encrypted)
+
+	if err := l.publisher.Publish(ctx, "/images/update", &eventstypes.ImageUpdate{
+		Name:   resp.Image.Name,
+		Labels: resp.Image.Labels,
+	}); err != nil {
+		return nil, err
+	}
+
+	return &resp, nil
+}
+
+func (l *local) DecryptImage(ctx context.Context, req *imagesapi.DecryptImageRequest, _ ...grpc.CallOption) (*imagesapi.DecryptImageResponse, error) {
+	log.G(ctx).WithField("name", req.Name).Debugf("decrypt image")
+
+	var resp       imagesapi.DecryptImageResponse
+
+	encrypted, err := l.store.DecryptImage(ctx, req.Name, req.NewName, &images.CryptoConfig{
+		// FIXME: missing parameters here
 	})
 	if err != nil {
 		return nil, errdefs.ToGRPC(err)
