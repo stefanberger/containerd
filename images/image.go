@@ -90,6 +90,7 @@ type Store interface {
 
 	EncryptImage(ctx context.Context, name, newName string, ec *CryptoConfig) (Image, error)
 	DecryptImage(ctx context.Context, name, newName string, ec *CryptoConfig) (Image, error)
+	GetImageKeyIds(ctx context.Context, name string) ([]uint64, error)
 }
 
 // TODO(stevvooe): Many of these functions make strong platform assumptions,
@@ -528,6 +529,36 @@ func CryptManifestList(ctx context.Context, cs content.Store, desc ocispec.Descr
 	}
 
 	return desc, false, nil
+}
+
+// Get the image key Ids necessary for decrypting an image
+// We determine the KeyIds starting with  the given OCI Decriptor, recursing to lower-level descriptors
+// until we get them from the layer descriptors
+func GetImageKeyIds(ctx context.Context, provider content.Provider, desc ocispec.Descriptor) ([]uint64, error) {
+	var keyids []uint64;
+
+	switch (desc.MediaType) {
+	case MediaTypeDockerSchema2ManifestList,
+		MediaTypeDockerSchema2Manifest, ocispec.MediaTypeImageManifest:
+		children, err := Children(ctx, provider, desc)
+		if err != nil {
+			return []uint64{}, err
+		}
+		for _, child := range children {
+			kids, err := GetImageKeyIds(ctx, provider, child)
+			if err != nil {
+				return []uint64{}, err
+			}
+			keyids = append(keyids, kids...)
+		}
+	case MediaTypeDockerSchema2Layer,MediaTypeDockerSchema2LayerGzip:
+		// nothing to do
+	case MediaTypeDockerSchema2LayerPGP,MediaTypeDockerSchema2LayerGzipPGP:
+		return GetKeyIds(desc)
+	default:
+		return []uint64{}, fmt.Errorf("GetImageKeyIds: Unhandled media type %s")
+	}
+	return keyids, nil
 }
 
 // Children returns the immediate children of content described by the descriptor.
