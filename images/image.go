@@ -488,8 +488,13 @@ func EncryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descrip
 		}
 		fmt.Printf("   old Index %s now written as %s\n", desc.Digest, nDesc.Digest)
 
+		labels := map[string]string{}
+		for i, m := range newIndex.Manifests {
+			labels[fmt.Sprintf("containerd.io/gc.ref.content.%d", i)] = m.Digest.String()
+		}
+
 		ref := fmt.Sprintf("index-%s", nDesc.Digest.String())
-		if err := content.WriteBlob(ctx, cs, ref, bytes.NewReader(mb), nDesc); err != nil {
+		if err := content.WriteBlob(ctx, cs, ref, bytes.NewReader(mb), nDesc, content.WithLabels(labels)); err != nil {
 			return ocispec.Descriptor{}, false, errors.Wrap(err, "failed to write index")
 		}
 		return nDesc, true, nil
