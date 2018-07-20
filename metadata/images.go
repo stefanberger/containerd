@@ -118,26 +118,50 @@ func (s *imageStore) EncryptImage(ctx context.Context, name, newName string, ec 
 		return image, nil
 	}
 
-	image.Target = newSpec
-	image.Name = newName
-	fmt.Printf("newSpec.Digest: %s\n", newSpec.Digest)
-	fmt.Printf("newName: %s\n", newName)
-	image.UpdatedAt = time.Now().UTC()
+	// if newName is either empty or equal to the existing name, it's an update
+	if (newName == "" || strings.Compare(image.Name, newName) == 0) {
+		if err := update(ctx, s.db, func(tx *bolt.Tx) error {
+			bkt, err := createImagesBucket(tx, namespace)
+			if err != nil {
+				return err
+			}
+
+			ibkt := bkt.Bucket([]byte(image.Name))
+			if ibkt == nil {
+				return errors.Wrapf(errdefs.ErrNotFound, "image %q", image.Name)
+			}
+
+			if err := validateImage(&image); err != nil {
+				return err
+			}
+
+			image.UpdatedAt = time.Now().UTC()
+			image.Target = newSpec
+			if err := writeImage(ibkt, &image); err != nil {
+				return err
+			}
+			// A reference to a piece of content has been removed,
+			// mark content store as dirty for triggering garbage
+			// collection
+			s.db.dirtyL.Lock()
+			s.db.dirtyCS = true
+			s.db.dirtyL.Unlock()
+
+			return nil
+		}); err != nil {
+			return image, err
+		}
+		return image, nil
+	}
 
 	if err := update(ctx, s.db, func(tx *bolt.Tx) error {
+		image.Target = newSpec
+		image.Name = newName
+		image.UpdatedAt = time.Now().UTC()
+
 		if err := validateImage(&image); err != nil {
 			return err
 		}
-
-		//bkt := getImagesBucket(tx, namespace)
-		//if bkt == nil {
-		//	return errors.Wrapf(errdefs.ErrNotFound, "image %q", name)
-		//}
-
-		//err = bkt.DeleteBucket([]byte(name))
-		//if err == bolt.ErrBucketNotFound {
-		//	return errors.Wrapf(errdefs.ErrNotFound, "image %q", name)
-		//}
 
 		bkt, err := createImagesBucket(tx, namespace)
 		if err != nil {
@@ -153,7 +177,6 @@ func (s *imageStore) EncryptImage(ctx context.Context, name, newName string, ec 
 			return errors.Wrapf(errdefs.ErrAlreadyExists, "image %q", image.Name)
 		}
 
-		//return nil
 		return writeImage(ibkt, &image)
 	}); err != nil {
 		return image, err
@@ -233,7 +256,7 @@ func (s *imageStore) Create(ctx context.Context, image images.Image) (images.Ima
 
 		image.CreatedAt = time.Now().UTC()
 		image.UpdatedAt = image.CreatedAt
-		return writeImage(ibkt, &image)
+		return writeImage(ibkt, &image);
 	}); err != nil {
 		return images.Image{}, err
 	}
