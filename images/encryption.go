@@ -25,6 +25,8 @@ import (
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/mitchellh/go-homedir"
 	"golang.org/x/crypto/openpgp"
+	"golang.org/x/crypto/openpgp/packet"
+
 )
 
 // EncryptConfig is the container image PGP encryption configuration holding
@@ -122,9 +124,12 @@ func Encrypt(cc *CryptoConfig, data []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer w.Close()
 
 	_, err = w.Write(data)
+	if err != nil {
+		return nil, err
+	}
+	err = w.Close();
 	if err != nil {
 		return nil, err
 	}
@@ -139,7 +144,25 @@ func Decrypt(cc *CryptoConfig, data []byte) ([]byte, error) {
 }
 
 // GetKeyIds 
-func GetKeyIds(desc ocispec.Descriptor) ([]uint64, error) {
-	return []uint64{}, fmt.Errorf("Missing implementation")
+func GetKeyIds(encData []byte, desc ocispec.Descriptor) ([]uint64, error) {
+	var keyids []uint64
+
+	r := bytes.NewReader(encData)
+
+	packets := packet.NewReader(r)
+ParsePackets:
+	for {
+		p, err := packets.Next()
+		if err != nil {
+			return []uint64{}, fmt.Errorf("yeek: %v\n", err)
+		}
+		switch p := p.(type) {
+		case *packet.EncryptedKey:
+			keyids = append(keyids, p.KeyId)
+		case *packet.SymmetricallyEncrypted:
+			break ParsePackets
+		}
+	}
+	return keyids, nil
 }
 
