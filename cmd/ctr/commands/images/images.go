@@ -48,6 +48,7 @@ var Command = cli.Command{
 		removeCommand,
 		setLabelsCommand,
 		encryptCommand,
+		decryptCommand,
 	},
 }
 
