@@ -42,6 +42,8 @@ service Images {
 
 	// Encyrpt an image given its name
 	rpc EncryptImage(EncryptImageRequest) returns (EncryptImageResponse);
+	// Decyrpt an image given its name
+	rpc DecryptImage(DecryptImageRequest) returns (DecryptImageResponse);
 }
 
 message Image {
@@ -126,7 +128,8 @@ message DeleteImageRequest {
 	bool sync = 2;
 }
 
-message EncryptConfig {
+// CryptConfig serves to pass keys used for encryption and decryption
+message CryptoConfig {
 	repeated string recipients = 1;
 	bytes gpgpubkeyring = 2;
 }
@@ -135,10 +138,21 @@ message EncryptImageRequest {
 	string name = 1;
 	string newName = 2;
 
-	EncryptConfig ec = 3;
+	CryptoConfig cc = 3;
 }
 
 message EncryptImageResponse {
+	Image image = 1 [(gogoproto.nullable) = false];
+}
+
+message DecryptImageRequest {
+	string name = 1;
+	string newName = 2;
+
+	CryptoConfig cc = 3;
+}
+
+message DecryptImageResponse {
 	Image image = 1 [(gogoproto.nullable) = false];
 }
 

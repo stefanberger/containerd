@@ -94,17 +94,16 @@ var pushCommand = cli.Command{
 			desc = img.Target
 		}
 
-		var ec *images.EncryptConfig
 		if recipients := context.StringSlice("recipient"); len(recipients) > 0 {
 			gpgPubRingFile, err := images.ReadGPGPubRingFile()
 			if err != nil {
 				return err
 			}
-			ec = &images.EncryptConfig{
+			cc := &images.CryptoConfig{
 				GPGPubRingFile: gpgPubRingFile,
 				Recipients:     recipients,
 			}
-			img, err := client.ImageService().EncryptImage(ctx, local, local, ec)
+			img, err := client.ImageService().EncryptImage(ctx, local, local, cc)
 			if err != nil {
 				return err
 			}
