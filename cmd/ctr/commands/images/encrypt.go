@@ -48,7 +48,7 @@ var encryptCommand = cli.Command{
 		if newName != "" {
 			fmt.Printf("Encrypting %s to %s\n", local, newName)
 		} else {
-			fmt.Printf("Encrypting %s and replacing it with the encrypted image\n");
+			fmt.Printf("Encrypting %s and replacing it with the encrypted image\n", local);
 		}
 		client, ctx, cancel, err := commands.NewClient(context)
 		if err != nil {
@@ -78,7 +78,6 @@ var encryptCommand = cli.Command{
 		if err != nil {
 			return err
 		}
-		fmt.Printf("local: %s,  img.Name: %s", local, img.Name)
 		return nil
 	},
 }
