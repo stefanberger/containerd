@@ -2348,6 +2348,26 @@ file {
       json_name: "image"
     }
   }
+  message_type {
+    name: "GetImageKeyIdsRequest"
+    field {
+      name: "name"
+      number: 1
+      label: LABEL_OPTIONAL
+      type: TYPE_STRING
+      json_name: "name"
+    }
+  }
+  message_type {
+    name: "GetImageKeyIdsResponse"
+    field {
+      name: "keyids"
+      number: 1
+      label: LABEL_REPEATED
+      type: TYPE_UINT64
+      json_name: "keyids"
+    }
+  }
   service {
     name: "Images"
     method {
@@ -2384,6 +2404,11 @@ file {
       name: "DecryptImage"
       input_type: ".containerd.services.images.v1.DecryptImageRequest"
       output_type: ".containerd.services.images.v1.DecryptImageResponse"
+    }
+    method {
+      name: "GetImageKeyIds"
+      input_type: ".containerd.services.images.v1.GetImageKeyIdsRequest"
+      output_type: ".containerd.services.images.v1.GetImageKeyIdsResponse"
     }
   }
   options {

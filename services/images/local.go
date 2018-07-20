@@ -225,3 +225,19 @@ func (l *local) DecryptImage(ctx context.Context, req *imagesapi.DecryptImageReq
 
 	return &resp, nil
 }
+
+func (l *local) GetImageKeyIds(ctx context.Context, req *imagesapi.GetImageKeyIdsRequest, _ ...grpc.CallOption) (*imagesapi.GetImageKeyIdsResponse, error) {
+	log.G(ctx).WithField("name", req.Name).Debugf("GetImageKeyIds")
+
+	var resp       imagesapi.GetImageKeyIdsResponse
+
+	keyids, err := l.store.GetImageKeyIds(ctx, req.Name)
+	if err != nil {
+		return nil, errdefs.ToGRPC(err)
+	}
+
+	resp.Keyids = keyids
+	return &resp, nil
+}
+
+
