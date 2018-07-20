@@ -333,8 +333,8 @@ func Check(ctx context.Context, provider content.Provider, image ocispec.Descrip
 }
 
 // encryptLayer encryts a single layer and writes the encrypted layer back into storage
-func cryptLayer(ctx context.Context, provider content.Store, desc ocispec.Descriptor, cc *CryptoConfig, encrypt bool) (ocispec.Descriptor, error) {
-	data, err := content.ReadBlob(ctx, provider, desc);
+func cryptLayer(ctx context.Context, cs content.Store, desc ocispec.Descriptor, cc *CryptoConfig, encrypt bool) (ocispec.Descriptor, error) {
+	data, err := content.ReadBlob(ctx, cs, desc);
 	if err != nil {
 		return ocispec.Descriptor{}, err
 	}
@@ -372,12 +372,12 @@ func cryptLayer(ctx context.Context, provider content.Store, desc ocispec.Descri
 	case MediaTypeDockerSchema2LayerPGP:
 		newDesc.MediaType = MediaTypeDockerSchema2Layer
 	default:
-		return ocispec.Descriptor{}, fmt.Errorf("Unsupporter layer MediaType: %s\n", desc.MediaType)
+		return ocispec.Descriptor{}, errors.Wrapf(err, "Unsupporter layer MediaType: %s\n", desc.MediaType)
 	}
 
 	fmt.Printf("   ... writing layer %s in encrypted form as %s\n", desc.Digest, d)
 	ref := fmt.Sprintf("layer-%s", newDesc.Digest.String())
-	content.WriteBlob(ctx, provider, ref, bytes.NewReader(p), newDesc);
+	content.WriteBlob(ctx, cs, ref, bytes.NewReader(p), newDesc);
 
 	return newDesc, nil
 }
@@ -426,7 +426,7 @@ func cryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descripto
 				newLayers = append(newLayers, child)
 			}
 		default:
-			return ocispec.Descriptor{}, false, fmt.Errorf("Bad/unhandled MediaType %s in encryptChildren\n", child.MediaType)
+			return ocispec.Descriptor{}, false, errors.Wrapf(err, "Bad/unhandled MediaType %s in encryptChildren\n", child.MediaType)
 		}
 	}
 
@@ -472,7 +472,7 @@ func cryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descripto
 // cryptManifestList encrypts or decrypts the children of a top level manifest list
 func CryptManifestList(ctx context.Context, cs content.Store, desc ocispec.Descriptor, cc *CryptoConfig, encrypt bool) (ocispec.Descriptor, bool, error) {
 	if desc.MediaType != MediaTypeDockerSchema2ManifestList {
-		return ocispec.Descriptor{}, false, fmt.Errorf("Wrong media type %s passed. Need %s.\n", desc.MediaType, MediaTypeDockerSchema2ManifestList)
+		return ocispec.Descriptor{}, false, errors.Wrapf(nil, "Wrong media type %s passed. Need %s.\n", desc.MediaType, MediaTypeDockerSchema2ManifestList)
 	}
 	// read the index; if any layer is encrypted and any manifests change we will need to rewrite it
 	b, err := content.ReadBlob(ctx, cs, desc)
@@ -534,30 +534,46 @@ func CryptManifestList(ctx context.Context, cs content.Store, desc ocispec.Descr
 // Get the image key Ids necessary for decrypting an image
 // We determine the KeyIds starting with  the given OCI Decriptor, recursing to lower-level descriptors
 // until we get them from the layer descriptors
-func GetImageKeyIds(ctx context.Context, provider content.Provider, desc ocispec.Descriptor) ([]uint64, error) {
-	var keyids []uint64;
+func GetImageKeyIds(ctx context.Context, cs content.Store, desc ocispec.Descriptor) ([]uint64, error) {
+	var keyids []uint64
 
 	switch (desc.MediaType) {
 	case MediaTypeDockerSchema2ManifestList,
 		MediaTypeDockerSchema2Manifest, ocispec.MediaTypeImageManifest:
-		children, err := Children(ctx, provider, desc)
+		children, err := Children(ctx, cs, desc)
 		if err != nil {
 			return []uint64{}, err
 		}
 		for _, child := range children {
-			kids, err := GetImageKeyIds(ctx, provider, child)
+			kids, err := GetImageKeyIds(ctx, cs, child)
 			if err != nil {
 				return []uint64{}, err
 			}
-			keyids = append(keyids, kids...)
+			for i := 0; i < len(kids); i++ {
+				f := false
+				for j := 0; j < len(keyids); j++ {
+					if kids[i] == keyids[j] {
+						f = true
+						break
+					}
+				}
+				if !f {
+					keyids = append(keyids, kids[i])
+				}
+			}
 		}
-	case MediaTypeDockerSchema2Layer,MediaTypeDockerSchema2LayerGzip:
-		// nothing to do
+	case MediaTypeDockerSchema2Layer,MediaTypeDockerSchema2LayerGzip,
+		MediaTypeDockerSchema2Config:
 	case MediaTypeDockerSchema2LayerPGP,MediaTypeDockerSchema2LayerGzipPGP:
-		return GetKeyIds(desc)
+		encData, err := content.ReadBlob(ctx, cs, desc);
+		if err != nil {
+			return []uint64{}, err
+		}
+		return GetKeyIds(encData, desc)
 	default:
-		return []uint64{}, fmt.Errorf("GetImageKeyIds: Unhandled media type %s")
+		return []uint64{}, errors.Wrapf(nil, "GetImageKeyIds: Unhandled media type %s", desc.MediaType)
 	}
+
 	return keyids, nil
 }
 
