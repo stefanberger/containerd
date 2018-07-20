@@ -88,7 +88,8 @@ type Store interface {
 
 	Delete(ctx context.Context, name string, opts ...DeleteOpt) error
 
-	EncryptImage(ctx context.Context, name, newName string, ec *EncryptConfig) (Image, error)
+	EncryptImage(ctx context.Context, name, newName string, ec *CryptoConfig) (Image, error)
+	DecryptImage(ctx context.Context, name, newName string, ec *CryptoConfig) (Image, error)
 }
 
 // TODO(stevvooe): Many of these functions make strong platform assumptions,
@@ -324,15 +325,20 @@ func Check(ctx context.Context, provider content.Provider, image ocispec.Descrip
 }
 
 // encryptLayer encryts a single layer and writes the encrypted layer back into storage
-func encryptLayer(ctx context.Context, provider content.Store, desc ocispec.Descriptor, ec *EncryptConfig) (ocispec.Descriptor, error) {
-	plain, err := content.ReadBlob(ctx, provider, desc);
+func cryptLayer(ctx context.Context, provider content.Store, desc ocispec.Descriptor, cc *CryptoConfig, encrypt bool) (ocispec.Descriptor, error) {
+	data, err := content.ReadBlob(ctx, provider, desc);
 	if err != nil {
 		return ocispec.Descriptor{}, err
 	}
 	//fmt.Printf("   ... read %d bytes of layer %s data\n", len(p), desc.Digest)
 	// now we should encrypt
 
-	p, err := Encrypt(ec, plain)
+	var p []byte
+	if encrypt {
+		p, err = Encrypt(cc, data)
+	} else {
+		p, err = Decrypt(cc, data)
+	}
 	if err != nil {
 		return ocispec.Descriptor{}, err
 	}
@@ -340,32 +346,36 @@ func encryptLayer(ctx context.Context, provider content.Store, desc ocispec.Desc
 	size := int64(len(p))
 	d := digest.FromBytes(p)
 
-	encDesc := ocispec.Descriptor{
+	newDesc := ocispec.Descriptor{
 		Digest:   d,
 		Size:     size,
 		Platform: desc.Platform,
 	}
-	encDesc.Annotations = make(map[string]string)
-	encDesc.Annotations["org.opencontainers.image.pgp.keys"] = "foo-bar"
+	newDesc.Annotations = make(map[string]string)
+	newDesc.Annotations["org.opencontainers.image.pgp.keys"] = "foo-bar"
 
 	switch (desc.MediaType) {
 	case MediaTypeDockerSchema2LayerGzip:
-		encDesc.MediaType = MediaTypeDockerSchema2LayerGzipPGP
+		newDesc.MediaType = MediaTypeDockerSchema2LayerGzipPGP
+	case MediaTypeDockerSchema2LayerGzipPGP:
+		newDesc.MediaType = MediaTypeDockerSchema2LayerGzip
 	case MediaTypeDockerSchema2Layer:
-		encDesc.MediaType = MediaTypeDockerSchema2LayerPGP
+		newDesc.MediaType = MediaTypeDockerSchema2LayerPGP
+	case MediaTypeDockerSchema2LayerPGP:
+		newDesc.MediaType = MediaTypeDockerSchema2Layer
 	default:
 		return ocispec.Descriptor{}, fmt.Errorf("Unsupporter layer MediaType: %s\n", desc.MediaType)
 	}
 
 	fmt.Printf("   ... writing layer %s in encrypted form as %s\n", desc.Digest, d)
-	ref := fmt.Sprintf("layer-%s", encDesc.Digest.String())
-	content.WriteBlob(ctx, provider, ref, bytes.NewReader(p), encDesc);
+	ref := fmt.Sprintf("layer-%s", newDesc.Digest.String())
+	content.WriteBlob(ctx, provider, ref, bytes.NewReader(p), newDesc);
 
-	return encDesc, nil
+	return newDesc, nil
 }
 
 // Encrypt all the Children of a given descriptor
-func encryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descriptor, ec *EncryptConfig) (ocispec.Descriptor, bool, error) {
+func cryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descriptor, cc *CryptoConfig, encrypt bool) (ocispec.Descriptor, bool, error) {
 	//fmt.Printf("metadata/image.go EncryptChildren(): Getting Children of %s [%s]\n", desc.MediaType, desc.Digest)
 	children, err := Children(ctx, cs, desc)
 	if err != nil {
@@ -383,19 +393,36 @@ func encryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descrip
 		case MediaTypeDockerSchema2Config:
 			config = child
 		case MediaTypeDockerSchema2LayerGzip,MediaTypeDockerSchema2Layer:
-			//fmt.Printf("   ... a layer to encrypt\n")
-			nl, err := encryptLayer(ctx, cs, child, ec)
-			if err != nil {
-				return ocispec.Descriptor{}, false, err
+			// this one we can only encrypt
+			if encrypt {
+				//fmt.Printf("   ... a layer to encrypt\n")
+				nl, err := cryptLayer(ctx, cs, child, cc, true)
+				if err != nil {
+					return ocispec.Descriptor{}, false, err
+				}
+				modified = true
+				newLayers = append(newLayers, nl)
+			} else {
+				newLayers = append(newLayers, child)
 			}
-			modified = true
-			newLayers = append(newLayers, nl)
+		case MediaTypeDockerSchema2LayerGzipPGP, MediaTypeDockerSchema2LayerPGP:
+			// this one we can only decrypt
+			if !encrypt {
+				nl, err := cryptLayer(ctx, cs, child, cc, false)
+				if err != nil {
+					return ocispec.Descriptor{}, false, err
+				}
+				modified = true
+				newLayers = append(newLayers, nl)
+			} else {
+				newLayers = append(newLayers, child)
+			}
 		default:
 			return ocispec.Descriptor{}, false, fmt.Errorf("Bad/unhandled MediaType %s in encryptChildren\n", child.MediaType)
 		}
 	}
 
-	if len(newLayers) > 0 {
+	if modified && len(newLayers) > 0 {
 		nM := ocispec.Manifest {
 			Versioned: specs.Versioned{
 				SchemaVersion: 2,
@@ -434,8 +461,8 @@ func encryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descrip
 	return ocispec.Descriptor{}, modified, nil
 }
 
-// EncryptChildren encrypts the children of a top level manifest list
-func EncryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descriptor, ec *EncryptConfig) (ocispec.Descriptor, bool, error) {
+// cryptManifestList encrypts or decrypts the children of a top level manifest list
+func CryptManifestList(ctx context.Context, cs content.Store, desc ocispec.Descriptor, cc *CryptoConfig, encrypt bool) (ocispec.Descriptor, bool, error) {
 	if desc.MediaType != MediaTypeDockerSchema2ManifestList {
 		return ocispec.Descriptor{}, false, fmt.Errorf("Wrong media type %s passed. Need %s.\n", desc.MediaType, MediaTypeDockerSchema2ManifestList)
 	}
@@ -453,7 +480,7 @@ func EncryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descrip
 	var newManifests []ocispec.Descriptor
 	modified := false
 	for _, manifest := range index.Manifests {
-		newManifest, m, err := encryptChildren(ctx, cs, manifest, ec)
+		newManifest, m, err := cryptChildren(ctx, cs, manifest, cc, encrypt)
 		if err != nil {
 			return ocispec.Descriptor{}, false, err
 		}
@@ -495,7 +522,6 @@ func EncryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descrip
 
 	return desc, false, nil
 }
-
 
 // Children returns the immediate children of content described by the descriptor.
 func Children(ctx context.Context, provider content.Provider, desc ocispec.Descriptor) ([]ocispec.Descriptor, error) {

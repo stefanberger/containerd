@@ -29,7 +29,7 @@ import (
 // EncryptConfig is the container image PGP encryption configuration holding
 // the identifiers of those that will be able to decrypt the container and
 // the PGP public keyring file data that contains their public keys.
-type EncryptConfig struct {
+type CryptoConfig struct {
        Recipients     []string
        GPGPubRingFile []byte
 }
@@ -52,8 +52,8 @@ func ReadGPGPubRingFile() ([]byte, error) {
 
 // createEntityList creates the opengpg EntityList by reading the KeyRing
 // first and then filtering out recipients' keys
-func createEntityList(ec *EncryptConfig) (openpgp.EntityList, error) {
-	r := bytes.NewReader(ec.GPGPubRingFile)
+func createEntityList(cc *CryptoConfig) (openpgp.EntityList, error) {
+	r := bytes.NewReader(cc.GPGPubRingFile)
 
 	entityList, err := openpgp.ReadKeyRing(r)
 	if err != nil {
@@ -61,7 +61,7 @@ func createEntityList(ec *EncryptConfig) (openpgp.EntityList, error) {
 	}
 
 	rSet := make(map[string]int)
-	for _, r := range ec.Recipients {
+	for _, r := range cc.Recipients {
 		rSet[r] = 0
 	}
 
@@ -73,7 +73,7 @@ func createEntityList(ec *EncryptConfig) (openpgp.EntityList, error) {
 			if err != nil {
 				return nil, err
 			}
-			for _, r := range ec.Recipients {
+			for _, r := range cc.Recipients {
 				if strings.Compare(addr.Name, r) == 0 || strings.Compare(addr.Address, r) == 0 {
 					fmt.Printf(" TAKING key of %s\n", k)
 					filteredList = append(filteredList, entity)
@@ -106,8 +106,8 @@ func createEntityList(ec *EncryptConfig) (openpgp.EntityList, error) {
 }
 
 // Encrypt encrypts a byte array using data from the EncryptConfig
-func Encrypt(ec *EncryptConfig, data []byte) ([]byte, error) {
-	filteredList, err := createEntityList(ec)
+func Encrypt(cc *CryptoConfig, data []byte) ([]byte, error) {
+	filteredList, err := createEntityList(cc)
 	if err != nil {
 		return nil, err
 	}
@@ -129,5 +129,11 @@ func Encrypt(ec *EncryptConfig, data []byte) ([]byte, error) {
 	}
 
 	return ioutil.ReadAll(buf)
+}
+
+// Decrypt decrypts a byte array using data from the EncryptConfig
+func Decrypt(cc *CryptoConfig, data []byte) ([]byte, error) {
+	// nothing here for now...
+	return data, nil
 }
 
