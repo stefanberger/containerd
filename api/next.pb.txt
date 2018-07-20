@@ -2254,7 +2254,7 @@ file {
     }
   }
   message_type {
-    name: "EncryptConfig"
+    name: "CryptoConfig"
     field {
       name: "recipients"
       number: 1
@@ -2287,16 +2287,55 @@ file {
       json_name: "newName"
     }
     field {
-      name: "ec"
+      name: "cc"
       number: 3
       label: LABEL_OPTIONAL
       type: TYPE_MESSAGE
-      type_name: ".containerd.services.images.v1.EncryptConfig"
-      json_name: "ec"
+      type_name: ".containerd.services.images.v1.CryptoConfig"
+      json_name: "cc"
     }
   }
   message_type {
     name: "EncryptImageResponse"
+    field {
+      name: "image"
+      number: 1
+      label: LABEL_OPTIONAL
+      type: TYPE_MESSAGE
+      type_name: ".containerd.services.images.v1.Image"
+      options {
+        65001: 0
+      }
+      json_name: "image"
+    }
+  }
+  message_type {
+    name: "DecryptImageRequest"
+    field {
+      name: "name"
+      number: 1
+      label: LABEL_OPTIONAL
+      type: TYPE_STRING
+      json_name: "name"
+    }
+    field {
+      name: "newName"
+      number: 2
+      label: LABEL_OPTIONAL
+      type: TYPE_STRING
+      json_name: "newName"
+    }
+    field {
+      name: "cc"
+      number: 3
+      label: LABEL_OPTIONAL
+      type: TYPE_MESSAGE
+      type_name: ".containerd.services.images.v1.CryptoConfig"
+      json_name: "cc"
+    }
+  }
+  message_type {
+    name: "DecryptImageResponse"
     field {
       name: "image"
       number: 1
@@ -2340,6 +2379,11 @@ file {
       name: "EncryptImage"
       input_type: ".containerd.services.images.v1.EncryptImageRequest"
       output_type: ".containerd.services.images.v1.EncryptImageResponse"
+    }
+    method {
+      name: "DecryptImage"
+      input_type: ".containerd.services.images.v1.DecryptImageRequest"
+      output_type: ".containerd.services.images.v1.DecryptImageResponse"
     }
   }
   options {

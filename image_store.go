@@ -50,14 +50,30 @@ func (s *remoteImages) Get(ctx context.Context, name string) (images.Image, erro
 	return imageFromProto(resp.Image), nil
 }
 
-func (s *remoteImages) EncryptImage(ctx context.Context, name, newName string, ec *images.EncryptConfig) (images.Image, error) {
+func (s *remoteImages) EncryptImage(ctx context.Context, name, newName string, ec *images.CryptoConfig) (images.Image, error) {
 	fmt.Printf("image_store.go: EncryptImage() name=%s\n", name);
 	resp, err := s.client.EncryptImage(ctx, &imagesapi.EncryptImageRequest{
 		Name:    name,
 		NewName: newName,
-		Ec:      &imagesapi.EncryptConfig{
+		Cc:      &imagesapi.CryptoConfig{
 			Recipients   : ec.Recipients,
 			Gpgpubkeyring: ec.GPGPubRingFile,
+		},
+	});
+	if err != nil {
+		return images.Image{}, errdefs.FromGRPC(err)
+	}
+
+	return imageFromProto(&resp.Image), nil
+}
+
+func (s *remoteImages) DecryptImage(ctx context.Context, name, newName string, ec *images.CryptoConfig) (images.Image, error) {
+	fmt.Printf("image_store.go: DecryptImage() name=%s\n", name);
+	resp, err := s.client.DecryptImage(ctx, &imagesapi.DecryptImageRequest{
+		Name:    name,
+		NewName: newName,
+		Cc:      &imagesapi.CryptoConfig{
+			// FIXME: missing parameters here
 		},
 	});
 	if err != nil {
