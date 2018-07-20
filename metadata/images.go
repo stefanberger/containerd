@@ -80,7 +80,7 @@ func (s *imageStore) Get(ctx context.Context, name string) (images.Image, error)
 // cryptImage encrypts or decrypts an image with the given name and stores it either under the newName
 // or updates the existing one
 func (s *imageStore) cryptImage(ctx context.Context, name, newName string, cc *images.CryptoConfig, encrypt bool) (images.Image, error) {
-	fmt.Printf("metadata/images.go: EncryptImage() name=%s\n", name)
+	fmt.Printf("metadata/images.go: cryptImage() name=%s\n", name)
 	var image images.Image
 
 	namespace, err := namespaces.NamespaceRequired(ctx)
@@ -195,6 +195,40 @@ func (s *imageStore) EncryptImage(ctx context.Context, name, newName string, cc 
 
 func (s *imageStore) DecryptImage(ctx context.Context, name, newName string, cc *images.CryptoConfig) (images.Image, error) {
 	return s.cryptImage(ctx, name, newName, cc, false)
+}
+
+func (s *imageStore) GetImageKeyIds(ctx context.Context, name string) ([]uint64, error) {
+	fmt.Printf("metadata/images.go: cryptImage() name=%s\n", name)
+	var image images.Image
+
+	namespace, err := namespaces.NamespaceRequired(ctx)
+	if err != nil {
+		return []uint64{}, err
+	}
+
+	if err := view(ctx, s.db, func(tx *bolt.Tx) error {
+		bkt := getImagesBucket(tx, namespace)
+		if bkt == nil {
+			return errors.Wrapf(errdefs.ErrNotFound, "image %q", name)
+		}
+
+		ibkt := bkt.Bucket([]byte(name))
+		if ibkt == nil {
+			return errors.Wrapf(errdefs.ErrNotFound, "image %q", name)
+		}
+
+		image.Name = name
+		if err := readImage(&image, ibkt); err != nil {
+			return errors.Wrapf(err, "image %q", name)
+		}
+
+		return nil
+	}); err != nil {
+		return []uint64{}, err
+	}
+
+	cs := s.db.ContentStore()
+	return images.GetImageKeyIds(ctx, cs, image.Target)
 }
 
 func (s *imageStore) List(ctx context.Context, fs ...string) ([]images.Image, error) {

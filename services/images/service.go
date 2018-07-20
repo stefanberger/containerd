@@ -90,3 +90,7 @@ func (s *service) EncryptImage(ctx context.Context, req *imagesapi.EncryptImageR
 func (s *service) DecryptImage(ctx context.Context, req *imagesapi.DecryptImageRequest) (*imagesapi.DecryptImageResponse, error) {
 	return s.local.DecryptImage(ctx, req)
 }
+
+func (s *service) GetImageKeyIds(ctx context.Context, req *imagesapi.GetImageKeyIdsRequest) (*imagesapi.GetImageKeyIdsResponse, error) {
+	return s.local.GetImageKeyIds(ctx, req)
+}
