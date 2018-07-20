@@ -22,6 +22,7 @@ import (
 	"net/mail"
 	"strings"
 
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/mitchellh/go-homedir"
 	"golang.org/x/crypto/openpgp"
 )
@@ -134,6 +135,11 @@ func Encrypt(cc *CryptoConfig, data []byte) ([]byte, error) {
 // Decrypt decrypts a byte array using data from the EncryptConfig
 func Decrypt(cc *CryptoConfig, data []byte) ([]byte, error) {
 	// nothing here for now...
-	return data, nil
+	return data, fmt.Errorf("Missing implementation")
+}
+
+// GetKeyIds 
+func GetKeyIds(desc ocispec.Descriptor) ([]uint64, error) {
+	return []uint64{}, fmt.Errorf("Missing implementation")
 }
 
