@@ -103,8 +103,10 @@ var pushCommand = cli.Command{
 				return err
 			}
 			cc := &images.CryptoConfig{
-				GPGPubRingFile: gpgPubRingFile,
-				Recipients:     recipients,
+				Ec:	&images.EncryptConfig{
+					GPGPubRingFile: gpgPubRingFile,
+					Recipients:     recipients,
+				},
 			}
 			img, err := client.ImageService().EncryptImage(ctx, local, local, cc)
 			if err != nil {
