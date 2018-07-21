@@ -91,6 +91,6 @@ func (s *service) DecryptImage(ctx context.Context, req *imagesapi.DecryptImageR
 	return s.local.DecryptImage(ctx, req)
 }
 
-func (s *service) GetImageKeyIds(ctx context.Context, req *imagesapi.GetImageKeyIdsRequest) (*imagesapi.GetImageKeyIdsResponse, error) {
-	return s.local.GetImageKeyIds(ctx, req)
+func (s *service) GetImageLayerInfo(ctx context.Context, req *imagesapi.GetImageLayerInfoRequest) (*imagesapi.GetImageLayerInfoResponse, error) {
+	return s.local.GetImageLayerInfo(ctx, req)
 }
