@@ -185,8 +185,10 @@ func (l *local) EncryptImage(ctx context.Context, req *imagesapi.EncryptImageReq
 	var resp       imagesapi.EncryptImageResponse
 
 	encrypted, err := l.store.EncryptImage(ctx, req.Name, req.NewName, &images.CryptoConfig{
-		Recipients: req.Cc.Recipients,
-		GPGPubRingFile: req.Cc.Gpgpubkeyring,
+		Ec:	&images.EncryptConfig{
+			Recipients    : req.Cc.Recipients,
+			GPGPubRingFile: req.Cc.Gpgpubkeyring,
+		},
 	})
 	if err != nil {
 		return nil, errdefs.ToGRPC(err)
