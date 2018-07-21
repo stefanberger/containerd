@@ -2219,7 +2219,7 @@ file {
     }
   }
   message_type {
-    name: "CryptoConfig"
+    name: "EncryptConfig"
     field {
       name: "recipients"
       number: 1
@@ -2234,6 +2234,9 @@ file {
       type: TYPE_BYTES
       json_name: "gpgpubkeyring"
     }
+  }
+  message_type {
+    name: "DecryptConfig"
   }
   message_type {
     name: "EncryptImageRequest"
@@ -2256,7 +2259,7 @@ file {
       number: 3
       label: LABEL_OPTIONAL
       type: TYPE_MESSAGE
-      type_name: ".containerd.services.images.v1.CryptoConfig"
+      type_name: ".containerd.services.images.v1.EncryptConfig"
       json_name: "cc"
     }
   }
@@ -2295,7 +2298,7 @@ file {
       number: 3
       label: LABEL_OPTIONAL
       type: TYPE_MESSAGE
-      type_name: ".containerd.services.images.v1.CryptoConfig"
+      type_name: ".containerd.services.images.v1.DecryptConfig"
       json_name: "cc"
     }
   }
