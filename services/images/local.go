@@ -228,17 +228,27 @@ func (l *local) DecryptImage(ctx context.Context, req *imagesapi.DecryptImageReq
 	return &resp, nil
 }
 
-func (l *local) GetImageKeyIds(ctx context.Context, req *imagesapi.GetImageKeyIdsRequest, _ ...grpc.CallOption) (*imagesapi.GetImageKeyIdsResponse, error) {
-	log.G(ctx).WithField("name", req.Name).Debugf("GetImageKeyIds")
+func (l *local) GetImageLayerInfo(ctx context.Context, req *imagesapi.GetImageLayerInfoRequest, _ ...grpc.CallOption) (*imagesapi.GetImageLayerInfoResponse, error) {
+	log.G(ctx).WithField("name", req.Name).Debugf("GetImageLayerInfo")
 
-	var resp       imagesapi.GetImageKeyIdsResponse
+	var resp imagesapi.GetImageLayerInfoResponse
 
-	keyids, err := l.store.GetImageKeyIds(ctx, req.Name)
+	lis, err := l.store.GetImageLayerInfo(ctx, req.Name)
 	if err != nil {
 		return nil, errdefs.ToGRPC(err)
 	}
 
-	resp.Keyids = keyids
+	resp.LayerInfo = make([]*imagesapi.LayerInfo, len(lis))
+	for i := 0; i < len(lis); i++ {
+		resp.LayerInfo[i] = &imagesapi.LayerInfo{
+			KeyIds:       lis[i].KeyIds,
+			Digest:       lis[i].Digest,
+			Encryption:   lis[i].Encryption,
+			FileSize:     lis[i].FileSize,
+			Architecture: lis[i].Architecture,
+		}
+	}
+
 	return &resp, nil
 }
 

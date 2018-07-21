@@ -2352,7 +2352,7 @@ file {
     }
   }
   message_type {
-    name: "GetImageKeyIdsRequest"
+    name: "GetImageLayerInfoRequest"
     field {
       name: "name"
       number: 1
@@ -2362,13 +2362,52 @@ file {
     }
   }
   message_type {
-    name: "GetImageKeyIdsResponse"
+    name: "LayerInfo"
     field {
-      name: "keyids"
+      name: "keyIds"
       number: 1
       label: LABEL_REPEATED
       type: TYPE_UINT64
-      json_name: "keyids"
+      json_name: "keyIds"
+    }
+    field {
+      name: "digest"
+      number: 2
+      label: LABEL_OPTIONAL
+      type: TYPE_STRING
+      json_name: "digest"
+    }
+    field {
+      name: "encryption"
+      number: 3
+      label: LABEL_OPTIONAL
+      type: TYPE_STRING
+      json_name: "encryption"
+    }
+    field {
+      name: "fileSize"
+      number: 4
+      label: LABEL_OPTIONAL
+      type: TYPE_INT64
+      json_name: "fileSize"
+    }
+    field {
+      name: "architecture"
+      number: 5
+      label: LABEL_OPTIONAL
+      type: TYPE_STRING
+      json_name: "architecture"
+    }
+  }
+  message_type {
+    name: "GetImageLayerInfoResponse"
+    field {
+      name: "layerInfo"
+      number: 1
+      label: LABEL_REPEATED
+      type: TYPE_MESSAGE
+      type_name: ".containerd.services.images.v1.LayerInfo"
+      json_name: "layerInfo"
     }
   }
   service {
@@ -2409,9 +2448,9 @@ file {
       output_type: ".containerd.services.images.v1.DecryptImageResponse"
     }
     method {
-      name: "GetImageKeyIds"
-      input_type: ".containerd.services.images.v1.GetImageKeyIdsRequest"
-      output_type: ".containerd.services.images.v1.GetImageKeyIdsResponse"
+      name: "GetImageLayerInfo"
+      input_type: ".containerd.services.images.v1.GetImageLayerInfoRequest"
+      output_type: ".containerd.services.images.v1.GetImageLayerInfoResponse"
     }
   }
   options {

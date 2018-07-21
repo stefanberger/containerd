@@ -45,7 +45,7 @@ service Images {
 	// Decyrpt an image given its name
 	rpc DecryptImage(DecryptImageRequest) returns (DecryptImageResponse);
 	// Get the KeyIds of keys the image is encrypted with
-	rpc GetImageKeyIds(GetImageKeyIdsRequest) returns (GetImageKeyIdsResponse);
+	rpc GetImageLayerInfo(GetImageLayerInfoRequest) returns (GetImageLayerInfoResponse);
 }
 
 message Image {
@@ -161,11 +161,20 @@ message DecryptImageResponse {
 	Image image = 1 [(gogoproto.nullable) = false];
 }
 
-message GetImageKeyIdsRequest {
+message GetImageLayerInfoRequest {
 	string name = 1;
+	string platform = 2;
 }
 
-message GetImageKeyIdsResponse {
-	repeated uint64 keyids = 1;
+message LayerInfo {
+	repeated uint64 keyIds = 1;
+	string digest = 2;
+	string encryption = 3;
+	int64 fileSize = 4;
+	string architecture = 5;
+}
+
+message GetImageLayerInfoResponse {
+	repeated LayerInfo layerInfo = 1;
 }
 

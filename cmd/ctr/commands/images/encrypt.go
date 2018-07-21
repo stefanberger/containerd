@@ -55,10 +55,6 @@ var encryptCommand = cli.Command{
 			return err
 		}
 		defer cancel()
-		//img, err := client.ImageService().Get(ctx, local)
-		//if err != nil {
-		//	return errors.Wrap(err, "unable to resolve image to manifest")
-		//}
 
 		recipients := context.StringSlice("recipient")
 		if len(recipients) == 0 {

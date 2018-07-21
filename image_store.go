@@ -83,16 +83,25 @@ func (s *remoteImages) DecryptImage(ctx context.Context, name, newName string, e
 	return imageFromProto(&resp.Image), nil
 }
 
-func (s *remoteImages) GetImageKeyIds(ctx context.Context, name string) ([]uint64, error) {
+func (s *remoteImages) GetImageLayerInfo(ctx context.Context, name string) ([]images.LayerInfo, error) {
 	fmt.Printf("image_store.go: GetImageKeyIds() name=%s\n", name);
-	resp, err := s.client.GetImageKeyIds(ctx, &imagesapi.GetImageKeyIdsRequest{
+	resp, err := s.client.GetImageLayerInfo(ctx, &imagesapi.GetImageLayerInfoRequest{
 		Name:    name,
 	});
 	if err != nil {
-		return []uint64{}, errdefs.FromGRPC(err)
+		return []images.LayerInfo{}, errdefs.FromGRPC(err)
 	}
 
-	return resp.Keyids, nil
+	li := make([]images.LayerInfo, len(resp.LayerInfo))
+	for i := 0; i < len(resp.LayerInfo); i++ {
+		li[i].KeyIds = resp.LayerInfo[i].KeyIds
+		li[i].Digest = resp.LayerInfo[i].Digest
+		li[i].Encryption = resp.LayerInfo[i].Encryption
+		li[i].FileSize = resp.LayerInfo[i].FileSize
+		li[i].Architecture = resp.LayerInfo[i].Architecture
+	}
+
+	return li, nil
 }
 
 func (s *remoteImages) List(ctx context.Context, filters ...string) ([]images.Image, error) {
