@@ -58,6 +58,14 @@ type Image struct {
 	CreatedAt, UpdatedAt time.Time
 }
 
+type LayerInfo struct {
+	KeyIds []uint64
+	Digest string
+	Encryption string
+	FileSize int64
+	Architecture string
+}
+
 // DeleteOptions provide options on image delete
 type DeleteOptions struct {
 	Synchronous bool
@@ -89,7 +97,7 @@ type Store interface {
 
 	EncryptImage(ctx context.Context, name, newName string, ec *CryptoConfig) (Image, error)
 	DecryptImage(ctx context.Context, name, newName string, ec *CryptoConfig) (Image, error)
-	GetImageKeyIds(ctx context.Context, name string) ([]uint64, error)
+	GetImageLayerInfo(ctx context.Context, name string) ([]LayerInfo, error)
 }
 
 // TODO(stevvooe): Many of these functions make strong platform assumptions,
@@ -518,47 +526,62 @@ func CryptManifestList(ctx context.Context, cs content.Store, desc ocispec.Descr
 // Get the image key Ids necessary for decrypting an image
 // We determine the KeyIds starting with  the given OCI Decriptor, recursing to lower-level descriptors
 // until we get them from the layer descriptors
-func GetImageKeyIds(ctx context.Context, cs content.Store, desc ocispec.Descriptor) ([]uint64, error) {
-	var keyids []uint64
+func GetImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descriptor) ([]LayerInfo, error) {
+	var (
+		lis []LayerInfo
+		Architecture string
+	)
 
 	switch (desc.MediaType) {
 	case MediaTypeDockerSchema2ManifestList,
 		MediaTypeDockerSchema2Manifest, ocispec.MediaTypeImageManifest:
 		children, err := Children(ctx, cs, desc)
+		if desc.Platform != nil {
+			Architecture = desc.Platform.Architecture
+		}
 		if err != nil {
-			return []uint64{}, err
+			return []LayerInfo{}, err
 		}
 		for _, child := range children {
-			kids, err := GetImageKeyIds(ctx, cs, child)
+			tmp, err := GetImageLayerInfo(ctx, cs, child)
 			if err != nil {
-				return []uint64{}, err
+				return []LayerInfo{}, err
 			}
-			for i := 0; i < len(kids); i++ {
-				f := false
-				for j := 0; j < len(keyids); j++ {
-					if kids[i] == keyids[j] {
-						f = true
-						break
-					}
-				}
-				if !f {
-					keyids = append(keyids, kids[i])
-				}
+			for i := 0; i < len(tmp); i++ {
+				tmp[i].Architecture = Architecture
 			}
+			lis = append(lis, tmp...)
 		}
-	case MediaTypeDockerSchema2Layer,MediaTypeDockerSchema2LayerGzip,
-		MediaTypeDockerSchema2Config:
+	case MediaTypeDockerSchema2Layer,MediaTypeDockerSchema2LayerGzip:
+		li := LayerInfo{
+			KeyIds:       []uint64{},
+			Digest:       desc.Digest.String(),
+			Encryption:   "",
+			FileSize:     desc.Size,
+		}
+		lis = append(lis, li)
+	case MediaTypeDockerSchema2Config:
 	case MediaTypeDockerSchema2LayerPGP,MediaTypeDockerSchema2LayerGzipPGP:
 		encData, err := content.ReadBlob(ctx, cs, desc);
 		if err != nil {
-			return []uint64{}, err
+			return []LayerInfo{}, err
 		}
-		return GetKeyIds(encData, desc)
+		kids, err := GetKeyIds(encData, desc)
+		if err != nil {
+			return []LayerInfo{}, err
+		}
+		li := LayerInfo{
+			KeyIds:       kids,
+			Digest:       desc.Digest.String(),
+			Encryption:   "gpg",
+			FileSize:     desc.Size,
+		}
+		lis = append(lis, li)
 	default:
-		return []uint64{}, errors.Wrapf(nil, "GetImageKeyIds: Unhandled media type %s", desc.MediaType)
+		return []LayerInfo{}, errors.Wrapf(nil, "GetImageLayerInfo: Unhandled media type %s", desc.MediaType)
 	}
 
-	return keyids, nil
+	return lis, nil
 }
 
 // Children returns the immediate children of content described by the descriptor.
