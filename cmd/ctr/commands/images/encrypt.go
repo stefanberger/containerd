@@ -70,8 +70,10 @@ var encryptCommand = cli.Command{
 			return err
 		}
 		cc := &images.CryptoConfig{
-			GPGPubRingFile: gpgPubRingFile,
-			Recipients:     recipients,
+			Ec:	&images.EncryptConfig{
+				GPGPubRingFile: gpgPubRingFile,
+				Recipients:     recipients,
+			},
 		}
 		_, err = client.ImageService().EncryptImage(ctx, local, newName, cc)
 		if err != nil {
