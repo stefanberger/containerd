@@ -131,16 +131,19 @@ message DeleteImageRequest {
 }
 
 // CryptConfig serves to pass keys used for encryption and decryption
-message CryptoConfig {
+message EncryptConfig {
 	repeated string recipients = 1;
 	bytes gpgpubkeyring = 2;
+}
+
+message DecryptConfig {
 }
 
 message EncryptImageRequest {
 	string name = 1;
 	string newName = 2;
 
-	CryptoConfig cc = 3;
+	EncryptConfig cc = 3;
 }
 
 message EncryptImageResponse {
@@ -151,7 +154,7 @@ message DecryptImageRequest {
 	string name = 1;
 	string newName = 2;
 
-	CryptoConfig cc = 3;
+	DecryptConfig cc = 3;
 }
 
 message DecryptImageResponse {
