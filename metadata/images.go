@@ -197,13 +197,13 @@ func (s *imageStore) DecryptImage(ctx context.Context, name, newName string, cc 
 	return s.cryptImage(ctx, name, newName, cc, false)
 }
 
-func (s *imageStore) GetImageKeyIds(ctx context.Context, name string) ([]uint64, error) {
-	fmt.Printf("metadata/images.go: GetImageKeyIds() name=%s\n", name)
+func (s *imageStore) GetImageLayerInfo(ctx context.Context, name string) ([]images.LayerInfo, error) {
+	fmt.Printf("metadata/images.go: GetImageLayerInfo() name=%s\n", name)
 	var image images.Image
 
 	namespace, err := namespaces.NamespaceRequired(ctx)
 	if err != nil {
-		return []uint64{}, err
+		return []images.LayerInfo{}, err
 	}
 
 	if err := view(ctx, s.db, func(tx *bolt.Tx) error {
@@ -224,11 +224,11 @@ func (s *imageStore) GetImageKeyIds(ctx context.Context, name string) ([]uint64,
 
 		return nil
 	}); err != nil {
-		return []uint64{}, err
+		return []images.LayerInfo{}, err
 	}
 
 	cs := s.db.ContentStore()
-	return images.GetImageKeyIds(ctx, cs, image.Target)
+	return images.GetImageLayerInfo(ctx, cs, image.Target)
 }
 
 func (s *imageStore) List(ctx context.Context, fs ...string) ([]images.Image, error) {
