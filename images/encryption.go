@@ -32,9 +32,13 @@ import (
 // EncryptConfig is the container image PGP encryption configuration holding
 // the identifiers of those that will be able to decrypt the container and
 // the PGP public keyring file data that contains their public keys.
-type CryptoConfig struct {
+type EncryptConfig struct {
        Recipients     []string
        GPGPubRingFile []byte
+}
+
+type CryptoConfig struct {
+	Ec *EncryptConfig
 }
 
 type Encryptor interface {
@@ -56,7 +60,7 @@ func ReadGPGPubRingFile() ([]byte, error) {
 // createEntityList creates the opengpg EntityList by reading the KeyRing
 // first and then filtering out recipients' keys
 func createEntityList(cc *CryptoConfig) (openpgp.EntityList, error) {
-	r := bytes.NewReader(cc.GPGPubRingFile)
+	r := bytes.NewReader(cc.Ec.GPGPubRingFile)
 
 	entityList, err := openpgp.ReadKeyRing(r)
 	if err != nil {
@@ -64,7 +68,7 @@ func createEntityList(cc *CryptoConfig) (openpgp.EntityList, error) {
 	}
 
 	rSet := make(map[string]int)
-	for _, r := range cc.Recipients {
+	for _, r := range cc.Ec.Recipients {
 		rSet[r] = 0
 	}
 
@@ -76,7 +80,7 @@ func createEntityList(cc *CryptoConfig) (openpgp.EntityList, error) {
 			if err != nil {
 				return nil, err
 			}
-			for _, r := range cc.Recipients {
+			for _, r := range cc.Ec.Recipients {
 				if strings.Compare(addr.Name, r) == 0 || strings.Compare(addr.Address, r) == 0 {
 					fmt.Printf(" TAKING key of %s\n", k)
 					filteredList = append(filteredList, entity)
