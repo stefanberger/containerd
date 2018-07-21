@@ -55,10 +55,15 @@ var decryptCommand = cli.Command{
 		}
 		defer cancel()
 
-		keyIds, err := client.ImageService().GetImageKeyIds(ctx, local)
+		LayerInfos, err := client.ImageService().GetImageLayerInfo(ctx, local)
 		if err != nil {
 			return err
 		}
+		var keyIds []uint64
+		for i := 0; i < len(LayerInfos); i++ {
+			keyIds = addToSet(keyIds, LayerInfos[i].KeyIds)
+		}
+
 		if len(keyIds) == 0 {
 			fmt.Printf("Image is not encrypted.\n")
 		} else {
@@ -70,5 +75,21 @@ var decryptCommand = cli.Command{
 		}
 		return nil
 	},
+}
+
+func addToSet(set, add []uint64) []uint64 {
+	for i := 0; i < len(add); i++ {
+		found := false
+		for j := 0; j < len(set); j++ {
+			if set[j] == add[i] {
+				found = true
+				break;
+			}
+		}
+		if !found {
+			set = append(set, add[i])
+		}
+	}
+	return set
 }
 
