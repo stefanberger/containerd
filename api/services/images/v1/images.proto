@@ -172,7 +172,7 @@ message LayerInfo {
 	string digest = 3;
 	string encryption = 4;
 	int64 fileSize = 5;
-	string architecture = 6;
+	string platform = 6;
 }
 
 message GetImageLayerInfoResponse {
