@@ -99,7 +99,7 @@ func (s *remoteImages) GetImageLayerInfo(ctx context.Context, name string) ([]im
 		li[i].Digest = resp.LayerInfo[i].Digest
 		li[i].Encryption = resp.LayerInfo[i].Encryption
 		li[i].FileSize = resp.LayerInfo[i].FileSize
-		li[i].Architecture = resp.LayerInfo[i].Architecture
+		li[i].Platform = resp.LayerInfo[i].Platform
 	}
 
 	return li, nil
