@@ -69,8 +69,8 @@ type LayerInfo struct {
 	Encryption string
 	// The size of the layer file
 	FileSize int64
-	// The architecture for which this layer is
-	Architecture string
+	// The platform for which this layer is
+	Platform string
 }
 
 // DeleteOptions provide options on image delete
@@ -536,7 +536,7 @@ func CryptManifestList(ctx context.Context, cs content.Store, desc ocispec.Descr
 func GetImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descriptor) ([]LayerInfo, error) {
 	var (
 		lis []LayerInfo
-		Architecture string
+		Platform string
 	)
 
 	switch (desc.MediaType) {
@@ -544,7 +544,7 @@ func GetImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descr
 		MediaTypeDockerSchema2Manifest, ocispec.MediaTypeImageManifest:
 		children, err := Children(ctx, cs, desc)
 		if desc.Platform != nil {
-			Architecture = desc.Platform.Architecture
+			Platform = desc.Platform.OS + "/" + desc.Platform.Architecture
 		}
 		if err != nil {
 			return []LayerInfo{}, err
@@ -556,8 +556,8 @@ func GetImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descr
 			}
 			for i := 0; i < len(tmp); i++ {
 				tmp[i].Id = uint32(i)
-				if Architecture != "" {
-					tmp[i].Architecture = Architecture
+				if Platform != "" {
+					tmp[i].Platform = Platform
 				}
 			}
 			lis = append(lis, tmp...)
