@@ -60,10 +60,17 @@ type Image struct {
 }
 
 type LayerInfo struct {
+	// The Id of the layer starting at 0
+	Id uint32
+	// An array of KeyIds to which the layer is encrypted
 	KeyIds []uint64
+	// The Digest of the layer
 	Digest string
+	// The Encryption algorithm used for encrypting the layer
 	Encryption string
+	// The size of the layer file
 	FileSize int64
+	// The architecture for which this layer is
 	Architecture string
 }
 
@@ -557,7 +564,10 @@ func GetImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descr
 				return []LayerInfo{}, err
 			}
 			for i := 0; i < len(tmp); i++ {
-				tmp[i].Architecture = Architecture
+				tmp[i].Id = uint32(i)
+				if Architecture != "" {
+					tmp[i].Architecture = Architecture
+				}
 			}
 			lis = append(lis, tmp...)
 		}
