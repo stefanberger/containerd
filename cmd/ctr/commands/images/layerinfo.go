@@ -54,7 +54,7 @@ var layerinfoCommand = cli.Command{
 			return err
 		}
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', tabwriter.AlignRight)
-		fmt.Fprintf(w, "Num\tDigest\tArchitecture\tSize\tEncryption\tKey IDs\t\n")
+		fmt.Fprintf(w, "#\tDIGEST\tPLATFORM\tSIZE\tENCRYPTION\tKEY IDS\t\n")
 		for _, layer := range LayerInfos {
 			keyids := ""
 			for _, keyid := range layer.KeyIds {
@@ -63,7 +63,7 @@ var layerinfoCommand = cli.Command{
 				}
 				keyids = keyids + "0x" + strconv.FormatUint(keyid, 16)
 			}
-			fmt.Fprintf(w, "%d\t%s\t%s\t%d\t%s\t%s\t\n", layer.Id, layer.Digest, layer.Architecture, layer.FileSize, layer.Encryption, keyids)
+			fmt.Fprintf(w, "%d\t%s\t%s\t%d\t%s\t%s\t\n", layer.Id, layer.Digest, layer.Platform, layer.FileSize, layer.Encryption, keyids)
 		}
 		w.Flush()
 		return nil
