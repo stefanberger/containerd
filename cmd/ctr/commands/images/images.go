@@ -49,6 +49,7 @@ var Command = cli.Command{
 		setLabelsCommand,
 		encryptCommand,
 		decryptCommand,
+		layerinfoCommand,
 	},
 }
 
