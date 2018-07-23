@@ -54,6 +54,7 @@ var layerinfoCommand = cli.Command{
 			return err
 		}
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', tabwriter.AlignRight)
+		fmt.Fprintf(w, "Num\tDigest\tArchitecture\tSize\tEncryption\tKey IDs\t\n")
 		for _, layer := range LayerInfos {
 			keyids := ""
 			for _, keyid := range layer.KeyIds {
