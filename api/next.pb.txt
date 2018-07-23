@@ -2360,40 +2360,54 @@ file {
       type: TYPE_STRING
       json_name: "name"
     }
+    field {
+      name: "platform"
+      number: 2
+      label: LABEL_OPTIONAL
+      type: TYPE_STRING
+      json_name: "platform"
+    }
   }
   message_type {
     name: "LayerInfo"
     field {
-      name: "keyIds"
+      name: "id"
       number: 1
+      label: LABEL_OPTIONAL
+      type: TYPE_UINT32
+      json_name: "id"
+    }
+    field {
+      name: "keyIds"
+      number: 2
       label: LABEL_REPEATED
       type: TYPE_UINT64
       json_name: "keyIds"
     }
     field {
       name: "digest"
-      number: 2
+      number: 3
       label: LABEL_OPTIONAL
       type: TYPE_STRING
       json_name: "digest"
     }
     field {
       name: "encryption"
-      number: 3
+      number: 4
       label: LABEL_OPTIONAL
       type: TYPE_STRING
       json_name: "encryption"
     }
     field {
       name: "fileSize"
-      number: 4
+      number: 5
       label: LABEL_OPTIONAL
       type: TYPE_INT64
       json_name: "fileSize"
     }
     field {
       name: "architecture"
-      number: 5
+      number: 6
       label: LABEL_OPTIONAL
       type: TYPE_STRING
       json_name: "architecture"
