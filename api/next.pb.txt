@@ -2371,11 +2371,11 @@ file {
       json_name: "fileSize"
     }
     field {
-      name: "architecture"
+      name: "platform"
       number: 6
       label: LABEL_OPTIONAL
       type: TYPE_STRING
-      json_name: "architecture"
+      json_name: "platform"
     }
   }
   message_type {
