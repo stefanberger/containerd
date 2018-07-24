@@ -67,13 +67,19 @@ func (s *remoteImages) EncryptImage(ctx context.Context, name, newName string, c
 	return imageFromProto(&resp.Image), nil
 }
 
-func (s *remoteImages) DecryptImage(ctx context.Context, name, newName string, ec *images.CryptoConfig) (images.Image, error) {
-	fmt.Printf("image_store.go: DecryptImage() name=%s\n", name);
+func (s *remoteImages) DecryptImage(ctx context.Context, name, newName string, cc *images.CryptoConfig) (images.Image, error) {
+	keyIdMap := make(map[uint64]*imagesapi.DecryptKeyData)
+	for k, v := range cc.Dc.KeyIdMap {
+		keyIdMap[k] = &imagesapi.DecryptKeyData{
+			KeyData:         v.KeyData,
+			KeyDataPassword: v.KeyDataPassword,
+		}
+	}
 	resp, err := s.client.DecryptImage(ctx, &imagesapi.DecryptImageRequest{
 		Name:    name,
 		NewName: newName,
-		Cc:      &imagesapi.DecryptConfig{
-			// FIXME: missing parameters here
+		Dc:      &imagesapi.DecryptConfig{
+			KeyIdMap: keyIdMap,
 		},
 	});
 	if err != nil {
@@ -84,7 +90,6 @@ func (s *remoteImages) DecryptImage(ctx context.Context, name, newName string, e
 }
 
 func (s *remoteImages) GetImageLayerInfo(ctx context.Context, name string) ([]images.LayerInfo, error) {
-	fmt.Printf("image_store.go: GetImageKeyIds() name=%s\n", name);
 	resp, err := s.client.GetImageLayerInfo(ctx, &imagesapi.GetImageLayerInfoRequest{
 		Name:    name,
 	});
