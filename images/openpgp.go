@@ -2,10 +2,10 @@ package images
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
-	"fmt"
 	"time"
 
 	"crypto"
@@ -25,54 +25,32 @@ var (
 	}
 )
 
-// createWrappedKeys creates wrapped key bytes
-func createWrappedKeys(symKey []byte, recipients openpgp.EntityList, config *packet.Config) (wrappedKeys [][]byte, err error) {
-	// Array of serialized EncryptedKeys
-	encKeys := make([][]byte, 0, len(recipients))
-	encKeyBuf := new(bytes.Buffer)
+// encryptData encrypts data with openpgp and returns the encrypted blob and wrapped keys separately
+func encryptData(data []byte, recipients openpgp.EntityList, symKey []byte) (encBlob []byte, wrappedKeys [][]byte, err error) {
+	config := DefaultEncryptConfig
 
-	for _, et := range recipients {
-		pkey, canEncrypt := encryptionKey(et, time.Now())
-		if !canEncrypt {
-			log.Printf("Error key doesn't support encryption")
-			return nil, fmt.Errorf("key doesn't support encryption")
+	// If no symkey, generate
+	if len(symKey) == 0 {
+		symKey = make([]byte, config.DefaultCipher.KeySize())
+		if _, err := io.ReadFull(config.Random(), symKey); err != nil {
+			return nil, nil, err
 		}
-		if err := packet.SerializeEncryptedKey(encKeyBuf, pkey.PublicKey, config.DefaultCipher, symKey, config); err != nil {
-			return nil, fmt.Errorf("Error serializing encrypted key: %v", err)
-		}
-		encryptedKeyBytes := encKeyBuf.Bytes()
-		encKeys = append(encKeys, encryptedKeyBytes)
-		encKeyBuf = new(bytes.Buffer)
 	}
 
-	log.Printf("Encrypted keys' bytes: %x", encKeys)
+	wrappedKeys, err = createWrappedKeys(symKey, recipients, config)
+	if err != nil {
+		return nil, nil, err
+	}
 
-	return encKeys, nil
+	encBlob, err = createEncryptedBlob(data, symKey, config)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return encBlob, wrappedKeys, nil
 }
 
-// createEncryptedBlob creates encrypted data blob bytes
-func createEncryptedBlob(data []byte, symKey []byte, config *packet.Config) (encBlob []byte, err error) {
-	// Perform encryption
-	encData := new(bytes.Buffer)
-	encContent, err := packet.SerializeSymmetricallyEncrypted(encData, config.DefaultCipher, symKey, config)
-	if err != nil {
-		return nil, fmt.Errorf("Error serializing SymmetricallyEncrypted packet: %v", err)
-	}
-
-	content, err := packet.SerializeLiteral(encContent, true, "", 0)
-	if err != nil {
-		return nil, fmt.Errorf("Error serializing Lietral packet: %v", err)
-	}
-
-	content.Write(data)
-	content.Close()
-
-	encBlob = encData.Bytes()
-	log.Printf("Encrypted data bytes: %x", encBlob)
-
-	return encBlob, nil
-}
-
+// decryptData decrypts an openpgp encrypted blob and wrapped keys and returns the decrypted data
 func decryptData(encBlob []byte, wrappedKeys [][]byte, kring openpgp.EntityList) (data []byte, err error) {
 	// Assemble message by concatenating packets
 	message := make([]byte, 0)
@@ -120,28 +98,52 @@ func decryptData(encBlob []byte, wrappedKeys [][]byte, kring openpgp.EntityList)
 	return plaintext, nil
 }
 
-func encryptData(data []byte, recipients openpgp.EntityList, symKey []byte) (encBlob []byte, wrappedKeys [][]byte, err error) {
-	config := DefaultEncryptConfig
+// createWrappedKeys creates wrapped key bytes
+func createWrappedKeys(symKey []byte, recipients openpgp.EntityList, config *packet.Config) (wrappedKeys [][]byte, err error) {
+	// Array of serialized EncryptedKeys
+	encKeys := make([][]byte, 0, len(recipients))
+	encKeyBuf := new(bytes.Buffer)
 
-	// If no symkey, generate
-	if len(symKey) == 0 {
-		symKey = make([]byte, config.DefaultCipher.KeySize())
-		if _, err := io.ReadFull(config.Random(), symKey); err != nil {
-			return nil, nil, err
+	for _, et := range recipients {
+		pkey, canEncrypt := encryptionKey(et, time.Now())
+		if !canEncrypt {
+			log.Printf("Error key doesn't support encryption")
+			return nil, fmt.Errorf("key doesn't support encryption")
 		}
+		if err := packet.SerializeEncryptedKey(encKeyBuf, pkey.PublicKey, config.DefaultCipher, symKey, config); err != nil {
+			return nil, fmt.Errorf("Error serializing encrypted key: %v", err)
+		}
+		encryptedKeyBytes := encKeyBuf.Bytes()
+		encKeys = append(encKeys, encryptedKeyBytes)
+		encKeyBuf = new(bytes.Buffer)
 	}
 
-	wrappedKeys, err = createWrappedKeys(symKey, recipients, config)
+	log.Printf("Encrypted keys' bytes: %x", encKeys)
+
+	return encKeys, nil
+}
+
+// createEncryptedBlob creates encrypted data blob bytes
+func createEncryptedBlob(data []byte, symKey []byte, config *packet.Config) (encBlob []byte, err error) {
+	// Perform encryption
+	encData := new(bytes.Buffer)
+	encContent, err := packet.SerializeSymmetricallyEncrypted(encData, config.DefaultCipher, symKey, config)
 	if err != nil {
-		return nil, nil, err
+		return nil, fmt.Errorf("Error serializing SymmetricallyEncrypted packet: %v", err)
 	}
 
-	encBlob, err = createEncryptedBlob(data, symKey, config)
+	content, err := packet.SerializeLiteral(encContent, true, "", 0)
 	if err != nil {
-		return nil, nil, err
+		return nil, fmt.Errorf("Error serializing Lietral packet: %v", err)
 	}
 
-	return encBlob, wrappedKeys, nil
+	content.Write(data)
+	content.Close()
+
+	encBlob = encData.Bytes()
+	log.Printf("Encrypted data bytes: %x", encBlob)
+
+	return encBlob, nil
 }
 
 // Helper private functions copied from golang.org/x/crypto/openpgp/packet
