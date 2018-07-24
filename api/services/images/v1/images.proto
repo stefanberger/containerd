@@ -136,7 +136,13 @@ message EncryptConfig {
 	bytes gpgpubkeyring = 2;
 }
 
+message DecryptKeyData {
+	bytes keyData = 1;
+	bytes keyDataPassword = 2;
+}
+
 message DecryptConfig {
+	map<uint64, DecryptKeyData> keyIdMap = 1;
 }
 
 message EncryptImageRequest {
@@ -154,7 +160,7 @@ message DecryptImageRequest {
 	string name = 1;
 	string newName = 2;
 
-	DecryptConfig cc = 3;
+	DecryptConfig dc = 3;
 }
 
 message DecryptImageResponse {
