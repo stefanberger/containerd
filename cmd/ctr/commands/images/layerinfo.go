@@ -35,7 +35,10 @@ var layerinfoCommand = cli.Command{
 
 	XYZ
 `,
-	Flags: commands.RegistryFlags,
+	Flags: append(commands.RegistryFlags, cli.IntSliceFlag{
+		Name:  "layer",
+		Usage: "The layer to get info for; this must be either the layer number or a negative number starting with -1 for topmost layer",
+	}),
 	Action: func(context *cli.Context) error {
 		var (
 			local = context.Args().First()
@@ -49,7 +52,7 @@ var layerinfoCommand = cli.Command{
 		}
 		defer cancel()
 
-		LayerInfos, err := client.ImageService().GetImageLayerInfo(ctx, local)
+		LayerInfos, err := client.ImageService().GetImageLayerInfo(ctx, local, context.IntSlice("layer"))
 		if err != nil {
 			return err
 		}

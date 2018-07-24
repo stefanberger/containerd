@@ -103,9 +103,9 @@ type Store interface {
 
 	Delete(ctx context.Context, name string, opts ...DeleteOpt) error
 
-	EncryptImage(ctx context.Context, name, newName string, ec *CryptoConfig) (Image, error)
-	DecryptImage(ctx context.Context, name, newName string, ec *CryptoConfig) (Image, error)
-	GetImageLayerInfo(ctx context.Context, name string) ([]LayerInfo, error)
+	EncryptImage(ctx context.Context, name, newName string, ec *CryptoConfig, layers []int) (Image, error)
+	DecryptImage(ctx context.Context, name, newName string, ec *CryptoConfig, layers []int) (Image, error)
+	GetImageLayerInfo(ctx context.Context, name string, layers []int) ([]LayerInfo, error)
 }
 
 // TODO(stevvooe): Many of these functions make strong platform assumptions,
@@ -391,13 +391,58 @@ func cryptLayer(ctx context.Context, cs content.Store, desc ocispec.Descriptor, 
 	return newDesc, nil
 }
 
+// isDecriptorALayer determines whether the given Descriptor describes a layer
+func isDescriptorALayer(desc ocispec.Descriptor) bool {
+	switch desc.MediaType {
+	case MediaTypeDockerSchema2LayerGzip,MediaTypeDockerSchema2Layer,
+		MediaTypeDockerSchema2LayerGzipPGP,MediaTypeDockerSchema2LayerPGP:
+		return true
+	}
+	return false
+}
+
+// countLayers counts the number of layer OCI descriptors in the given array
+func countLayers(desc []ocispec.Descriptor) int {
+	c := 0
+
+	for _, d := range desc {
+		if isDescriptorALayer(d) {
+			c = c + 1
+		}
+	}
+	return c
+}
+
+// needModifyLayer checks whether we need to modify this layer given its number
+// A layer can be described with its (positive) index number or its negative number, which
+// is counted relative to the last one
+func isUserSelectedLayer(layerNum, layersTotal int, layers []int) bool {
+	if len(layers) == 0 {
+		// convenience for the user; none given means 'all'
+		return true
+	}
+	negNumber := layerNum - layersTotal
+	fmt.Printf("%d vs %d\n", layerNum, negNumber)
+
+	for _, l := range layers {
+		if l == negNumber || l == layerNum {
+			return true
+		}
+	}
+	return false;
+}
+
 // Encrypt all the Children of a given descriptor
-func cryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descriptor, cc *CryptoConfig, encrypt bool) (ocispec.Descriptor, bool, error) {
-	//fmt.Printf("metadata/image.go EncryptChildren(): Getting Children of %s [%s]\n", desc.MediaType, desc.Digest)
+func cryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descriptor, cc *CryptoConfig, layers []int, encrypt bool) (ocispec.Descriptor, bool, error) {
+	layerNum := 0
+
 	children, err := Children(ctx, cs, desc)
 	if err != nil {
 		return ocispec.Descriptor{}, false, err
 	}
+
+	layersTotal := countLayers(children)
+
 	//fmt.Printf("metadata/image.go EncryptChildren(): got %d children\n", len(children))
 	var newLayers []ocispec.Descriptor
 	var config ocispec.Descriptor
@@ -405,14 +450,12 @@ func cryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descripto
 
 	for _, child := range children {
 		// we only encrypt child layers and have to update their parents if encyrption happened
-		//fmt.Printf("   child : %s\n", child.MediaType)
 		switch child.MediaType {
 		case MediaTypeDockerSchema2Config:
 			config = child
 		case MediaTypeDockerSchema2LayerGzip,MediaTypeDockerSchema2Layer:
 			// this one we can only encrypt
-			if encrypt {
-				//fmt.Printf("   ... a layer to encrypt\n")
+			if encrypt && isUserSelectedLayer(layerNum, layersTotal, layers) {
 				nl, err := cryptLayer(ctx, cs, child, cc, true)
 				if err != nil {
 					return ocispec.Descriptor{}, false, err
@@ -422,9 +465,10 @@ func cryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descripto
 			} else {
 				newLayers = append(newLayers, child)
 			}
+			layerNum = layerNum + 1
 		case MediaTypeDockerSchema2LayerGzipPGP, MediaTypeDockerSchema2LayerPGP:
 			// this one we can only decrypt
-			if !encrypt {
+			if !encrypt && isUserSelectedLayer(layerNum, layersTotal, layers){
 				nl, err := cryptLayer(ctx, cs, child, cc, false)
 				if err != nil {
 					return ocispec.Descriptor{}, false, err
@@ -434,6 +478,7 @@ func cryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descripto
 			} else {
 				newLayers = append(newLayers, child)
 			}
+			layerNum = layerNum + 1
 		default:
 			return ocispec.Descriptor{}, false, errors.Wrapf(err, "Bad/unhandled MediaType %s in encryptChildren\n", child.MediaType)
 		}
@@ -479,7 +524,7 @@ func cryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descripto
 }
 
 // cryptManifestList encrypts or decrypts the children of a top level manifest list
-func CryptManifestList(ctx context.Context, cs content.Store, desc ocispec.Descriptor, cc *CryptoConfig, encrypt bool) (ocispec.Descriptor, bool, error) {
+func CryptManifestList(ctx context.Context, cs content.Store, desc ocispec.Descriptor, cc *CryptoConfig, layers []int, encrypt bool) (ocispec.Descriptor, bool, error) {
 	if desc.MediaType != MediaTypeDockerSchema2ManifestList {
 		return ocispec.Descriptor{}, false, errors.Wrapf(nil, "Wrong media type %s passed. Need %s.\n", desc.MediaType, MediaTypeDockerSchema2ManifestList)
 	}
@@ -497,7 +542,7 @@ func CryptManifestList(ctx context.Context, cs content.Store, desc ocispec.Descr
 	var newManifests []ocispec.Descriptor
 	modified := false
 	for _, manifest := range index.Manifests {
-		newManifest, m, err := cryptChildren(ctx, cs, manifest, cc, encrypt)
+		newManifest, m, err := cryptChildren(ctx, cs, manifest, cc, layers, encrypt)
 		if err != nil {
 			return ocispec.Descriptor{}, false, err
 		}
@@ -543,9 +588,10 @@ func CryptManifestList(ctx context.Context, cs content.Store, desc ocispec.Descr
 // Get the image key Ids necessary for decrypting an image
 // We determine the KeyIds starting with  the given OCI Decriptor, recursing to lower-level descriptors
 // until we get them from the layer descriptors
-func GetImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descriptor) ([]LayerInfo, error) {
+func GetImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descriptor, layers []int, layerNum int) ([]LayerInfo, error) {
 	var (
 		lis []LayerInfo
+		tmp []LayerInfo
 		Platform string
 	)
 
@@ -559,13 +605,26 @@ func GetImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descr
 		if err != nil {
 			return []LayerInfo{}, err
 		}
+
+		layersTotal := countLayers(children)
+		layerNum := -1
+
 		for _, child := range children {
-			tmp, err := GetImageLayerInfo(ctx, cs, child)
+			if isDescriptorALayer(child) {
+				layerNum = layerNum + 1
+				if isUserSelectedLayer(layerNum, layersTotal, layers) {
+					tmp, err = GetImageLayerInfo(ctx, cs, child, layers, layerNum)
+				} else {
+					continue
+				}
+			} else {
+				tmp, err = GetImageLayerInfo(ctx, cs, child, layers, -1)
+			}
 			if err != nil {
 				return []LayerInfo{}, err
 			}
+
 			for i := 0; i < len(tmp); i++ {
-				tmp[i].Id = uint32(i)
 				if Platform != "" {
 					tmp[i].Platform = Platform
 				}
@@ -578,6 +637,7 @@ func GetImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descr
 			Digest:       desc.Digest.String(),
 			Encryption:   "",
 			FileSize:     desc.Size,
+			Id:           uint32(layerNum),
 		}
 		lis = append(lis, li)
 	case MediaTypeDockerSchema2Config:
@@ -595,6 +655,7 @@ func GetImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descr
 			Digest:       desc.Digest.String(),
 			Encryption:   "gpg",
 			FileSize:     desc.Size,
+			Id:           uint32(layerNum),
 		}
 		lis = append(lis, li)
 	default:
