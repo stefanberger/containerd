@@ -114,8 +114,8 @@ var decryptCommand = cli.Command{
 				found = true
 				break
 			}
-			if !found {
-				return fmt.Errorf("Missing key for decryption of layer %d.\n", LayerInfo.Id)
+			if !found && len(LayerInfo.KeyIds) > 0 {
+				return fmt.Errorf("Missing key for decryption of layer %d of %s. Need one of the following keys: %s\n", LayerInfo.Id, LayerInfo.Platform, LayerInfo.KeyIds)
 			}
 		}
 		fmt.Printf("\n")
