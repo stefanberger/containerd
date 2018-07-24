@@ -2271,7 +2271,53 @@ file {
     }
   }
   message_type {
+    name: "DecryptKeyData"
+    field {
+      name: "keyData"
+      number: 1
+      label: LABEL_OPTIONAL
+      type: TYPE_BYTES
+      json_name: "keyData"
+    }
+    field {
+      name: "keyDataPassword"
+      number: 2
+      label: LABEL_OPTIONAL
+      type: TYPE_BYTES
+      json_name: "keyDataPassword"
+    }
+  }
+  message_type {
     name: "DecryptConfig"
+    field {
+      name: "keyIdMap"
+      number: 1
+      label: LABEL_REPEATED
+      type: TYPE_MESSAGE
+      type_name: ".containerd.services.images.v1.DecryptConfig.KeyIdMapEntry"
+      json_name: "keyIdMap"
+    }
+    nested_type {
+      name: "KeyIdMapEntry"
+      field {
+        name: "key"
+        number: 1
+        label: LABEL_OPTIONAL
+        type: TYPE_UINT64
+        json_name: "key"
+      }
+      field {
+        name: "value"
+        number: 2
+        label: LABEL_OPTIONAL
+        type: TYPE_MESSAGE
+        type_name: ".containerd.services.images.v1.DecryptKeyData"
+        json_name: "value"
+      }
+      options {
+        map_entry: true
+      }
+    }
   }
   message_type {
     name: "EncryptImageRequest"
@@ -2329,12 +2375,12 @@ file {
       json_name: "newName"
     }
     field {
-      name: "cc"
+      name: "dc"
       number: 3
       label: LABEL_OPTIONAL
       type: TYPE_MESSAGE
       type_name: ".containerd.services.images.v1.DecryptConfig"
-      json_name: "cc"
+      json_name: "dc"
     }
   }
   message_type {
