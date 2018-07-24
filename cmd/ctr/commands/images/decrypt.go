@@ -17,11 +17,17 @@
 package images
 
 import (
+	"io/ioutil"
+	"os/exec"
 	"fmt"
+	"syscall"
 
+	"github.com/containerd/containerd/images"
 	"github.com/containerd/containerd/cmd/ctr/commands"
 	"github.com/pkg/errors"
 	"github.com/urfave/cli"
+
+	"golang.org/x/crypto/ssh/terminal"
 )
 
 var decryptCommand = cli.Command{
@@ -64,17 +70,58 @@ var decryptCommand = cli.Command{
 			keyIds = addToSet(keyIds, LayerInfos[i].KeyIds)
 		}
 
+		keyIdMap := make(map[uint64]images.DecryptKeyData)
 		if len(keyIds) == 0 {
-			fmt.Printf("Image is not encrypted.\n")
+			fmt.Printf("The image is not encrypted.\n")
+			return nil
 		} else {
-			fmt.Printf("Image is encrypted to the following keys: ")
 			for _, keyid := range keyIds {
-				fmt.Printf("0x%x ", keyid)
+				fmt.Printf("Enter password for key with Id 0x%x: ", keyid)
+				password, err := terminal.ReadPassword(int(syscall.Stdin))
+				if err != nil {
+					return err
+				}
+				keydata, err := GetGPGPrivateKey(keyid, string(password))
+				if err != nil {
+					return err
+				}
+				keyIdMap[keyid] = images.DecryptKeyData{
+					KeyData:         keydata,
+					KeyDataPassword: password,
+				}
 			}
 			fmt.Printf("\n")
 		}
+		client.ImageService().DecryptImage(ctx, local, newName, &images.CryptoConfig{
+			Dc: &images.DecryptConfig {
+				KeyIdMap: keyIdMap,
+			},
+		})
+
 		return nil
 	},
+}
+
+func GetGPGPrivateKey (keyid uint64, password string) ([]byte, error) {
+	args := append([]string{"--pinentry-mode", "loopback", "--passphrase", password,"--export-secret-key"}, fmt.Sprintf("0x%x", keyid))
+
+	cmd := exec.Command("gpg2", args...)
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, err
+	}
+	if err := cmd.Start(); err != nil {
+		return nil, err
+	}
+
+	keydata, err2 := ioutil.ReadAll(stdout)
+
+	if err := cmd.Wait(); err != nil {
+		return nil, err
+	}
+
+	return keydata, err2
 }
 
 func addToSet(set, add []uint64) []uint64 {
