@@ -90,10 +90,8 @@ var decryptCommand = cli.Command{
 					break
 				}
 				// do we have this key
-				haveKey, err := HaveGPGPrivateKey(keyid)
-				if err != nil {
-					return err
-				}
+				haveKey, _ := HaveGPGPrivateKey(keyid)
+				// this may fail if the key is not here; we ignore the error
 				if !haveKey {
 					// key not on this system
 					continue
@@ -101,6 +99,7 @@ var decryptCommand = cli.Command{
 				fmt.Printf("Enter password for key with Id 0x%x: ", keyid)
 				password, err := terminal.ReadPassword(int(syscall.Stdin))
 				if err != nil {
+					fmt.Printf("B!\n");
 					return err
 				}
 				keydata, err := GetGPGPrivateKey(keyid, string(password))
