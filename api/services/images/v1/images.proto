@@ -150,6 +150,7 @@ message EncryptImageRequest {
 	string newName = 2;
 
 	EncryptConfig cc = 3;
+	repeated int32 layers = 4;
 }
 
 message EncryptImageResponse {
@@ -161,6 +162,7 @@ message DecryptImageRequest {
 	string newName = 2;
 
 	DecryptConfig dc = 3;
+	repeated int32 layers = 4;
 }
 
 message DecryptImageResponse {
@@ -169,7 +171,7 @@ message DecryptImageResponse {
 
 message GetImageLayerInfoRequest {
 	string name = 1;
-	string platform = 2;
+	repeated int32 layers = 2;
 }
 
 message LayerInfo {
