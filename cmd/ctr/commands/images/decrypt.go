@@ -98,8 +98,8 @@ var decryptCommand = cli.Command{
 				}
 				fmt.Printf("Enter password for key with Id 0x%x: ", keyid)
 				password, err := terminal.ReadPassword(int(syscall.Stdin))
+				fmt.Printf("\n")
 				if err != nil {
-					fmt.Printf("B!\n");
 					return err
 				}
 				keydata, err := GetGPGPrivateKey(keyid, string(password))
@@ -148,6 +148,7 @@ func GetGPGPrivateKey (keyid uint64, password string) ([]byte, error) {
 	cmd := exec.Command("gpg2", args...)
 
 	stdout, err := cmd.StdoutPipe()
+	stderr, err := cmd.StderrPipe()
 	if err != nil {
 		return nil, err
 	}
@@ -156,9 +157,10 @@ func GetGPGPrivateKey (keyid uint64, password string) ([]byte, error) {
 	}
 
 	keydata, err2 := ioutil.ReadAll(stdout)
+	message, _ := ioutil.ReadAll(stderr)
 
 	if err := cmd.Wait(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Error from gpg2: %s\n", message)
 	}
 
 	return keydata, err2
