@@ -210,8 +210,19 @@ func (l *local) DecryptImage(ctx context.Context, req *imagesapi.DecryptImageReq
 
 	var resp       imagesapi.DecryptImageResponse
 
+	keyIdMap := make(map[uint64]images.DecryptKeyData)
+
+	for k, v := range req.Dc.KeyIdMap {
+		keyIdMap[k] = images.DecryptKeyData{
+			KeyData:         v.KeyData,
+			KeyDataPassword: v.KeyDataPassword,
+		}
+	}
+
 	encrypted, err := l.store.DecryptImage(ctx, req.Name, req.NewName, &images.CryptoConfig{
-		// FIXME: missing parameters here
+		Dc:	&images.DecryptConfig{
+			KeyIdMap: keyIdMap,
+		},
 	})
 	if err != nil {
 		return nil, errdefs.ToGRPC(err)
