@@ -50,8 +50,9 @@ func (s *remoteImages) Get(ctx context.Context, name string) (images.Image, erro
 	return imageFromProto(resp.Image), nil
 }
 
-func (s *remoteImages) EncryptImage(ctx context.Context, name, newName string, cc *images.CryptoConfig) (images.Image, error) {
+func (s *remoteImages) EncryptImage(ctx context.Context, name, newName string, cc *images.CryptoConfig, layers []int) (images.Image, error) {
 	fmt.Printf("image_store.go: EncryptImage() name=%s\n", name);
+
 	resp, err := s.client.EncryptImage(ctx, &imagesapi.EncryptImageRequest{
 		Name:    name,
 		NewName: newName,
@@ -59,6 +60,7 @@ func (s *remoteImages) EncryptImage(ctx context.Context, name, newName string, c
 			Recipients   : cc.Ec.Recipients,
 			Gpgpubkeyring: cc.Ec.GPGPubRingFile,
 		},
+		Layers: layersToLayers32(layers),
 	});
 	if err != nil {
 		return images.Image{}, errdefs.FromGRPC(err)
@@ -67,7 +69,7 @@ func (s *remoteImages) EncryptImage(ctx context.Context, name, newName string, c
 	return imageFromProto(&resp.Image), nil
 }
 
-func (s *remoteImages) DecryptImage(ctx context.Context, name, newName string, cc *images.CryptoConfig) (images.Image, error) {
+func (s *remoteImages) DecryptImage(ctx context.Context, name, newName string, cc *images.CryptoConfig, layers []int) (images.Image, error) {
 	keyIdMap := make(map[uint64]*imagesapi.DecryptKeyData)
 	for k, v := range cc.Dc.KeyIdMap {
 		keyIdMap[k] = &imagesapi.DecryptKeyData{
@@ -75,12 +77,14 @@ func (s *remoteImages) DecryptImage(ctx context.Context, name, newName string, c
 			KeyDataPassword: v.KeyDataPassword,
 		}
 	}
+
 	resp, err := s.client.DecryptImage(ctx, &imagesapi.DecryptImageRequest{
 		Name:    name,
 		NewName: newName,
 		Dc:      &imagesapi.DecryptConfig{
 			KeyIdMap: keyIdMap,
 		},
+		Layers: layersToLayers32(layers),
 	});
 	if err != nil {
 		return images.Image{}, errdefs.FromGRPC(err)
@@ -89,9 +93,19 @@ func (s *remoteImages) DecryptImage(ctx context.Context, name, newName string, c
 	return imageFromProto(&resp.Image), nil
 }
 
-func (s *remoteImages) GetImageLayerInfo(ctx context.Context, name string) ([]images.LayerInfo, error) {
+func layersToLayers32(layers []int) []int32 {
+	var layers32 [] int32
+
+	for _, layer := range layers {
+		layers32 = append(layers32, int32(layer))
+	}
+	return layers32
+}
+
+func (s *remoteImages) GetImageLayerInfo(ctx context.Context, name string, layers []int) ([]images.LayerInfo, error) {
 	resp, err := s.client.GetImageLayerInfo(ctx, &imagesapi.GetImageLayerInfoRequest{
 		Name:    name,
+		Layers:  layersToLayers32(layers),
 	});
 	if err != nil {
 		return []images.LayerInfo{}, errdefs.FromGRPC(err)

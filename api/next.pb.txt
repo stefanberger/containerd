@@ -2343,6 +2343,13 @@ file {
       type_name: ".containerd.services.images.v1.EncryptConfig"
       json_name: "cc"
     }
+    field {
+      name: "layers"
+      number: 4
+      label: LABEL_REPEATED
+      type: TYPE_INT32
+      json_name: "layers"
+    }
   }
   message_type {
     name: "EncryptImageResponse"
@@ -2382,6 +2389,13 @@ file {
       type_name: ".containerd.services.images.v1.DecryptConfig"
       json_name: "dc"
     }
+    field {
+      name: "layers"
+      number: 4
+      label: LABEL_REPEATED
+      type: TYPE_INT32
+      json_name: "layers"
+    }
   }
   message_type {
     name: "DecryptImageResponse"
@@ -2407,11 +2421,11 @@ file {
       json_name: "name"
     }
     field {
-      name: "platform"
+      name: "layers"
       number: 2
-      label: LABEL_OPTIONAL
-      type: TYPE_STRING
-      json_name: "platform"
+      label: LABEL_REPEATED
+      type: TYPE_INT32
+      json_name: "layers"
     }
   }
   message_type {
