@@ -22,8 +22,8 @@ import (
 	"fmt"
 	"syscall"
 
-	"github.com/containerd/containerd/images"
 	"github.com/containerd/containerd/cmd/ctr/commands"
+	"github.com/containerd/containerd/images"
 	"github.com/pkg/errors"
 	"github.com/urfave/cli"
 
@@ -38,15 +38,16 @@ var decryptCommand = cli.Command{
 
 	XYZ
 `,
-	Flags: append(commands.RegistryFlags, cli.StringSliceFlag{
-		Name:  "foo",
-		Usage: "foo",
+	Flags: append(commands.RegistryFlags, cli.IntSliceFlag{
+		Name:  "layer",
+		Usage: "The layer to decrypt; this must be either the layer number or a negative number starting with -1 for topmost layer",
 	}),
 	Action: func(context *cli.Context) error {
 		var (
 			local = context.Args().First()
 			newName = context.Args().Get(1)
 		)
+		fmt.Printf("pl: %s\n", context.StringSlice("platform"))
 		if local == "" {
 			return errors.New("please provide the name of an image to decrypt")
 		}
@@ -61,7 +62,7 @@ var decryptCommand = cli.Command{
 		}
 		defer cancel()
 
-		LayerInfos, err := client.ImageService().GetImageLayerInfo(ctx, local)
+		LayerInfos, err := client.ImageService().GetImageLayerInfo(ctx, local, context.IntSlice("layer"))
 		if err != nil {
 			return err
 		}
@@ -118,13 +119,12 @@ var decryptCommand = cli.Command{
 			}
 		}
 		fmt.Printf("\n")
-		client.ImageService().DecryptImage(ctx, local, newName, &images.CryptoConfig{
+		_, err = client.ImageService().DecryptImage(ctx, local, newName, &images.CryptoConfig{
 			Dc: &images.DecryptConfig {
 				KeyIdMap: keyIdMap,
 			},
-		})
-
-		return nil
+		}, context.IntSlice("layer"))
+		return err
 	},
 }
 
