@@ -65,17 +65,38 @@ var decryptCommand = cli.Command{
 		if err != nil {
 			return err
 		}
-		var keyIds []uint64
+
+		isEncrypted := false
 		for i := 0; i < len(LayerInfos); i++ {
-			keyIds = addToSet(keyIds, LayerInfos[i].KeyIds)
+			if len(LayerInfos[i].KeyIds) > 0 {
+				isEncrypted = true
+			}
+		}
+		if !isEncrypted {
+			fmt.Printf("The image is not encrypted.\n")
+			return nil
 		}
 
 		keyIdMap := make(map[uint64]images.DecryptKeyData)
-		if len(keyIds) == 0 {
-			fmt.Printf("The image is not encrypted.\n")
-			return nil
-		} else {
-			for _, keyid := range keyIds {
+
+		// we need one key per encrypted layer
+		for _, LayerInfo := range LayerInfos {
+			found := false
+			for _, keyid := range LayerInfo.KeyIds {
+				if _, ok := keyIdMap[keyid]; ok {
+					// password already there
+					found = true
+					break
+				}
+				// do we have this key
+				haveKey, err := HaveGPGPrivateKey(keyid)
+				if err != nil {
+					return err
+				}
+				if !haveKey {
+					// key not on this system
+					continue
+				}
 				fmt.Printf("Enter password for key with Id 0x%x: ", keyid)
 				password, err := terminal.ReadPassword(int(syscall.Stdin))
 				if err != nil {
@@ -89,9 +110,14 @@ var decryptCommand = cli.Command{
 					KeyData:         keydata,
 					KeyDataPassword: password,
 				}
+				found = true
+				break
 			}
-			fmt.Printf("\n")
+			if !found {
+				return fmt.Errorf("Missing key for decryption of layer %d.\n", LayerInfo.Id)
+			}
 		}
+		fmt.Printf("\n")
 		client.ImageService().DecryptImage(ctx, local, newName, &images.CryptoConfig{
 			Dc: &images.DecryptConfig {
 				KeyIdMap: keyIdMap,
@@ -100,6 +126,21 @@ var decryptCommand = cli.Command{
 
 		return nil
 	},
+}
+
+func HaveGPGPrivateKey(keyid uint64) (bool, error) {
+	args := append([]string{"-K"}, fmt.Sprintf("0x%x", keyid))
+
+	cmd := exec.Command("gpg2", args...)
+
+	if err := cmd.Start(); err != nil {
+		return false, err
+	}
+
+	if err := cmd.Wait(); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func GetGPGPrivateKey (keyid uint64, password string) ([]byte, error) {
