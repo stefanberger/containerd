@@ -37,13 +37,27 @@ type EncryptConfig struct {
        GPGPubRingFile []byte
 }
 
+// DecryptKeyData stores private key data for decryption and the necessary password
+// for being able to access/decrypt the private key data
+type DecryptKeyData struct {
+	KeyData []byte
+	KeyDataPassword []byte
+}
+
+// DecryptConfig stores the KeyIDs of keys needed for decryption as keys of
+// a map and the actual private key data in the values
+type DecryptConfig struct {
+	KeyIdMap map[uint64]DecryptKeyData
+}
+
+// CryptoConfig is a common wrapper for EncryptConfig and DecrypConfig that can
+// be passed through functions that share much code for encryption and decryption
 type CryptoConfig struct {
 	Ec *EncryptConfig
+	Dc *DecryptConfig
 }
 
-type Encryptor interface {
-}
-
+// ReadGPGPubRingFile reads the GPG public key ring file
 func ReadGPGPubRingFile() ([]byte, error) {
 	home, err := homedir.Dir()
 	if err != nil {
@@ -112,7 +126,7 @@ func createEntityList(cc *CryptoConfig) (openpgp.EntityList, error) {
 	return filteredList, nil
 }
 
-// Encrypt encrypts a byte array using data from the EncryptConfig
+// Encrypt encrypts a byte array using data from the CryptoConfig
 func Encrypt(cc *CryptoConfig, data []byte) ([]byte, error) {
 	filteredList, err := createEntityList(cc)
 	if err != nil {
@@ -141,13 +155,37 @@ func Encrypt(cc *CryptoConfig, data []byte) ([]byte, error) {
 	return ioutil.ReadAll(buf)
 }
 
-// Decrypt decrypts a byte array using data from the EncryptConfig
+// Decrypt decrypts a byte array using data from the CryptoConfig
 func Decrypt(cc *CryptoConfig, data []byte) ([]byte, error) {
-	// nothing here for now...
-	return data, fmt.Errorf("Missing implementation")
+	dc := cc.Dc
+	keyIds, err := GetKeyIds(data, ocispec.Descriptor{})
+	if err != nil {
+		return []byte{}, err
+	}
+	// decrypt with the right key
+	for _, keyId := range keyIds {
+		if keydata, ok := dc.KeyIdMap[keyId]; ok {
+			r := bytes.NewReader(keydata.KeyData)
+			entityList, err := openpgp.ReadKeyRing(r)
+			if err != nil {
+				return []byte{}, err
+			}
+			entity := entityList[0]
+			entity.PrivateKey.Decrypt(keydata.KeyDataPassword)
+			for _, subkey := range entity.Subkeys {
+				subkey.PrivateKey.Decrypt(keydata.KeyDataPassword)
+			}
+			md, err := openpgp.ReadMessage(bytes.NewBuffer(data), entityList, nil, nil)
+			if err != nil {
+				return []byte{}, err
+			}
+			return ioutil.ReadAll(md.UnverifiedBody)
+		}
+	}
+	return []byte{}, fmt.Errorf("No suitable decryption key was found.")
 }
 
-// GetKeyIds 
+// GetKeyIds gets the Key IDs for which the data are encrypted
 func GetKeyIds(encData []byte, desc ocispec.Descriptor) ([]uint64, error) {
 	var keyids []uint64
 

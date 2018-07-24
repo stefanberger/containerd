@@ -358,23 +358,24 @@ func cryptLayer(ctx context.Context, cs content.Store, desc ocispec.Descriptor, 
 		Size:     size,
 		Platform: desc.Platform,
 	}
-	newDesc.Annotations = make(map[string]string)
-	newDesc.Annotations["org.opencontainers.image.pgp.keys"] = "foo-bar"
+	if encrypt {
+		newDesc.Annotations = make(map[string]string)
+		newDesc.Annotations["org.opencontainers.image.pgp.keys"] = "foo-bar"
+	}
 
 	switch (desc.MediaType) {
 	case MediaTypeDockerSchema2LayerGzip:
 		newDesc.MediaType = MediaTypeDockerSchema2LayerGzipPGP
-	case MediaTypeDockerSchema2LayerGzipPGP:
-		newDesc.MediaType = MediaTypeDockerSchema2LayerGzip
 	case MediaTypeDockerSchema2Layer:
 		newDesc.MediaType = MediaTypeDockerSchema2LayerPGP
+	case MediaTypeDockerSchema2LayerGzipPGP:
+		newDesc.MediaType = MediaTypeDockerSchema2LayerGzip
 	case MediaTypeDockerSchema2LayerPGP:
 		newDesc.MediaType = MediaTypeDockerSchema2Layer
 	default:
 		return ocispec.Descriptor{}, errors.Wrapf(err, "Unsupporter layer MediaType: %s\n", desc.MediaType)
 	}
 
-	fmt.Printf("   ... writing layer %s in encrypted form as %s\n", desc.Digest, d)
 	ref := fmt.Sprintf("layer-%s", newDesc.Digest.String())
 	content.WriteBlob(ctx, cs, ref, bytes.NewReader(p), newDesc);
 
