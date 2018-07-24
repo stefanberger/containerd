@@ -600,7 +600,10 @@ func GetImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descr
 		MediaTypeDockerSchema2Manifest, ocispec.MediaTypeImageManifest:
 		children, err := Children(ctx, cs, desc)
 		if desc.Platform != nil {
-			Platform = desc.Platform.OS + "/" + desc.Platform.Architecture
+			Platform = desc.Platform.OS + "/" + desc.Platform.Architecture;
+			if desc.Platform.Variant != "" {
+				Platform = Platform + "/" + desc.Platform.Variant
+			}
 		}
 		if err != nil {
 			return []LayerInfo{}, err
