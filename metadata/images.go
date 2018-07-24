@@ -79,8 +79,7 @@ func (s *imageStore) Get(ctx context.Context, name string) (images.Image, error)
 
 // cryptImage encrypts or decrypts an image with the given name and stores it either under the newName
 // or updates the existing one
-func (s *imageStore) cryptImage(ctx context.Context, name, newName string, cc *images.CryptoConfig, encrypt bool) (images.Image, error) {
-	fmt.Printf("metadata/images.go: cryptImage() name=%s\n", name)
+func (s *imageStore) cryptImage(ctx context.Context, name, newName string, cc *images.CryptoConfig, layers []int, encrypt bool) (images.Image, error) {
 	var image images.Image
 
 	namespace, err := namespaces.NamespaceRequired(ctx)
@@ -113,7 +112,7 @@ func (s *imageStore) cryptImage(ctx context.Context, name, newName string, cc *i
 	fmt.Printf("metadata/images.go: cs = %v\n",cs)
 	fmt.Printf("  high level image.Target is of MediaType %s\n", image.Target.MediaType)
 
-	newSpec, modified, err := images.CryptManifestList(ctx, cs, image.Target, cc, encrypt)
+	newSpec, modified, err := images.CryptManifestList(ctx, cs, image.Target, cc, layers, encrypt)
 	if err != nil {
 		return image, err
 	}
@@ -189,15 +188,15 @@ func (s *imageStore) cryptImage(ctx context.Context, name, newName string, cc *i
 	return image, nil
 }
 
-func (s *imageStore) EncryptImage(ctx context.Context, name, newName string, cc *images.CryptoConfig) (images.Image, error) {
-	return s.cryptImage(ctx, name, newName, cc, true)
+func (s *imageStore) EncryptImage(ctx context.Context, name, newName string, cc *images.CryptoConfig, layers []int) (images.Image, error) {
+	return s.cryptImage(ctx, name, newName, cc, layers, true)
 }
 
-func (s *imageStore) DecryptImage(ctx context.Context, name, newName string, cc *images.CryptoConfig) (images.Image, error) {
-	return s.cryptImage(ctx, name, newName, cc, false)
+func (s *imageStore) DecryptImage(ctx context.Context, name, newName string, cc *images.CryptoConfig, layers []int) (images.Image, error) {
+	return s.cryptImage(ctx, name, newName, cc, layers, false)
 }
 
-func (s *imageStore) GetImageLayerInfo(ctx context.Context, name string) ([]images.LayerInfo, error) {
+func (s *imageStore) GetImageLayerInfo(ctx context.Context, name string, layers []int) ([]images.LayerInfo, error) {
 	fmt.Printf("metadata/images.go: GetImageLayerInfo() name=%s\n", name)
 	var image images.Image
 
@@ -228,7 +227,7 @@ func (s *imageStore) GetImageLayerInfo(ctx context.Context, name string) ([]imag
 	}
 
 	cs := s.db.ContentStore()
-	return images.GetImageLayerInfo(ctx, cs, image.Target)
+	return images.GetImageLayerInfo(ctx, cs, image.Target, layers, -1)
 }
 
 func (s *imageStore) List(ctx context.Context, fs ...string) ([]images.Image, error) {

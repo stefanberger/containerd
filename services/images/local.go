@@ -184,14 +184,14 @@ func (l *local) Delete(ctx context.Context, req *imagesapi.DeleteImageRequest, _
 func (l *local) EncryptImage(ctx context.Context, req *imagesapi.EncryptImageRequest, _ ...grpc.CallOption) (*imagesapi.EncryptImageResponse, error) {
 	log.G(ctx).WithField("name", req.Name).Debugf("encrypt image")
 
-	var resp       imagesapi.EncryptImageResponse
+	var resp   imagesapi.EncryptImageResponse
 
 	encrypted, err := l.store.EncryptImage(ctx, req.Name, req.NewName, &images.CryptoConfig{
 		Ec:	&images.EncryptConfig{
 			Recipients    : req.Cc.Recipients,
 			GPGPubRingFile: req.Cc.Gpgpubkeyring,
 		},
-	})
+	}, layers32ToLayers(req.Layers))
 	if err != nil {
 		return nil, errdefs.ToGRPC(err)
 	}
@@ -210,7 +210,7 @@ func (l *local) EncryptImage(ctx context.Context, req *imagesapi.EncryptImageReq
 func (l *local) DecryptImage(ctx context.Context, req *imagesapi.DecryptImageRequest, _ ...grpc.CallOption) (*imagesapi.DecryptImageResponse, error) {
 	log.G(ctx).WithField("name", req.Name).Debugf("decrypt image")
 
-	var resp       imagesapi.DecryptImageResponse
+	var resp   imagesapi.DecryptImageResponse
 
 	keyIdMap := make(map[uint64]images.DecryptKeyData)
 
@@ -225,7 +225,7 @@ func (l *local) DecryptImage(ctx context.Context, req *imagesapi.DecryptImageReq
 		Dc:	&images.DecryptConfig{
 			KeyIdMap: keyIdMap,
 		},
-	})
+	}, layers32ToLayers(req.Layers))
 	if err != nil {
 		return nil, errdefs.ToGRPC(err)
 	}
@@ -246,7 +246,7 @@ func (l *local) GetImageLayerInfo(ctx context.Context, req *imagesapi.GetImageLa
 
 	var resp imagesapi.GetImageLayerInfoResponse
 
-	lis, err := l.store.GetImageLayerInfo(ctx, req.Name)
+	lis, err := l.store.GetImageLayerInfo(ctx, req.Name, layers32ToLayers(req.Layers))
 	if err != nil {
 		return nil, errdefs.ToGRPC(err)
 	}
@@ -266,4 +266,11 @@ func (l *local) GetImageLayerInfo(ctx context.Context, req *imagesapi.GetImageLa
 	return &resp, nil
 }
 
+func layers32ToLayers(layers []int32) []int {
+	var l []int
 
+	for _, layer := range layers{
+		l = append(l, int(layer))
+	}
+	return l;
+}
