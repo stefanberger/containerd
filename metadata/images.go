@@ -27,6 +27,7 @@ import (
 	"github.com/containerd/containerd/filters"
 	"github.com/containerd/containerd/images"
 	"github.com/containerd/containerd/labels"
+	"github.com/containerd/containerd/platforms"
 	"github.com/containerd/containerd/metadata/boltutil"
 	"github.com/containerd/containerd/namespaces"
 	digest "github.com/opencontainers/go-digest"
@@ -79,7 +80,7 @@ func (s *imageStore) Get(ctx context.Context, name string) (images.Image, error)
 
 // cryptImage encrypts or decrypts an image with the given name and stores it either under the newName
 // or updates the existing one
-func (s *imageStore) cryptImage(ctx context.Context, name, newName string, cc *images.CryptoConfig, layers []int, encrypt bool) (images.Image, error) {
+func (s *imageStore) cryptImage(ctx context.Context, name, newName string, cc *images.CryptoConfig, layers []int, platformList []string, encrypt bool) (images.Image, error) {
 	var image images.Image
 
 	namespace, err := namespaces.NamespaceRequired(ctx)
@@ -112,7 +113,17 @@ func (s *imageStore) cryptImage(ctx context.Context, name, newName string, cc *i
 	fmt.Printf("metadata/images.go: cs = %v\n",cs)
 	fmt.Printf("  high level image.Target is of MediaType %s\n", image.Target.MediaType)
 
-	newSpec, modified, err := images.CryptManifestList(ctx, cs, image.Target, cc, layers, encrypt)
+	pl, err := platforms.ParseArray(platformList)
+	if err != nil {
+		return image, err
+	}
+
+	lf := &images.LayerFilter {
+		Layers:    layers,
+		Platforms: pl,
+	}
+
+	newSpec, modified, err := images.CryptManifestList(ctx, cs, image.Target, cc, lf, encrypt)
 	if err != nil {
 		return image, err
 	}
@@ -188,16 +199,15 @@ func (s *imageStore) cryptImage(ctx context.Context, name, newName string, cc *i
 	return image, nil
 }
 
-func (s *imageStore) EncryptImage(ctx context.Context, name, newName string, cc *images.CryptoConfig, layers []int) (images.Image, error) {
-	return s.cryptImage(ctx, name, newName, cc, layers, true)
+func (s *imageStore) EncryptImage(ctx context.Context, name, newName string, cc *images.CryptoConfig, layers []int, platformList []string) (images.Image, error) {
+	return s.cryptImage(ctx, name, newName, cc, layers, platformList, true)
 }
 
-func (s *imageStore) DecryptImage(ctx context.Context, name, newName string, cc *images.CryptoConfig, layers []int) (images.Image, error) {
-	return s.cryptImage(ctx, name, newName, cc, layers, false)
+func (s *imageStore) DecryptImage(ctx context.Context, name, newName string, cc *images.CryptoConfig, layers []int, platformList []string) (images.Image, error) {
+	return s.cryptImage(ctx, name, newName, cc, layers, platformList, false)
 }
 
-func (s *imageStore) GetImageLayerInfo(ctx context.Context, name string, layers []int) ([]images.LayerInfo, error) {
-	fmt.Printf("metadata/images.go: GetImageLayerInfo() name=%s\n", name)
+func (s *imageStore) GetImageLayerInfo(ctx context.Context, name string, layers []int, platformList []string) ([]images.LayerInfo, error) {
 	var image images.Image
 
 	namespace, err := namespaces.NamespaceRequired(ctx)
@@ -227,7 +237,17 @@ func (s *imageStore) GetImageLayerInfo(ctx context.Context, name string, layers 
 	}
 
 	cs := s.db.ContentStore()
-	return images.GetImageLayerInfo(ctx, cs, image.Target, layers, -1)
+
+	pl, err := platforms.ParseArray(platformList)
+	if err != nil {
+		return []images.LayerInfo{}, err
+	}
+	lf := &images.LayerFilter {
+		Layers:    layers,
+		Platforms: pl,
+	}
+
+	return images.GetImageLayerInfo(ctx, cs, image.Target, lf, -1)
 }
 
 func (s *imageStore) List(ctx context.Context, fs ...string) ([]images.Image, error) {
