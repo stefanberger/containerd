@@ -127,38 +127,27 @@ func createEntityList(cc *CryptoConfig) (openpgp.EntityList, error) {
 }
 
 // Encrypt encrypts a byte array using data from the CryptoConfig
-func Encrypt(cc *CryptoConfig, data []byte) ([]byte, error) {
+func Encrypt(cc *CryptoConfig, data []byte) ([]byte, [][]byte, error) {
 	filteredList, err := createEntityList(cc)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if len(filteredList) == 0 {
-		return nil, fmt.Errorf("No keys were found to encrypt message to.\n")
+		return nil, nil, fmt.Errorf("No keys were found to encrypt message to.\n")
 	}
 
-	buf := new(bytes.Buffer)
-
-	w, err := openpgp.Encrypt(buf, filteredList, nil, nil, nil)
+	encBlob, wrappedKeys, err := encryptData(data, filteredList, nil)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	_, err = w.Write(data)
-	if err != nil {
-		return nil, err
-	}
-	err = w.Close();
-	if err != nil {
-		return nil, err
-	}
-
-	return ioutil.ReadAll(buf)
+	return encBlob, wrappedKeys, nil
 }
 
 // Decrypt decrypts a byte array using data from the CryptoConfig
 func Decrypt(cc *CryptoConfig, data []byte) ([]byte, error) {
 	dc := cc.Dc
-	keyIds, err := GetKeyIds(data, ocispec.Descriptor{})
+	keyIds, err := GetKeyIds(ocispec.Descriptor{})
 	if err != nil {
 		return []byte{}, err
 	}
@@ -186,17 +175,26 @@ func Decrypt(cc *CryptoConfig, data []byte) ([]byte, error) {
 }
 
 // GetKeyIds gets the Key IDs for which the data are encrypted
-func GetKeyIds(encData []byte, desc ocispec.Descriptor) ([]uint64, error) {
+func GetKeyIds(desc ocispec.Descriptor) ([]uint64, error) {
 	var keyids []uint64
 
-	r := bytes.NewReader(encData)
+    keys, err := getWrappedKeys(desc)
+    if err != nil {
+        return nil, err
+    }
 
-	packets := packet.NewReader(r)
+    kbytes := make([]byte, 0)
+    for _, k := range keys {
+        kbytes = append(kbytes, k...)
+    }
+    kbuf := bytes.NewBuffer(kbytes)
+
+	packets := packet.NewReader(kbuf)
 ParsePackets:
 	for {
 		p, err := packets.Next()
 		if err != nil {
-			return []uint64{}, fmt.Errorf("yeek: %v\n", err)
+			break ParsePackets
 		}
 		switch p := p.(type) {
 		case *packet.EncryptedKey:
