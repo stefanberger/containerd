@@ -355,13 +355,7 @@ func cryptLayer(ctx context.Context, cs content.Store, desc ocispec.Descriptor, 
 	if encrypt {
 		p, keys, err = Encrypt(cc, data)
 	} else {
-		keys, err = getWrappedKeys(desc)
-        if err != nil {
-            return ocispec.Descriptor{}, err
-        }
-
-	    inData := assemblyEncryptedMessage (data, keys)
-		p, err = Decrypt(cc, inData)
+		p, err = Decrypt(cc, data, desc)
 	}
 	if err != nil {
 		return ocispec.Descriptor{}, err
@@ -411,9 +405,9 @@ func getWrappedKeys (desc ocispec.Descriptor) ([][]byte, error) {
     }
 }
 
-// assemblyEncryptedMessage takes in the openpgp encrypted body packets and 
+// assembleEncryptedMessage takes in the openpgp encrypted body packets and 
 // assembles the openpgp message
-func assemblyEncryptedMessage (encBody []byte, keys [][]byte) []byte {
+func assembleEncryptedMessage (encBody []byte, keys [][]byte) []byte {
 	encMsg := make([]byte, 0)
 
 	for _, k := range keys {
@@ -711,7 +705,6 @@ func GetImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descr
 		lis = append(lis, li)
 	case MediaTypeDockerSchema2Config:
 	case MediaTypeDockerSchema2LayerPGP,MediaTypeDockerSchema2LayerGzipPGP:
-        
 		kids, err := GetKeyIds(desc)
 		if err != nil {
 			return []LayerInfo{}, err
