@@ -511,7 +511,7 @@ func cryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descripto
 		return nDesc, true, nil
 	}
 
-	return ocispec.Descriptor{}, modified, nil
+	return desc, modified, nil
 }
 
 // cryptManifestList encrypts or decrypts the children of a top level manifest list
