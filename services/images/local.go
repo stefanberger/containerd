@@ -189,6 +189,7 @@ func (l *local) EncryptImage(ctx context.Context, req *imagesapi.EncryptImageReq
 		Ec:	&images.EncryptConfig{
 			Recipients    : req.Cc.Recipients,
 			GPGPubRingFile: req.Cc.Gpgpubkeyring,
+			Operation     : req.Cc.Operation,
 		},
 	}, layers32ToLayers(req.Layers), req.Platforms)
 	if err != nil {
