@@ -42,6 +42,9 @@ var encryptCommand = cli.Command{
 	}, cli.StringSliceFlag{
 		Name:  "platform",
 		Usage: "For which platform to encrypt; by default encrytion is done for all platforms",
+	}, cli.BoolFlag{
+		Name:  "remove",
+		Usage: "Remove the given set of recipients",
 	}),
 	Action: func(context *cli.Context) error {
 		var (
@@ -71,10 +74,17 @@ var encryptCommand = cli.Command{
 		if err != nil {
 			return err
 		}
+
+		operation := images.OPERATION_ADD_RECIPIENTS
+		if context.Bool("remove") {
+			operation = images.OPERATION_REMOVE_RECIPIENTS
+		}
+
 		cc := &images.CryptoConfig{
 			Ec:	&images.EncryptConfig{
 				GPGPubRingFile: gpgPubRingFile,
 				Recipients:     recipients,
+				Operation:      operation,
 			},
 		}
 		_, err = client.ImageService().EncryptImage(ctx, local, newName, cc, context.IntSlice("layer"), context.StringSlice("platform"))
