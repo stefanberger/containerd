@@ -134,6 +134,7 @@ message DeleteImageRequest {
 message EncryptConfig {
 	repeated string recipients = 1;
 	bytes gpgpubkeyring = 2;
+	int32 operation = 3;
 }
 
 message DecryptKeyData {

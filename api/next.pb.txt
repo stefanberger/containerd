@@ -2234,6 +2234,13 @@ file {
       type: TYPE_BYTES
       json_name: "gpgpubkeyring"
     }
+    field {
+      name: "operation"
+      number: 3
+      label: LABEL_OPTIONAL
+      type: TYPE_INT32
+      json_name: "operation"
+    }
   }
   message_type {
     name: "DecryptKeyData"
