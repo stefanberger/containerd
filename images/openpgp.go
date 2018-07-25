@@ -50,6 +50,26 @@ func encryptData(data []byte, recipients openpgp.EntityList, symKey []byte) (enc
 	return encBlob, wrappedKeys, nil
 }
 
+func removeRecipientsFromKeys(keys [][]byte, removeRecipients openpgp.EntityList) ([][]byte, error) {
+	var wrappedKeys [][]byte
+
+	for _, ek := range keys {
+		ekbuf := bytes.NewBuffer(ek)
+		p, err := packet.Read(ekbuf)
+		if err != nil {
+			return [][]byte{}, fmt.Errorf("Err reading enc key packet: %v", err)
+		}
+		pek := p.(*packet.EncryptedKey)
+
+		if len(removeRecipients.KeysById(pek.KeyId)) == 0 {
+			// we can keep this key
+			wrappedKeys = append(wrappedKeys, ek)
+		}
+	}
+
+	return wrappedKeys, nil
+}
+
 // decryptData decrypts an openpgp encrypted blob and wrapped keys and returns the decrypted data
 func decryptData(encBlob []byte, wrappedKeys [][]byte, kring openpgp.EntityList) (data []byte, err error) {
 	// Assemble message by concatenating packets
