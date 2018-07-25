@@ -35,7 +35,13 @@ import (
 type EncryptConfig struct {
 	Recipients     []string
 	GPGPubRingFile []byte
+	Operation      int32
 }
+
+const (
+	OPERATION_ADD_RECIPIENTS    = int32(iota)
+	OPERATION_REMOVE_RECIPIENTS = int32(iota)
+)
 
 // DecryptKeyData stores private key data for decryption and the necessary password
 // for being able to access/decrypt the private key data
@@ -126,8 +132,15 @@ func createEntityList(cc *CryptoConfig) (openpgp.EntityList, error) {
 	return filteredList, nil
 }
 
-// Encrypt encrypts a byte array using data from the CryptoConfig
-func Encrypt(cc *CryptoConfig, data []byte) ([]byte, [][]byte, error) {
+// HandleEncrypt encrypts a byte array using data from the CryptoConfig and also manages
+// the list of recipients' keys
+func HandleEncrypt(cc *CryptoConfig, data []byte, keys [][]byte) ([]byte, [][]byte, error) {
+	var (
+		encBlob []byte
+		wrappedKeys [][]byte
+		err error
+	)
+
 	filteredList, err := createEntityList(cc)
 	if err != nil {
 		return nil, nil, err
@@ -136,7 +149,17 @@ func Encrypt(cc *CryptoConfig, data []byte) ([]byte, [][]byte, error) {
 		return nil, nil, fmt.Errorf("No keys were found to encrypt message to.\n")
 	}
 
-	encBlob, wrappedKeys, err := encryptData(data, filteredList, nil)
+	switch (cc.Ec.Operation) {
+	case OPERATION_ADD_RECIPIENTS:
+		if len(keys) > 0 {
+			return nil, nil, fmt.Errorf("Refusing to encrypt an already encrypted layer.\n")
+		}
+		encBlob, wrappedKeys, err = encryptData(data, filteredList, nil)
+	case OPERATION_REMOVE_RECIPIENTS:
+		wrappedKeys, err = removeRecipientsFromKeys(keys, filteredList)
+		encBlob = data
+	}
+
 	if err != nil {
 		return nil, nil, err
 	}
