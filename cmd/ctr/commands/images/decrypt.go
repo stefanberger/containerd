@@ -17,9 +17,9 @@
 package images
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os/exec"
-	"fmt"
 	"syscall"
 
 	"github.com/containerd/containerd/cmd/ctr/commands"
@@ -47,7 +47,7 @@ var decryptCommand = cli.Command{
 	}),
 	Action: func(context *cli.Context) error {
 		var (
-			local = context.Args().First()
+			local   = context.Args().First()
 			newName = context.Args().Get(1)
 		)
 		fmt.Printf("pl: %s\n", context.StringSlice("platform"))
@@ -57,7 +57,7 @@ var decryptCommand = cli.Command{
 		if newName != "" {
 			fmt.Printf("Decrypting %s to %s\n", local, newName)
 		} else {
-			fmt.Printf("Decrypting %s and replacing it with the decrypted image\n", local);
+			fmt.Printf("Decrypting %s and replacing it with the decrypted image\n", local)
 		}
 		client, ctx, cancel, err := commands.NewClient(context)
 		if err != nil {
@@ -93,13 +93,16 @@ var decryptCommand = cli.Command{
 					break
 				}
 				// do we have this key?
-				haveKey, _ := HaveGPGPrivateKey(keyid)
+				keyinfo, haveKey, err := GetSecretKeyDetails(keyid)
 				// this may fail if the key is not here; we ignore the error
 				if !haveKey {
 					// key not on this system
 					continue
 				}
-				fmt.Printf("Enter password for key with Id 0x%x: ", keyid)
+
+				fmt.Printf("Passphrase required for Key id 0x%x: \n%v", keyid, string(keyinfo))
+				fmt.Printf("Enter passphrase for key with Id 0x%x: ", keyid)
+
 				password, err := terminal.ReadPassword(int(syscall.Stdin))
 				fmt.Printf("\n")
 				if err != nil {
@@ -122,7 +125,7 @@ var decryptCommand = cli.Command{
 		}
 		fmt.Printf("\n")
 		_, err = client.ImageService().DecryptImage(ctx, local, newName, &images.CryptoConfig{
-			Dc: &images.DecryptConfig {
+			Dc: &images.DecryptConfig{
 				KeyIdMap: keyIdMap,
 			},
 		}, context.IntSlice("layer"), context.StringSlice("platform"))
@@ -130,23 +133,9 @@ var decryptCommand = cli.Command{
 	},
 }
 
-func HaveGPGPrivateKey(keyid uint64) (bool, error) {
-	args := append([]string{"-K"}, fmt.Sprintf("0x%x", keyid))
-
-	cmd := exec.Command("gpg2", args...)
-
-	if err := cmd.Start(); err != nil {
-		return false, err
-	}
-
-	if err := cmd.Wait(); err != nil {
-		return false, err
-	}
-	return true, nil
-}
-
-func GetGPGPrivateKey (keyid uint64, password string) ([]byte, error) {
-	args := append([]string{"--pinentry-mode", "loopback", "--passphrase", password,"--export-secret-key"}, fmt.Sprintf("0x%x", keyid))
+// GetGPGPrivateKey gets the bytes of a specified keyid, supplying a passphrase
+func GetGPGPrivateKey(keyid uint64, password string) ([]byte, error) {
+	args := append([]string{"--pinentry-mode", "loopback", "--batch", "--passphrase", password, "--export-secret-key"}, fmt.Sprintf("0x%x", keyid))
 
 	cmd := exec.Command("gpg2", args...)
 
@@ -169,13 +158,39 @@ func GetGPGPrivateKey (keyid uint64, password string) ([]byte, error) {
 	return keydata, err2
 }
 
+// GetSecretKeyDetails retrives the secret key details of key with keyid.
+// returns a byte array of the details and a bool if the key exists
+func GetSecretKeyDetails(keyid uint64) ([]byte, bool, error) {
+	args := append([]string{"-K"}, fmt.Sprintf("0x%x", keyid))
+
+	cmd := exec.Command("gpg2", args...)
+
+	stdout, err := cmd.StdoutPipe()
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return nil, false, err
+	}
+	if err := cmd.Start(); err != nil {
+		return nil, false, err
+	}
+
+	keydata, err2 := ioutil.ReadAll(stdout)
+	message, _ := ioutil.ReadAll(stderr)
+
+	if err := cmd.Wait(); err != nil {
+		return nil, false, fmt.Errorf("Error from gpg2: %s\n", message)
+	}
+
+	return keydata, err2 == nil, err2
+}
+
 func addToSet(set, add []uint64) []uint64 {
 	for i := 0; i < len(add); i++ {
 		found := false
 		for j := 0; j < len(set); j++ {
 			if set[j] == add[i] {
 				found = true
-				break;
+				break
 			}
 		}
 		if !found {
@@ -184,4 +199,3 @@ func addToSet(set, add []uint64) []uint64 {
 	}
 	return set
 }
-
