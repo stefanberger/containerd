@@ -145,12 +145,19 @@ func Encrypt(cc *CryptoConfig, data []byte) ([]byte, [][]byte, error) {
 }
 
 // Decrypt decrypts a byte array using data from the CryptoConfig
-func Decrypt(cc *CryptoConfig, data []byte) ([]byte, error) {
+func Decrypt(cc *CryptoConfig, encBody []byte, desc ocispec.Descriptor) ([]byte, error) {
 	dc := cc.Dc
-	keyIds, err := GetKeyIds(ocispec.Descriptor{})
+	keyIds, err := GetKeyIds(desc)
 	if err != nil {
-		return []byte{}, err
+		return nil, err
 	}
+
+    keys, err :=  getWrappedKeys (desc)
+    if err != nil {
+        return nil, err
+    }
+
+    data := assembleEncryptedMessage (encBody, keys)
 	// decrypt with the right key
 	for _, keyId := range keyIds {
 		if keydata, ok := dc.KeyIdMap[keyId]; ok {
