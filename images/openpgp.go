@@ -137,8 +137,13 @@ func createEncryptedBlob(data []byte, symKey []byte, config *packet.Config) (enc
 		return nil, fmt.Errorf("Error serializing Lietral packet: %v", err)
 	}
 
-	content.Write(data)
-	content.Close()
+    if _, err := content.Write(data); err != nil {
+        return nil, err
+    }
+
+    if err := content.Close(); err != nil {
+        return nil, err
+    }
 
 	encBlob = encData.Bytes()
 	log.Printf("Encrypted data bytes: %x", encBlob)
