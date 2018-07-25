@@ -19,8 +19,8 @@ package images
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -334,7 +334,7 @@ func Check(ctx context.Context, provider content.Provider, image ocispec.Descrip
 
 // encryptLayer encryts a single layer and writes the encrypted layer back into storage
 func cryptLayer(ctx context.Context, cs content.Store, desc ocispec.Descriptor, cc *CryptoConfig, encrypt bool) (ocispec.Descriptor, error) {
-	data, err := content.ReadBlob(ctx, cs, desc);
+	data, err := content.ReadBlob(ctx, cs, desc)
 	if err != nil {
 		return ocispec.Descriptor{}, err
 	}
@@ -342,7 +342,7 @@ func cryptLayer(ctx context.Context, cs content.Store, desc ocispec.Descriptor, 
 	// now we should encrypt
 
 	var p []byte
-    var keys [][]byte
+	var keys [][]byte
 	if encrypt {
 		p, keys, err = Encrypt(cc, data)
 	} else {
@@ -362,10 +362,10 @@ func cryptLayer(ctx context.Context, cs content.Store, desc ocispec.Descriptor, 
 	}
 	if encrypt {
 		newDesc.Annotations = make(map[string]string)
-        newDesc.Annotations["org.opencontainers.image.pgp.keys"] = encodeWrappedKeys(keys)
+		newDesc.Annotations["org.opencontainers.image.pgp.keys"] = encodeWrappedKeys(keys)
 	}
 
-	switch (desc.MediaType) {
+	switch desc.MediaType {
 	case MediaTypeDockerSchema2LayerGzip:
 		newDesc.MediaType = MediaTypeDockerSchema2LayerGzipPGP
 	case MediaTypeDockerSchema2Layer:
@@ -379,26 +379,26 @@ func cryptLayer(ctx context.Context, cs content.Store, desc ocispec.Descriptor, 
 	}
 
 	ref := fmt.Sprintf("layer-%s", newDesc.Digest.String())
-	content.WriteBlob(ctx, cs, ref, bytes.NewReader(p), newDesc);
+	content.WriteBlob(ctx, cs, ref, bytes.NewReader(p), newDesc)
 
 	return newDesc, nil
 }
-func getWrappedKeys (desc ocispec.Descriptor) ([][]byte, error) {
-    // Parse and decode keys
-    if v, ok := desc.Annotations["org.opencontainers.image.pgp.keys"]; ok {
-        keys, err := decodeWrappedKeys(v)
-        if err != nil {
-            return nil, err
-        }
-        return keys, nil
-    } else {
-        return make([][]byte,0), nil
-    }
+func getWrappedKeys(desc ocispec.Descriptor) ([][]byte, error) {
+	// Parse and decode keys
+	if v, ok := desc.Annotations["org.opencontainers.image.pgp.keys"]; ok {
+		keys, err := decodeWrappedKeys(v)
+		if err != nil {
+			return nil, err
+		}
+		return keys, nil
+	} else {
+		return make([][]byte, 0), nil
+	}
 }
 
-// assembleEncryptedMessage takes in the openpgp encrypted body packets and 
+// assembleEncryptedMessage takes in the openpgp encrypted body packets and
 // assembles the openpgp message
-func assembleEncryptedMessage (encBody []byte, keys [][]byte) []byte {
+func assembleEncryptedMessage(encBody []byte, keys [][]byte) []byte {
 	encMsg := make([]byte, 0)
 
 	for _, k := range keys {
@@ -409,44 +409,43 @@ func assembleEncryptedMessage (encBody []byte, keys [][]byte) []byte {
 	return encMsg
 }
 
-
 // encodeWrappedKeys encodes wrapped openpgp keys to a string readable ','
 // separated base64 strings.
-func encodeWrappedKeys (keys [][]byte) string {
-    keyString := ""
-    for _, k := range keys {
-        if keyString == "" {
-            keyString += base64.StdEncoding.EncodeToString(k)
-        } else {
-            keyString += "," + base64.StdEncoding.EncodeToString(k)
-        }
-    }
+func encodeWrappedKeys(keys [][]byte) string {
+	keyString := ""
+	for _, k := range keys {
+		if keyString == "" {
+			keyString += base64.StdEncoding.EncodeToString(k)
+		} else {
+			keyString += "," + base64.StdEncoding.EncodeToString(k)
+		}
+	}
 
-    return keyString
+	return keyString
 }
 
 // decodeWrappedKeys decodes wrapped openpgp keys from string readable ','
 // separated base64 strings to their byte values
-func decodeWrappedKeys (keys string) ([][]byte, error){
+func decodeWrappedKeys(keys string) ([][]byte, error) {
 	kSplit := strings.Split(keys, ",")
 	keyBytes := make([][]byte, 0, len(kSplit))
 
-    for _, v := range kSplit {
+	for _, v := range kSplit {
 		data, err := base64.StdEncoding.DecodeString(v)
 		if err != nil {
 			return nil, err
 		}
 		keyBytes = append(keyBytes, data)
-    }
+	}
 
-    return keyBytes, nil
+	return keyBytes, nil
 }
 
 // isDecriptorALayer determines whether the given Descriptor describes a layer
 func isDescriptorALayer(desc ocispec.Descriptor) bool {
 	switch desc.MediaType {
-	case MediaTypeDockerSchema2LayerGzip,MediaTypeDockerSchema2Layer,
-		MediaTypeDockerSchema2LayerGzipPGP,MediaTypeDockerSchema2LayerPGP:
+	case MediaTypeDockerSchema2LayerGzip, MediaTypeDockerSchema2Layer,
+		MediaTypeDockerSchema2LayerGzipPGP, MediaTypeDockerSchema2LayerPGP:
 		return true
 	}
 	return false
@@ -480,7 +479,7 @@ func isUserSelectedLayer(layerNum, layersTotal int, layers []int) bool {
 			return true
 		}
 	}
-	return false;
+	return false
 }
 
 // Encrypt all the Children of a given descriptor
@@ -497,14 +496,14 @@ func cryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descripto
 	//fmt.Printf("metadata/image.go EncryptChildren(): got %d children\n", len(children))
 	var newLayers []ocispec.Descriptor
 	var config ocispec.Descriptor
-	modified := false;
+	modified := false
 
 	for _, child := range children {
 		// we only encrypt child layers and have to update their parents if encyrption happened
 		switch child.MediaType {
 		case MediaTypeDockerSchema2Config:
 			config = child
-		case MediaTypeDockerSchema2LayerGzip,MediaTypeDockerSchema2Layer:
+		case MediaTypeDockerSchema2LayerGzip, MediaTypeDockerSchema2Layer:
 			// this one we can only encrypt
 			if encrypt && isUserSelectedLayer(layerNum, layersTotal, layers) {
 				nl, err := cryptLayer(ctx, cs, child, cc, true)
@@ -519,7 +518,7 @@ func cryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descripto
 			layerNum = layerNum + 1
 		case MediaTypeDockerSchema2LayerGzipPGP, MediaTypeDockerSchema2LayerPGP:
 			// this one we can only decrypt
-			if !encrypt && isUserSelectedLayer(layerNum, layersTotal, layers){
+			if !encrypt && isUserSelectedLayer(layerNum, layersTotal, layers) {
 				nl, err := cryptLayer(ctx, cs, child, cc, false)
 				if err != nil {
 					return ocispec.Descriptor{}, false, err
@@ -536,11 +535,11 @@ func cryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descripto
 	}
 
 	if modified && len(newLayers) > 0 {
-		nM := ocispec.Manifest {
+		nM := ocispec.Manifest{
 			Versioned: specs.Versioned{
 				SchemaVersion: 2,
 			},
-			Config : config,
+			Config: config,
 			Layers: newLayers,
 		}
 
@@ -550,7 +549,7 @@ func cryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descripto
 		}
 
 		nDesc := ocispec.Descriptor{
-			MediaType: MediaTypeDockerSchema2Manifest,//ocispec.MediaTypeImageManifest,//MediaTypeDockerSchema2Manifest,
+			MediaType: MediaTypeDockerSchema2Manifest, //ocispec.MediaTypeImageManifest,//MediaTypeDockerSchema2Manifest,
 			Size:      int64(len(mb)),
 			Digest:    digest.Canonical.FromBytes(mb),
 			Platform:  desc.Platform,
@@ -603,7 +602,7 @@ func CryptManifestList(ctx context.Context, cs content.Store, desc ocispec.Descr
 		}
 	}
 
-	if (modified) {
+	if modified {
 		// we need to update the index
 		newIndex := ocispec.Index{
 			Versioned: index.Versioned,
@@ -641,17 +640,17 @@ func CryptManifestList(ctx context.Context, cs content.Store, desc ocispec.Descr
 // until we get them from the layer descriptors
 func GetImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descriptor, layers []int, layerNum int) ([]LayerInfo, error) {
 	var (
-		lis []LayerInfo
-		tmp []LayerInfo
+		lis      []LayerInfo
+		tmp      []LayerInfo
 		Platform string
 	)
 
-	switch (desc.MediaType) {
+	switch desc.MediaType {
 	case MediaTypeDockerSchema2ManifestList,
 		MediaTypeDockerSchema2Manifest, ocispec.MediaTypeImageManifest:
 		children, err := Children(ctx, cs, desc)
 		if desc.Platform != nil {
-			Platform = desc.Platform.OS + "/" + desc.Platform.Architecture;
+			Platform = desc.Platform.OS + "/" + desc.Platform.Architecture
 			if desc.Platform.Variant != "" {
 				Platform = Platform + "/" + desc.Platform.Variant
 			}
@@ -685,27 +684,27 @@ func GetImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descr
 			}
 			lis = append(lis, tmp...)
 		}
-	case MediaTypeDockerSchema2Layer,MediaTypeDockerSchema2LayerGzip:
+	case MediaTypeDockerSchema2Layer, MediaTypeDockerSchema2LayerGzip:
 		li := LayerInfo{
-			KeyIds:       []uint64{},
-			Digest:       desc.Digest.String(),
-			Encryption:   "",
-			FileSize:     desc.Size,
-			Id:           uint32(layerNum),
+			KeyIds:     []uint64{},
+			Digest:     desc.Digest.String(),
+			Encryption: "",
+			FileSize:   desc.Size,
+			Id:         uint32(layerNum),
 		}
 		lis = append(lis, li)
 	case MediaTypeDockerSchema2Config:
-	case MediaTypeDockerSchema2LayerPGP,MediaTypeDockerSchema2LayerGzipPGP:
+	case MediaTypeDockerSchema2LayerPGP, MediaTypeDockerSchema2LayerGzipPGP:
 		kids, err := GetKeyIds(desc)
 		if err != nil {
 			return []LayerInfo{}, err
 		}
 		li := LayerInfo{
-			KeyIds:       kids,
-			Digest:       desc.Digest.String(),
-			Encryption:   "gpg",
-			FileSize:     desc.Size,
-			Id:           uint32(layerNum),
+			KeyIds:     kids,
+			Digest:     desc.Digest.String(),
+			Encryption: "gpg",
+			FileSize:   desc.Size,
+			Id:         uint32(layerNum),
 		}
 		lis = append(lis, li)
 	default:
