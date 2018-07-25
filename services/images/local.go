@@ -18,6 +18,7 @@ package images
 
 import (
 	"context"
+	"fmt"
 
 	eventstypes "github.com/containerd/containerd/api/events"
 	imagesapi "github.com/containerd/containerd/api/services/images/v1"
@@ -189,7 +190,7 @@ func (l *local) EncryptImage(ctx context.Context, req *imagesapi.EncryptImageReq
 			Recipients    : req.Cc.Recipients,
 			GPGPubRingFile: req.Cc.Gpgpubkeyring,
 		},
-	}, layers32ToLayers(req.Layers))
+	}, layers32ToLayers(req.Layers), req.Platforms)
 	if err != nil {
 		return nil, errdefs.ToGRPC(err)
 	}
@@ -208,6 +209,8 @@ func (l *local) EncryptImage(ctx context.Context, req *imagesapi.EncryptImageReq
 func (l *local) DecryptImage(ctx context.Context, req *imagesapi.DecryptImageRequest, _ ...grpc.CallOption) (*imagesapi.DecryptImageResponse, error) {
 	log.G(ctx).WithField("name", req.Name).Debugf("decrypt image")
 
+	fmt.Printf("req.Platforms: %s\n", req.Platforms)
+
 	var resp   imagesapi.DecryptImageResponse
 
 	keyIdMap := make(map[uint64]images.DecryptKeyData)
@@ -223,7 +226,7 @@ func (l *local) DecryptImage(ctx context.Context, req *imagesapi.DecryptImageReq
 		Dc:	&images.DecryptConfig{
 			KeyIdMap: keyIdMap,
 		},
-	}, layers32ToLayers(req.Layers))
+	}, layers32ToLayers(req.Layers), req.Platforms)
 	if err != nil {
 		return nil, errdefs.ToGRPC(err)
 	}
@@ -244,7 +247,7 @@ func (l *local) GetImageLayerInfo(ctx context.Context, req *imagesapi.GetImageLa
 
 	var resp imagesapi.GetImageLayerInfoResponse
 
-	lis, err := l.store.GetImageLayerInfo(ctx, req.Name, layers32ToLayers(req.Layers))
+	lis, err := l.store.GetImageLayerInfo(ctx, req.Name, layers32ToLayers(req.Layers), req.Platforms)
 	if err != nil {
 		return nil, errdefs.ToGRPC(err)
 	}
