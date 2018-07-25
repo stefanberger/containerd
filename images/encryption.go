@@ -15,32 +15,32 @@
 */
 
 package images
+
 import (
 	"bytes"
 	"fmt"
-        "io/ioutil"
+	"io/ioutil"
 	"net/mail"
 	"strings"
 
-	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/mitchellh/go-homedir"
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"golang.org/x/crypto/openpgp"
 	"golang.org/x/crypto/openpgp/packet"
-
 )
 
 // EncryptConfig is the container image PGP encryption configuration holding
 // the identifiers of those that will be able to decrypt the container and
 // the PGP public keyring file data that contains their public keys.
 type EncryptConfig struct {
-       Recipients     []string
-       GPGPubRingFile []byte
+	Recipients     []string
+	GPGPubRingFile []byte
 }
 
 // DecryptKeyData stores private key data for decryption and the necessary password
 // for being able to access/decrypt the private key data
 type DecryptKeyData struct {
-	KeyData []byte
+	KeyData         []byte
 	KeyDataPassword []byte
 }
 
@@ -89,7 +89,7 @@ func createEntityList(cc *CryptoConfig) (openpgp.EntityList, error) {
 	var filteredList openpgp.EntityList
 	for _, entity := range entityList {
 		for k, _ := range entity.Identities {
-			fmt.Printf("k = %s\n",k)
+			fmt.Printf("k = %s\n", k)
 			addr, err := mail.ParseAddress(k)
 			if err != nil {
 				return nil, err
@@ -106,7 +106,7 @@ func createEntityList(cc *CryptoConfig) (openpgp.EntityList, error) {
 
 	// make sure we found keys for all the Recipients...
 	var buffer bytes.Buffer
-	notFound := false;
+	notFound := false
 	buffer.WriteString("No key found for the following recipients: ")
 
 	for k, v := range rSet {
@@ -115,7 +115,7 @@ func createEntityList(cc *CryptoConfig) (openpgp.EntityList, error) {
 				buffer.WriteString(", ")
 			}
 			buffer.WriteString(k)
-			notFound = true;
+			notFound = true
 		}
 	}
 
@@ -152,12 +152,12 @@ func Decrypt(cc *CryptoConfig, encBody []byte, desc ocispec.Descriptor) ([]byte,
 		return nil, err
 	}
 
-    keys, err :=  getWrappedKeys (desc)
-    if err != nil {
-        return nil, err
-    }
+	keys, err := getWrappedKeys(desc)
+	if err != nil {
+		return nil, err
+	}
 
-    data := assembleEncryptedMessage (encBody, keys)
+	data := assembleEncryptedMessage(encBody, keys)
 	// decrypt with the right key
 	for _, keyId := range keyIds {
 		if keydata, ok := dc.KeyIdMap[keyId]; ok {
@@ -185,16 +185,16 @@ func Decrypt(cc *CryptoConfig, encBody []byte, desc ocispec.Descriptor) ([]byte,
 func GetKeyIds(desc ocispec.Descriptor) ([]uint64, error) {
 	var keyids []uint64
 
-    keys, err := getWrappedKeys(desc)
-    if err != nil {
-        return nil, err
-    }
+	keys, err := getWrappedKeys(desc)
+	if err != nil {
+		return nil, err
+	}
 
-    kbytes := make([]byte, 0)
-    for _, k := range keys {
-        kbytes = append(kbytes, k...)
-    }
-    kbuf := bytes.NewBuffer(kbytes)
+	kbytes := make([]byte, 0)
+	for _, k := range keys {
+		kbytes = append(kbytes, k...)
+	}
+	kbuf := bytes.NewBuffer(kbytes)
 
 	packets := packet.NewReader(kbuf)
 ParsePackets:
@@ -212,4 +212,3 @@ ParsePackets:
 	}
 	return keyids, nil
 }
-
