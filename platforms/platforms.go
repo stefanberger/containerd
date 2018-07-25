@@ -123,6 +123,7 @@ var (
 // Matcher matches platforms specifications, provided by an image or runtime.
 type Matcher interface {
 	Match(platform specs.Platform) bool
+	MatchArray(platformList []specs.Platform) bool
 }
 
 // NewMatcher returns a simple matcher based on the provided platform
@@ -148,6 +149,15 @@ func (m *matcher) Match(platform specs.Platform) bool {
 	return m.OS == normalized.OS &&
 		m.Architecture == normalized.Architecture &&
 		m.Variant == normalized.Variant
+}
+
+func (m *matcher) MatchArray(platformList []specs.Platform) bool {
+	for _, platform := range platformList {
+		if m.Match(platform) {
+			return true
+		}
+	}
+	return false
 }
 
 func (m *matcher) String() string {
@@ -228,6 +238,19 @@ func Parse(specifier string) (specs.Platform, error) {
 	}
 
 	return specs.Platform{}, errors.Wrapf(errdefs.ErrInvalidArgument, "%q: cannot parse platform specifier", specifier)
+}
+
+func ParseArray(specifiers []string) ([]specs.Platform, error) {
+	var speclist []specs.Platform
+
+	for _, specifier := range specifiers {
+		spec, err := Parse(specifier)
+		if err != nil {
+			return []specs.Platform{}, err
+		}
+		speclist = append(speclist, spec)
+	}
+	return speclist, nil
 }
 
 // Format returns a string specifier from the provided platform specification.
