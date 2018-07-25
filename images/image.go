@@ -75,6 +75,13 @@ type LayerInfo struct {
 	Platform string
 }
 
+type LayerFilter struct {
+	// IDs of layers to touch
+	Layers []int
+	// Platforms to touch
+	Platforms []ocispec.Platform
+}
+
 // DeleteOptions provide options on image delete
 type DeleteOptions struct {
 	Synchronous bool
@@ -104,9 +111,9 @@ type Store interface {
 
 	Delete(ctx context.Context, name string, opts ...DeleteOpt) error
 
-	EncryptImage(ctx context.Context, name, newName string, ec *CryptoConfig, layers []int) (Image, error)
-	DecryptImage(ctx context.Context, name, newName string, ec *CryptoConfig, layers []int) (Image, error)
-	GetImageLayerInfo(ctx context.Context, name string, layers []int) ([]LayerInfo, error)
+	EncryptImage(ctx context.Context, name, newName string, ec *CryptoConfig, layers []int, platforms []string) (Image, error)
+	DecryptImage(ctx context.Context, name, newName string, ec *CryptoConfig, layers []int, platforms []string) (Image, error)
+	GetImageLayerInfo(ctx context.Context, name string, layers []int, platforms []string) ([]LayerInfo, error)
 }
 
 // TODO(stevvooe): Many of these functions make strong platform assumptions,
@@ -472,7 +479,7 @@ func countLayers(desc []ocispec.Descriptor) int {
 	return c
 }
 
-// needModifyLayer checks whether we need to modify this layer given its number
+// isUserSelectedLayer checks whether we need to modify this layer given its number
 // A layer can be described with its (positive) index number or its negative number, which
 // is counted relative to the last one
 func isUserSelectedLayer(layerNum, layersTotal int, layers []int) bool {
@@ -491,8 +498,25 @@ func isUserSelectedLayer(layerNum, layersTotal int, layers []int) bool {
 	return false
 }
 
+// isUserSelectedPlatform determines whether the platform matches one in
+// the array of user provided platforms
+func isUserSelectedPlatform(platform *ocispec.Platform, platformList []ocispec.Platform) bool {
+	if len(platformList) == 0 {
+		// convenience for the user; none given means 'all'
+		return true
+	}
+	matcher := platforms.NewMatcher(*platform)
+
+	for _, platform := range platformList {
+		if matcher.Match(platform) {
+			return true
+		}
+	}
+	return false
+}
+
 // Encrypt all the Children of a given descriptor
-func cryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descriptor, cc *CryptoConfig, layers []int, encrypt bool) (ocispec.Descriptor, bool, error) {
+func cryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descriptor, cc *CryptoConfig, lf *LayerFilter, encrypt bool, thisPlatform *ocispec.Platform) (ocispec.Descriptor, bool, error) {
 	layerNum := 0
 
 	children, err := Children(ctx, cs, desc)
@@ -514,7 +538,7 @@ func cryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descripto
 			config = child
 		case MediaTypeDockerSchema2LayerGzip, MediaTypeDockerSchema2Layer:
 			// this one we can only encrypt
-			if encrypt && isUserSelectedLayer(layerNum, layersTotal, layers) {
+			if encrypt && isUserSelectedLayer(layerNum, layersTotal, lf.Layers) && isUserSelectedPlatform(thisPlatform, lf.Platforms) {
 				nl, err := cryptLayer(ctx, cs, child, cc, true)
 				if err != nil {
 					return ocispec.Descriptor{}, false, err
@@ -527,7 +551,7 @@ func cryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descripto
 			layerNum = layerNum + 1
 		case MediaTypeDockerSchema2LayerGzipPGP, MediaTypeDockerSchema2LayerPGP:
 			// this one we can only decrypt
-			if !encrypt && isUserSelectedLayer(layerNum, layersTotal, layers) {
+			if !encrypt && isUserSelectedLayer(layerNum, layersTotal, lf.Layers) && isUserSelectedPlatform(thisPlatform, lf.Platforms) {
 				nl, err := cryptLayer(ctx, cs, child, cc, false)
 				if err != nil {
 					return ocispec.Descriptor{}, false, err
@@ -572,7 +596,6 @@ func cryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descripto
 		fmt.Printf("   old desc %s now written as %s\n", desc.Digest, nDesc.Digest)
 
 		ref := fmt.Sprintf("manifest-%s", nDesc.Digest.String())
-		//, content.WithLabels(labels)
 		if err := content.WriteBlob(ctx, cs, ref, bytes.NewReader(mb), nDesc, content.WithLabels(labels)); err != nil {
 			return ocispec.Descriptor{}, false, errors.Wrap(err, "failed to write config")
 		}
@@ -583,7 +606,7 @@ func cryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descripto
 }
 
 // cryptManifestList encrypts or decrypts the children of a top level manifest list
-func CryptManifestList(ctx context.Context, cs content.Store, desc ocispec.Descriptor, cc *CryptoConfig, layers []int, encrypt bool) (ocispec.Descriptor, bool, error) {
+func CryptManifestList(ctx context.Context, cs content.Store, desc ocispec.Descriptor, cc *CryptoConfig, lf *LayerFilter, encrypt bool) (ocispec.Descriptor, bool, error) {
 	if desc.MediaType != MediaTypeDockerSchema2ManifestList {
 		return ocispec.Descriptor{}, false, errors.Wrapf(nil, "Wrong media type %s passed. Need %s.\n", desc.MediaType, MediaTypeDockerSchema2ManifestList)
 	}
@@ -601,14 +624,14 @@ func CryptManifestList(ctx context.Context, cs content.Store, desc ocispec.Descr
 	var newManifests []ocispec.Descriptor
 	modified := false
 	for _, manifest := range index.Manifests {
-		newManifest, m, err := cryptChildren(ctx, cs, manifest, cc, layers, encrypt)
+		newManifest, m, err := cryptChildren(ctx, cs, manifest, cc, lf, encrypt, manifest.Platform)
 		if err != nil {
 			return ocispec.Descriptor{}, false, err
 		}
-		newManifests = append(newManifests, newManifest)
 		if m {
 			modified = true
 		}
+		newManifests = append(newManifests, newManifest)
 	}
 
 	if modified {
@@ -647,11 +670,11 @@ func CryptManifestList(ctx context.Context, cs content.Store, desc ocispec.Descr
 // Get the image key Ids necessary for decrypting an image
 // We determine the KeyIds starting with  the given OCI Decriptor, recursing to lower-level descriptors
 // until we get them from the layer descriptors
-func GetImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descriptor, layers []int, layerNum int) ([]LayerInfo, error) {
+func GetImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descriptor, lf *LayerFilter, layerNum int) ([]LayerInfo, error) {
 	var (
 		lis      []LayerInfo
 		tmp      []LayerInfo
-		Platform string
+		platform string
 	)
 
 	switch desc.MediaType {
@@ -659,10 +682,10 @@ func GetImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descr
 		MediaTypeDockerSchema2Manifest, ocispec.MediaTypeImageManifest:
 		children, err := Children(ctx, cs, desc)
 		if desc.Platform != nil {
-			Platform = desc.Platform.OS + "/" + desc.Platform.Architecture
-			if desc.Platform.Variant != "" {
-				Platform = Platform + "/" + desc.Platform.Variant
+			if !isUserSelectedPlatform(desc.Platform, lf.Platforms) {
+				return []LayerInfo{}, nil
 			}
+			platform = platforms.Format(*desc.Platform)
 		}
 		if err != nil {
 			return []LayerInfo{}, err
@@ -674,21 +697,21 @@ func GetImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descr
 		for _, child := range children {
 			if isDescriptorALayer(child) {
 				layerNum = layerNum + 1
-				if isUserSelectedLayer(layerNum, layersTotal, layers) {
-					tmp, err = GetImageLayerInfo(ctx, cs, child, layers, layerNum)
+				if isUserSelectedLayer(layerNum, layersTotal, lf.Layers) {
+					tmp, err = GetImageLayerInfo(ctx, cs, child, lf, layerNum)
 				} else {
 					continue
 				}
 			} else {
-				tmp, err = GetImageLayerInfo(ctx, cs, child, layers, -1)
+				tmp, err = GetImageLayerInfo(ctx, cs, child, lf, -1)
 			}
 			if err != nil {
 				return []LayerInfo{}, err
 			}
 
-			for i := 0; i < len(tmp); i++ {
-				if Platform != "" {
-					tmp[i].Platform = Platform
+			if (platform != "") {
+				for i := 0; i < len(tmp); i++ {
+					tmp[i].Platform = platform
 				}
 			}
 			lis = append(lis, tmp...)
