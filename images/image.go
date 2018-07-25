@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"encoding/base64"
 	"fmt"
 	"strings"
 	"time"
@@ -341,10 +342,17 @@ func cryptLayer(ctx context.Context, cs content.Store, desc ocispec.Descriptor, 
 	// now we should encrypt
 
 	var p []byte
+    var keys [][]byte
 	if encrypt {
-		p, err = Encrypt(cc, data)
+		p, keys, err = Encrypt(cc, data)
 	} else {
-		p, err = Decrypt(cc, data)
+		keys, err = getWrappedKeys(desc)
+        if err != nil {
+            return ocispec.Descriptor{}, err
+        }
+
+	    inData := assemblyEncryptedMessage (data, keys)
+		p, err = Decrypt(cc, inData)
 	}
 	if err != nil {
 		return ocispec.Descriptor{}, err
@@ -360,7 +368,7 @@ func cryptLayer(ctx context.Context, cs content.Store, desc ocispec.Descriptor, 
 	}
 	if encrypt {
 		newDesc.Annotations = make(map[string]string)
-		newDesc.Annotations["org.opencontainers.image.pgp.keys"] = "foo-bar"
+        newDesc.Annotations["org.opencontainers.image.pgp.keys"] = encodeWrappedKeys(keys)
 	}
 
 	switch (desc.MediaType) {
@@ -380,6 +388,64 @@ func cryptLayer(ctx context.Context, cs content.Store, desc ocispec.Descriptor, 
 	content.WriteBlob(ctx, cs, ref, bytes.NewReader(p), newDesc);
 
 	return newDesc, nil
+}
+func getWrappedKeys (desc ocispec.Descriptor) ([][]byte, error) {
+    // Parse and decode keys
+    if v, ok := desc.Annotations["org.opencontainers.image.pgp.keys"]; ok {
+        keys, err := decodeWrappedKeys(v)
+        if err != nil {
+            return nil, err
+        }
+        return keys, nil
+    } else {
+        return make([][]byte,0), nil
+    }
+}
+
+// assemblyEncryptedMessage takes in the openpgp encrypted body packets and 
+// assembles the openpgp message
+func assemblyEncryptedMessage (encBody []byte, keys [][]byte) []byte {
+	encMsg := make([]byte, 0)
+
+	for _, k := range keys {
+		encMsg = append(encMsg, k...)
+	}
+	encMsg = append(encMsg, encBody...)
+
+	return encMsg
+}
+
+
+// encodeWrappedKeys encodes wrapped openpgp keys to a string readable ','
+// separated base64 strings.
+func encodeWrappedKeys (keys [][]byte) string {
+    keyString := ""
+    for _, k := range keys {
+        if keyString == "" {
+            keyString += base64.StdEncoding.EncodeToString(k)
+        } else {
+            keyString += "," + base64.StdEncoding.EncodeToString(k)
+        }
+    }
+
+    return keyString
+}
+
+// decodeWrappedKeys decodes wrapped openpgp keys from string readable ','
+// separated base64 strings to their byte values
+func decodeWrappedKeys (keys string) ([][]byte, error){
+	kSplit := strings.Split(keys, ",")
+	keyBytes := make([][]byte, 0, len(kSplit))
+
+    for _, v := range kSplit {
+		data, err := base64.StdEncoding.DecodeString(v)
+		if err != nil {
+			return nil, err
+		}
+		keyBytes = append(keyBytes, data)
+    }
+
+    return keyBytes, nil
 }
 
 // isDecriptorALayer determines whether the given Descriptor describes a layer
@@ -636,11 +702,8 @@ func GetImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descr
 		lis = append(lis, li)
 	case MediaTypeDockerSchema2Config:
 	case MediaTypeDockerSchema2LayerPGP,MediaTypeDockerSchema2LayerGzipPGP:
-		encData, err := content.ReadBlob(ctx, cs, desc);
-		if err != nil {
-			return []LayerInfo{}, err
-		}
-		kids, err := GetKeyIds(encData, desc)
+        
+		kids, err := GetKeyIds(desc)
 		if err != nil {
 			return []LayerInfo{}, err
 		}
