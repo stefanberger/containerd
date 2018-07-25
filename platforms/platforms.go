@@ -231,6 +231,19 @@ func Parse(specifier string) (specs.Platform, error) {
 	return specs.Platform{}, errors.Wrapf(errdefs.ErrInvalidArgument, "%q: cannot parse platform specifier", specifier)
 }
 
+func ParseArray(specifiers []string) ([]specs.Platform, error) {
+	var speclist []specs.Platform
+
+	for _, specifier := range specifiers {
+		spec, err := Parse(specifier)
+		if err != nil {
+			return []specs.Platform{}, err
+		}
+		speclist = append(speclist, spec)
+	}
+	return speclist, nil
+}
+
 // MustParse is like Parses but panics if the specifier cannot be parsed.
 // Simplifies initialization of global variables.
 func MustParse(specifier string) specs.Platform {
