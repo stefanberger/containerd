@@ -38,6 +38,9 @@ var layerinfoCommand = cli.Command{
 	Flags: append(commands.RegistryFlags, cli.IntSliceFlag{
 		Name:  "layer",
 		Usage: "The layer to get info for; this must be either the layer number or a negative number starting with -1 for topmost layer",
+	}, cli.StringSliceFlag{
+		Name:  "platform",
+		Usage: "For which platform to get the layer info; by default info for all platforms is retrieved",
 	}),
 	Action: func(context *cli.Context) error {
 		var (
@@ -52,10 +55,14 @@ var layerinfoCommand = cli.Command{
 		}
 		defer cancel()
 
-		LayerInfos, err := client.ImageService().GetImageLayerInfo(ctx, local, context.IntSlice("layer"))
+		LayerInfos, err := client.ImageService().GetImageLayerInfo(ctx, local, context.IntSlice("layer"), context.StringSlice("platform"))
 		if err != nil {
 			return err
 		}
+		if len(LayerInfos) == 0 {
+			return nil
+		}
+
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', tabwriter.AlignRight)
 		fmt.Fprintf(w, "#\tDIGEST\tPLATFORM\tSIZE\tENCRYPTION\tKEY IDS\t\n")
 		for _, layer := range LayerInfos {
@@ -72,5 +79,4 @@ var layerinfoCommand = cli.Command{
 		return nil
 	},
 }
-
 
