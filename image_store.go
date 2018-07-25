@@ -56,6 +56,7 @@ func (s *remoteImages) EncryptImage(ctx context.Context, name, newName string, c
 		Cc:      &imagesapi.EncryptConfig{
 			Recipients   : cc.Ec.Recipients,
 			Gpgpubkeyring: cc.Ec.GPGPubRingFile,
+			Operation    : cc.Ec.Operation,
 		},
 		Layers: layersToLayers32(layers),
 		Platforms: platforms,
