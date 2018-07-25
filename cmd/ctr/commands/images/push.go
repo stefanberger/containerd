@@ -105,7 +105,7 @@ var pushCommand = cli.Command{
 					Recipients:     recipients,
 				},
 			}
-			img, err := client.ImageService().EncryptImage(ctx, local, local, cc, []int{})
+			img, err := client.ImageService().EncryptImage(ctx, local, local, cc, []int{}, []string{})
 			if err != nil {
 				return err
 			}

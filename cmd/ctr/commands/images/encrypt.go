@@ -36,9 +36,12 @@ var encryptCommand = cli.Command{
 	Flags: append(commands.RegistryFlags, cli.StringSliceFlag{
 		Name:  "recipient",
 		Usage: "Recipient of the image is the person who can decrypt it",
-		}, cli.IntSliceFlag{
+	}, cli.IntSliceFlag{
 		Name:  "layer",
 		Usage: "The layer to encrypt; this must be either the layer number or a negative number starting with -1 for topmost layer",
+	}, cli.StringSliceFlag{
+		Name:  "platform",
+		Usage: "For which platform to encrypt; by default encrytion is done for all platforms",
 	}),
 	Action: func(context *cli.Context) error {
 		var (
@@ -74,7 +77,7 @@ var encryptCommand = cli.Command{
 				Recipients:     recipients,
 			},
 		}
-		_, err = client.ImageService().EncryptImage(ctx, local, newName, cc, context.IntSlice("layer"))
+		_, err = client.ImageService().EncryptImage(ctx, local, newName, cc, context.IntSlice("layer"), context.StringSlice("platform"))
 		if err != nil {
 			return err
 		}
