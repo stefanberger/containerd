@@ -339,26 +339,60 @@ func Check(ctx context.Context, provider content.Provider, image ocispec.Descrip
 	return true, required, present, missing, nil
 }
 
-// encryptLayer encryts a single layer and writes the encrypted layer back into storage
-func cryptLayer(ctx context.Context, cs content.Store, desc ocispec.Descriptor, cc *CryptoConfig, encrypt bool) (ocispec.Descriptor, error) {
-	data, err := content.ReadBlob(ctx, cs, desc)
-	if err != nil {
-		return ocispec.Descriptor{}, err
-	}
-	//fmt.Printf("   ... read %d bytes of layer %s data\n", len(p), desc.Digest)
-	// now we should encrypt
+// encryptLayer encrypts the layer using the CryptoConfig and creates a new OCI Descriptor.
+// The caller is expected to store the returned encrypted data and OCI Descriptor
+func encryptLayer(cc *CryptoConfig, data []byte, desc ocispec.Descriptor) (ocispec.Descriptor, []byte, error) {
+	var (
+		keys [][]byte
+		size int64
+		d    digest.Digest
+		err  error
+	)
 
-	var p []byte
-	var keys [][]byte
-	if encrypt {
-		p, keys, err = Encrypt(cc, data)
-	} else {
-		p, err = Decrypt(cc, data, desc)
-	}
-	if err != nil {
-		return ocispec.Descriptor{}, err
+	if v, ok := desc.Annotations["org.opencontainers.image.pgp.keys"]; ok {
+		keys, err = decodeWrappedKeys(v)
+		if err != nil {
+			return ocispec.Descriptor{}, []byte{}, err
+		}
 	}
 
+	p, keys, err := HandleEncrypt(cc, data, keys)
+	if err != nil {
+		return ocispec.Descriptor{}, []byte{}, err
+	}
+	size = int64(len(p))
+	d = digest.FromBytes(p)
+
+	newDesc := ocispec.Descriptor{
+		Digest:   d,
+		Size:     size,
+		Platform: desc.Platform,
+	}
+	newDesc.Annotations = make(map[string]string)
+	newDesc.Annotations["org.opencontainers.image.pgp.keys"] = encodeWrappedKeys(keys)
+
+	switch desc.MediaType {
+	case MediaTypeDockerSchema2LayerGzip:
+		newDesc.MediaType = MediaTypeDockerSchema2LayerGzipPGP
+	case MediaTypeDockerSchema2Layer:
+		newDesc.MediaType = MediaTypeDockerSchema2LayerPGP
+	case MediaTypeDockerSchema2LayerGzipPGP:
+		newDesc.MediaType = MediaTypeDockerSchema2LayerGzipPGP
+	case MediaTypeDockerSchema2LayerPGP:
+		newDesc.MediaType = MediaTypeDockerSchema2LayerPGP
+	default:
+		return ocispec.Descriptor{}, []byte{}, errors.Wrapf(err, "Encryption: unsupporter layer MediaType: %s\n", desc.MediaType)
+	}
+	return newDesc, p, nil
+}
+
+// decryptLayer decrypts the layer using the CryptoConfig and creates a new OCI Descriptor.
+// The caller is expected to store the returned plain data and OCI Descriptor
+func decryptLayer(cc *CryptoConfig, data []byte, desc ocispec.Descriptor) (ocispec.Descriptor, []byte, error) {
+	p, err := Decrypt(cc, data, desc)
+	if err != nil {
+		return ocispec.Descriptor{}, []byte{}, err
+	}
 	size := int64(len(p))
 	d := digest.FromBytes(p)
 
@@ -367,29 +401,47 @@ func cryptLayer(ctx context.Context, cs content.Store, desc ocispec.Descriptor, 
 		Size:     size,
 		Platform: desc.Platform,
 	}
-	if encrypt {
-		newDesc.Annotations = make(map[string]string)
-		newDesc.Annotations["org.opencontainers.image.pgp.keys"] = encodeWrappedKeys(keys)
-	}
 
 	switch desc.MediaType {
-	case MediaTypeDockerSchema2LayerGzip:
-		newDesc.MediaType = MediaTypeDockerSchema2LayerGzipPGP
-	case MediaTypeDockerSchema2Layer:
-		newDesc.MediaType = MediaTypeDockerSchema2LayerPGP
 	case MediaTypeDockerSchema2LayerGzipPGP:
 		newDesc.MediaType = MediaTypeDockerSchema2LayerGzip
 	case MediaTypeDockerSchema2LayerPGP:
 		newDesc.MediaType = MediaTypeDockerSchema2Layer
 	default:
-		return ocispec.Descriptor{}, errors.Wrapf(err, "Unsupporter layer MediaType: %s\n", desc.MediaType)
+		return ocispec.Descriptor{}, []byte{}, errors.Wrapf(err, "Decryption: unsupporter layer MediaType: %s\n", desc.MediaType)
+	}
+	return newDesc, p, nil
+}
+
+// cryptLayer handles the changes due to encryption or decryption of a layer
+func cryptLayer(ctx context.Context, cs content.Store, desc ocispec.Descriptor, cc *CryptoConfig, encrypt bool) (ocispec.Descriptor, error) {
+	var (
+		p       []byte
+		newDesc ocispec.Descriptor
+	)
+
+	data, err := content.ReadBlob(ctx, cs, desc)
+	if err != nil {
+		return ocispec.Descriptor{}, err
 	}
 
-	ref := fmt.Sprintf("layer-%s", newDesc.Digest.String())
-	content.WriteBlob(ctx, cs, ref, bytes.NewReader(p), newDesc)
-
-	return newDesc, nil
+	if encrypt {
+		newDesc, p, err = encryptLayer(cc, data, desc)
+	} else {
+		newDesc, p, err = decryptLayer(cc, data, desc)
+	}
+	if err != nil {
+		return ocispec.Descriptor{}, err
+	}
+	// some operations, such as adding or removing recipients, may not touch
+	// the layer at all
+	if len(p) > 0 {
+		ref := fmt.Sprintf("layer-%s", newDesc.Digest.String())
+		err = content.WriteBlob(ctx, cs, ref, bytes.NewReader(p), newDesc)
+	}
+	return newDesc, err
 }
+
 func getWrappedKeys(desc ocispec.Descriptor) ([][]byte, error) {
 	// Parse and decode keys
 	if v, ok := desc.Annotations["org.opencontainers.image.pgp.keys"]; ok {
@@ -522,8 +574,7 @@ func cryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descripto
 		case MediaTypeDockerSchema2Config:
 			config = child
 		case MediaTypeDockerSchema2LayerGzip, MediaTypeDockerSchema2Layer:
-			// this one we can only encrypt
-			if encrypt && isUserSelectedLayer(layerNum, layersTotal, lf.Layers) && isUserSelectedPlatform(thisPlatform, lf.Platforms) {
+			if encrypt &&isUserSelectedLayer(layerNum, layersTotal, lf.Layers) && isUserSelectedPlatform(thisPlatform, lf.Platforms) {
 				nl, err := cryptLayer(ctx, cs, child, cc, true)
 				if err != nil {
 					return ocispec.Descriptor{}, false, err
@@ -535,9 +586,9 @@ func cryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descripto
 			}
 			layerNum = layerNum + 1
 		case MediaTypeDockerSchema2LayerGzipPGP, MediaTypeDockerSchema2LayerPGP:
-			// this one we can only decrypt
-			if !encrypt && isUserSelectedLayer(layerNum, layersTotal, lf.Layers) && isUserSelectedPlatform(thisPlatform, lf.Platforms) {
-				nl, err := cryptLayer(ctx, cs, child, cc, false)
+			// this one can be decrypted but also its recpients list changed
+			if isUserSelectedLayer(layerNum, layersTotal, lf.Layers) && isUserSelectedPlatform(thisPlatform, lf.Platforms) {
+				nl, err := cryptLayer(ctx, cs, child, cc, encrypt)
 				if err != nil {
 					return ocispec.Descriptor{}, false, err
 				}
