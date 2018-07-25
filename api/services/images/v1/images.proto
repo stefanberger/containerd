@@ -151,6 +151,7 @@ message EncryptImageRequest {
 
 	EncryptConfig cc = 3;
 	repeated int32 layers = 4;
+	repeated string platforms = 5;
 }
 
 message EncryptImageResponse {
@@ -163,6 +164,7 @@ message DecryptImageRequest {
 
 	DecryptConfig dc = 3;
 	repeated int32 layers = 4;
+	repeated string platforms = 5;
 }
 
 message DecryptImageResponse {
@@ -172,6 +174,7 @@ message DecryptImageResponse {
 message GetImageLayerInfoRequest {
 	string name = 1;
 	repeated int32 layers = 2;
+	repeated string platforms = 3;
 }
 
 message LayerInfo {

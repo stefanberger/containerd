@@ -41,6 +41,9 @@ var decryptCommand = cli.Command{
 	Flags: append(commands.RegistryFlags, cli.IntSliceFlag{
 		Name:  "layer",
 		Usage: "The layer to decrypt; this must be either the layer number or a negative number starting with -1 for topmost layer",
+	}, cli.StringSliceFlag{
+		Name:  "platform",
+		Usage: "For which platform to decrypt; by default decryption is done for all platforms",
 	}),
 	Action: func(context *cli.Context) error {
 		var (
@@ -62,7 +65,7 @@ var decryptCommand = cli.Command{
 		}
 		defer cancel()
 
-		LayerInfos, err := client.ImageService().GetImageLayerInfo(ctx, local, context.IntSlice("layer"))
+		LayerInfos, err := client.ImageService().GetImageLayerInfo(ctx, local, context.IntSlice("layer"), context.StringSlice("platform"))
 		if err != nil {
 			return err
 		}
@@ -74,7 +77,7 @@ var decryptCommand = cli.Command{
 			}
 		}
 		if !isEncrypted {
-			fmt.Printf("The image is not encrypted.\n")
+			fmt.Printf("Nothing to decrypted.\n")
 			return nil
 		}
 
@@ -89,7 +92,7 @@ var decryptCommand = cli.Command{
 					found = true
 					break
 				}
-				// do we have this key
+				// do we have this key?
 				haveKey, _ := HaveGPGPrivateKey(keyid)
 				// this may fail if the key is not here; we ignore the error
 				if !haveKey {
@@ -122,7 +125,7 @@ var decryptCommand = cli.Command{
 			Dc: &images.DecryptConfig {
 				KeyIdMap: keyIdMap,
 			},
-		}, context.IntSlice("layer"))
+		}, context.IntSlice("layer"), context.StringSlice("platform"))
 		return err
 	},
 }
