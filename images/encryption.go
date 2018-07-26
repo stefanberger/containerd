@@ -79,15 +79,13 @@ func createEntityList(ec *EncryptConfig) (openpgp.EntityList, error) {
 
 	var filteredList openpgp.EntityList
 	for _, entity := range entityList {
-		for k, _ := range entity.Identities {
-			fmt.Printf("k = %s\n", k)
+		for k := range entity.Identities {
 			addr, err := mail.ParseAddress(k)
 			if err != nil {
 				return nil, err
 			}
 			for _, r := range ec.Recipients {
 				if strings.Compare(addr.Name, r) == 0 || strings.Compare(addr.Address, r) == 0 {
-					fmt.Printf(" TAKING key of %s\n", k)
 					filteredList = append(filteredList, entity)
 					rSet[r] = rSet[r] + 1
 				}
@@ -117,7 +115,7 @@ func createEntityList(ec *EncryptConfig) (openpgp.EntityList, error) {
 	return filteredList, nil
 }
 
-// HandleEncrypt encrypts a byte array using data from the CryptoConfig and also manages
+// HandleEncrypt encrypts a byte array using data from the EncryptConfig and also manages
 // the list of recipients' keys
 func HandleEncrypt(ec *EncryptConfig, data []byte, keys [][]byte) ([]byte, [][]byte, error) {
 	var (
@@ -142,7 +140,7 @@ func HandleEncrypt(ec *EncryptConfig, data []byte, keys [][]byte) ([]byte, [][]b
 		encBlob, wrappedKeys, err = encryptData(data, filteredList, nil)
 	case OPERATION_REMOVE_RECIPIENTS:
 		wrappedKeys, err = removeRecipientsFromKeys(keys, filteredList)
-		encBlob = data
+		// encBlob stays empty to indicate it wasn't touched
 	}
 
 	if err != nil {
@@ -152,7 +150,7 @@ func HandleEncrypt(ec *EncryptConfig, data []byte, keys [][]byte) ([]byte, [][]b
 	return encBlob, wrappedKeys, nil
 }
 
-// Decrypt decrypts a byte array using data from the CryptoConfig
+// Decrypt decrypts a byte array using data from the DecryptConfig
 func Decrypt(dc *DecryptConfig, encBody []byte, desc ocispec.Descriptor) ([]byte, error) {
 	keyIds, err := GetKeyIds(desc)
 	if err != nil {
