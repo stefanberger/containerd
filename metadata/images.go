@@ -80,7 +80,7 @@ func (s *imageStore) Get(ctx context.Context, name string) (images.Image, error)
 
 // cryptImage encrypts or decrypts an image with the given name and stores it either under the newName
 // or updates the existing one
-func (s *imageStore) cryptImage(ctx context.Context, name, newName string, cc *images.CryptoConfig, layers []int, platformList []string, encrypt bool) (images.Image, error) {
+func (s *imageStore) cryptImage(ctx context.Context, name, newName string, cc *images.CryptoConfig, layers []int32, platformList []string, encrypt bool) (images.Image, error) {
 	var image images.Image
 
 	namespace, err := namespaces.NamespaceRequired(ctx)
@@ -199,15 +199,15 @@ func (s *imageStore) cryptImage(ctx context.Context, name, newName string, cc *i
 	return image, nil
 }
 
-func (s *imageStore) EncryptImage(ctx context.Context, name, newName string, cc *images.CryptoConfig, layers []int, platformList []string) (images.Image, error) {
+func (s *imageStore) EncryptImage(ctx context.Context, name, newName string, cc *images.CryptoConfig, layers []int32, platformList []string) (images.Image, error) {
 	return s.cryptImage(ctx, name, newName, cc, layers, platformList, true)
 }
 
-func (s *imageStore) DecryptImage(ctx context.Context, name, newName string, cc *images.CryptoConfig, layers []int, platformList []string) (images.Image, error) {
+func (s *imageStore) DecryptImage(ctx context.Context, name, newName string, cc *images.CryptoConfig, layers []int32, platformList []string) (images.Image, error) {
 	return s.cryptImage(ctx, name, newName, cc, layers, platformList, false)
 }
 
-func (s *imageStore) GetImageLayerInfo(ctx context.Context, name string, layers []int, platformList []string) ([]images.LayerInfo, error) {
+func (s *imageStore) GetImageLayerInfo(ctx context.Context, name string, layers []int32, platformList []string) ([]images.LayerInfo, error) {
 	var image images.Image
 
 	namespace, err := namespaces.NamespaceRequired(ctx)

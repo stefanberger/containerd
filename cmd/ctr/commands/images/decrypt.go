@@ -65,7 +65,9 @@ var decryptCommand = cli.Command{
 		}
 		defer cancel()
 
-		LayerInfos, err := client.ImageService().GetImageLayerInfo(ctx, local, context.IntSlice("layer"), context.StringSlice("platform"))
+		layers32 := commands.IntToInt32Array(context.IntSlice("layer"))
+
+		LayerInfos, err := client.ImageService().GetImageLayerInfo(ctx, local, layers32, context.StringSlice("platform"))
 		if err != nil {
 			return err
 		}
@@ -128,7 +130,7 @@ var decryptCommand = cli.Command{
 			Dc: &images.DecryptConfig{
 				KeyIdMap: keyIdMap,
 			},
-		}, context.IntSlice("layer"), context.StringSlice("platform"))
+		}, layers32, context.StringSlice("platform"))
 		return err
 	},
 }

@@ -76,7 +76,7 @@ type LayerInfo struct {
 
 type LayerFilter struct {
 	// IDs of layers to touch
-	Layers []int
+	Layers []int32
 	// Platforms to touch
 	Platforms []ocispec.Platform
 }
@@ -110,9 +110,9 @@ type Store interface {
 
 	Delete(ctx context.Context, name string, opts ...DeleteOpt) error
 
-	EncryptImage(ctx context.Context, name, newName string, ec *CryptoConfig, layers []int, platforms []string) (Image, error)
-	DecryptImage(ctx context.Context, name, newName string, ec *CryptoConfig, layers []int, platforms []string) (Image, error)
-	GetImageLayerInfo(ctx context.Context, name string, layers []int, platforms []string) ([]LayerInfo, error)
+	EncryptImage(ctx context.Context, name, newName string, ec *CryptoConfig, layers []int32, platforms []string) (Image, error)
+	DecryptImage(ctx context.Context, name, newName string, ec *CryptoConfig, layers []int32, platforms []string) (Image, error)
+	GetImageLayerInfo(ctx context.Context, name string, layers []int32, platforms []string) ([]LayerInfo, error)
 }
 
 // TODO(stevvooe): Many of these functions make strong platform assumptions,
@@ -511,8 +511,8 @@ func isDescriptorALayer(desc ocispec.Descriptor) bool {
 }
 
 // countLayers counts the number of layer OCI descriptors in the given array
-func countLayers(desc []ocispec.Descriptor) int {
-	c := 0
+func countLayers(desc []ocispec.Descriptor) int32 {
+	c := int32(0)
 
 	for _, d := range desc {
 		if isDescriptorALayer(d) {
@@ -525,7 +525,7 @@ func countLayers(desc []ocispec.Descriptor) int {
 // isUserSelectedLayer checks whether we need to modify this layer given its number
 // A layer can be described with its (positive) index number or its negative number, which
 // is counted relative to the last one
-func isUserSelectedLayer(layerNum, layersTotal int, layers []int) bool {
+func isUserSelectedLayer(layerNum, layersTotal int32, layers []int32) bool {
 	if len(layers) == 0 {
 		// convenience for the user; none given means 'all'
 		return true
@@ -554,7 +554,7 @@ func isUserSelectedPlatform(platform *ocispec.Platform, platformList []ocispec.P
 
 // Encrypt all the Children of a given descriptor
 func cryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descriptor, cc *CryptoConfig, lf *LayerFilter, encrypt bool, thisPlatform *ocispec.Platform) (ocispec.Descriptor, bool, error) {
-	layerNum := 0
+	layerNum := int32(0)
 
 	children, err := Children(ctx, cs, desc)
 	if err != nil {
@@ -706,7 +706,7 @@ func CryptManifestList(ctx context.Context, cs content.Store, desc ocispec.Descr
 // Get the image key Ids necessary for decrypting an image
 // We determine the KeyIds starting with  the given OCI Decriptor, recursing to lower-level descriptors
 // until we get them from the layer descriptors
-func GetImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descriptor, lf *LayerFilter, layerNum int) ([]LayerInfo, error) {
+func GetImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descriptor, lf *LayerFilter, layerNum int32) ([]LayerInfo, error) {
 	var (
 		lis      []LayerInfo
 		tmp      []LayerInfo
@@ -728,7 +728,7 @@ func GetImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descr
 		}
 
 		layersTotal := countLayers(children)
-		layerNum := -1
+		layerNum := int32(-1)
 
 		for _, child := range children {
 			if isDescriptorALayer(child) {
