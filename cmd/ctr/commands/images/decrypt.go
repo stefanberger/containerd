@@ -18,8 +18,6 @@ package images
 
 import (
 	"fmt"
-	"io/ioutil"
-	"os/exec"
 	"syscall"
 
 	"github.com/containerd/containerd/cmd/ctr/commands"
@@ -34,9 +32,12 @@ var decryptCommand = cli.Command{
 	Name:      "decrypt",
 	Usage:     "decrypt an image locally",
 	ArgsUsage: "[flags] <local> <new name>",
-	Description: `Encrypt and image.
+	Description: `Decrypt an image locally.
 
-	XYZ
+	Decrypt an image using private keys managed by GPG.
+	The user has contol over which layers to decrypt and for which platform.
+	If no payers or platforms are specified, all layers for all platforms are
+	decrypted.
 `,
 	Flags: append(commands.RegistryFlags, cli.IntSliceFlag{
 		Name:  "layer",
@@ -44,6 +45,12 @@ var decryptCommand = cli.Command{
 	}, cli.StringSliceFlag{
 		Name:  "platform",
 		Usage: "For which platform to decrypt; by default decryption is done for all platforms",
+	}, cli.StringFlag{
+		Name:  "gpg-homedir",
+		Usage: "The GPG homedir to use; by default gpg uses ~/.gnupg",
+	}, cli.StringFlag{
+		Name:  "gpg-version",
+		Usage: "The GPG version (\"v1\" or \"v2\"), default will make an educated guess",
 	}),
 	Action: func(context *cli.Context) error {
 		var (
@@ -64,6 +71,22 @@ var decryptCommand = cli.Command{
 			return err
 		}
 		defer cancel()
+
+		// Create gpg client
+		gpgVersion := context.String("gpg-version")
+		v := new(images.GPGVersion)
+		switch gpgVersion {
+		case "v1":
+			*v = images.GPGv1
+		case "v2":
+			*v = images.GPGv2
+		default:
+			v = nil
+		}
+		gpgClient, err := images.NewGPGClient(v, context.String("gpg-homedir"))
+		if err != nil {
+			return errors.New("Unable to create GPG Client")
+		}
 
 		layers32 := commands.IntToInt32Array(context.IntSlice("layer"))
 
@@ -95,7 +118,7 @@ var decryptCommand = cli.Command{
 					break
 				}
 				// do we have this key?
-				keyinfo, haveKey, err := GetSecretKeyDetails(keyid)
+				keyinfo, haveKey, err := gpgClient.GetSecretKeyDetails(keyid)
 				// this may fail if the key is not here; we ignore the error
 				if !haveKey {
 					// key not on this system
@@ -110,7 +133,8 @@ var decryptCommand = cli.Command{
 				if err != nil {
 					return err
 				}
-				keydata, err := images.GetGPGPrivateKey(keyid, string(password))
+
+				keydata, err := gpgClient.GetGPGPrivateKey(keyid, string(password))
 				if err != nil {
 					return err
 				}
@@ -122,7 +146,7 @@ var decryptCommand = cli.Command{
 				break
 			}
 			if !found && len(LayerInfo.KeyIds) > 0 {
-				return fmt.Errorf("Missing key for decryption of layer %d of %s. Need one of the following keys: %s\n", LayerInfo.Id, LayerInfo.Platform, LayerInfo.KeyIds)
+				return fmt.Errorf("Missing key for decryption of layer %d of %s. Need one of the following keys: %v\n", LayerInfo.Id, LayerInfo.Platform, LayerInfo.KeyIds)
 			}
 		}
 		fmt.Printf("\n")
@@ -133,32 +157,6 @@ var decryptCommand = cli.Command{
 		}, layers32, context.StringSlice("platform"))
 		return err
 	},
-}
-
-// GetSecretKeyDetails retrives the secret key details of key with keyid.
-// returns a byte array of the details and a bool if the key exists
-func GetSecretKeyDetails(keyid uint64) ([]byte, bool, error) {
-	args := append([]string{"-K"}, fmt.Sprintf("0x%x", keyid))
-
-	cmd := exec.Command("gpg2", args...)
-
-	stdout, err := cmd.StdoutPipe()
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return nil, false, err
-	}
-	if err := cmd.Start(); err != nil {
-		return nil, false, err
-	}
-
-	keydata, err2 := ioutil.ReadAll(stdout)
-	message, _ := ioutil.ReadAll(stderr)
-
-	if err := cmd.Wait(); err != nil {
-		return nil, false, fmt.Errorf("Error from gpg2: %s\n", message)
-	}
-
-	return keydata, err2 == nil, err2
 }
 
 func addToSet(set, add []uint64) []uint64 {
