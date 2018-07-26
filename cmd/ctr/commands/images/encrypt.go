@@ -87,7 +87,9 @@ var encryptCommand = cli.Command{
 				Operation:      operation,
 			},
 		}
-		_, err = client.ImageService().EncryptImage(ctx, local, newName, cc, context.IntSlice("layer"), context.StringSlice("platform"))
+		layers32 := commands.IntToInt32Array(context.IntSlice("layer"))
+
+		_, err = client.ImageService().EncryptImage(ctx, local, newName, cc, layers32, context.StringSlice("platform"))
 		if err != nil {
 			return err
 		}
