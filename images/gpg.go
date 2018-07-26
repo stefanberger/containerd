@@ -30,7 +30,7 @@ func GuessGPGVersion() (GPGVersion, error) {
 
 // GetGPGPrivateKey gets the bytes of a specified keyid, supplying a passphrase
 func GetGPGPrivateKey(keyid uint64, password string) ([]byte, error) {
-	args := append([]string{"--pinentry-mode", "loopback", "--batch", "--passphrase", password, "--  export-secret-key"}, fmt.Sprintf("0x%x", keyid))
+	args := append([]string{"--pinentry-mode", "loopback", "--batch", "--passphrase", password, "--export-secret-key"}, fmt.Sprintf("0x%x", keyid))
 
 	cmd := exec.Command("gpg2", args...)
 
