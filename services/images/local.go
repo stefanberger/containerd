@@ -184,11 +184,23 @@ func (l *local) EncryptImage(ctx context.Context, req *imagesapi.EncryptImageReq
 
 	var resp imagesapi.EncryptImageResponse
 
+	keyIdMap := make(map[uint64]images.DecryptKeyData)
+
+	for k, v := range req.Ec.Dc.KeyIdMap {
+		keyIdMap[k] = images.DecryptKeyData{
+			KeyData:         v.KeyData,
+			KeyDataPassword: v.KeyDataPassword,
+		}
+	}
+
 	encrypted, err := l.store.EncryptImage(ctx, req.Name, req.NewName, &images.CryptoConfig{
 		Ec: &images.EncryptConfig{
-			Recipients:     req.Cc.Recipients,
-			GPGPubRingFile: req.Cc.Gpgpubkeyring,
-			Operation:      req.Cc.Operation,
+			Recipients:     req.Ec.Recipients,
+			GPGPubRingFile: req.Ec.Gpgpubkeyring,
+			Operation:      req.Ec.Operation,
+			Dc: images.DecryptConfig{
+				KeyIdMap: keyIdMap,
+			},
 		},
 	}, req.Layers, req.Platforms)
 	if err != nil {
