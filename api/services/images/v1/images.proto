@@ -195,4 +195,3 @@ message LayerInfo {
 message GetImageLayerInfoResponse {
 	repeated LayerInfo layerInfo = 1;
 }
-
