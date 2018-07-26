@@ -90,14 +90,14 @@ var decryptCommand = cli.Command{
 
 		layers32 := commands.IntToInt32Array(context.IntSlice("layer"))
 
-		LayerInfos, err := client.ImageService().GetImageLayerInfo(ctx, local, layers32, context.StringSlice("platform"))
+		layerInfos, err := client.ImageService().GetImageLayerInfo(ctx, local, layers32, context.StringSlice("platform"))
 		if err != nil {
 			return err
 		}
 
 		isEncrypted := false
-		for i := 0; i < len(LayerInfos); i++ {
-			if len(LayerInfos[i].KeyIds) > 0 {
+		for i := 0; i < len(layerInfos); i++ {
+			if len(layerInfos[i].KeyIds) > 0 {
 				isEncrypted = true
 			}
 		}
@@ -106,49 +106,8 @@ var decryptCommand = cli.Command{
 			return nil
 		}
 
-		keyIdMap := make(map[uint64]images.DecryptKeyData)
+		keyIdMap, err := getPrivateKeys(layerInfos, gpgClient)
 
-		// we need one key per encrypted layer
-		for _, LayerInfo := range LayerInfos {
-			found := false
-			for _, keyid := range LayerInfo.KeyIds {
-				if _, ok := keyIdMap[keyid]; ok {
-					// password already there
-					found = true
-					break
-				}
-				// do we have this key?
-				keyinfo, haveKey, err := gpgClient.GetSecretKeyDetails(keyid)
-				// this may fail if the key is not here; we ignore the error
-				if !haveKey {
-					// key not on this system
-					continue
-				}
-
-				fmt.Printf("Passphrase required for Key id 0x%x: \n%v", keyid, string(keyinfo))
-				fmt.Printf("Enter passphrase for key with Id 0x%x: ", keyid)
-
-				password, err := terminal.ReadPassword(int(syscall.Stdin))
-				fmt.Printf("\n")
-				if err != nil {
-					return err
-				}
-
-				keydata, err := gpgClient.GetGPGPrivateKey(keyid, string(password))
-				if err != nil {
-					return err
-				}
-				keyIdMap[keyid] = images.DecryptKeyData{
-					KeyData:         keydata,
-					KeyDataPassword: password,
-				}
-				found = true
-				break
-			}
-			if !found && len(LayerInfo.KeyIds) > 0 {
-				return fmt.Errorf("Missing key for decryption of layer %d of %s. Need one of the following keys: %v\n", LayerInfo.Id, LayerInfo.Platform, LayerInfo.KeyIds)
-			}
-		}
 		fmt.Printf("\n")
 		_, err = client.ImageService().DecryptImage(ctx, local, newName, &images.CryptoConfig{
 			Dc: &images.DecryptConfig{
@@ -173,4 +132,54 @@ func addToSet(set, add []uint64) []uint64 {
 		}
 	}
 	return set
+}
+
+// getPrivateKeys walks the list of layerInfos and determines which keys are on this system
+// and prompts for the passwords for those that are available. If one layer does not have
+// a private key an error is thrown.
+func getPrivateKeys(layerInfos []images.LayerInfo, gpgClient images.GPGClient) (map[uint64]images.DecryptKeyData, error) {
+	keyIdMap := make(map[uint64]images.DecryptKeyData)
+
+	// we need one key per encrypted layer
+	for _, layerInfo := range layerInfos {
+		found := false
+		for _, keyid := range layerInfo.KeyIds {
+			if _, ok := keyIdMap[keyid]; ok {
+				// password already there
+				found = true
+				break
+			}
+			// do we have this key?
+			keyinfo, haveKey, err := gpgClient.GetSecretKeyDetails(keyid)
+			// this may fail if the key is not here; we ignore the error
+			if !haveKey {
+				// key not on this system
+				continue
+			}
+
+			fmt.Printf("Passphrase required for Key id 0x%x: \n%v", keyid, string(keyinfo))
+			fmt.Printf("Enter passphrase for key with Id 0x%x: ", keyid)
+
+			password, err := terminal.ReadPassword(int(syscall.Stdin))
+			fmt.Printf("\n")
+			if err != nil {
+				return keyIdMap, err
+			}
+
+			keydata, err := gpgClient.GetGPGPrivateKey(keyid, string(password))
+			if err != nil {
+				return keyIdMap, err
+			}
+			keyIdMap[keyid] = images.DecryptKeyData{
+				KeyData:         keydata,
+				KeyDataPassword: password,
+			}
+			found = true
+			break
+		}
+		if !found && len(layerInfo.KeyIds) > 0 {
+			return keyIdMap, fmt.Errorf("Missing key for decryption of layer %d of %s. Need one of the following keys: %v\n", layerInfo.Id, layerInfo.Platform, layerInfo.KeyIds)
+		}
+	}
+	return keyIdMap, nil
 }
