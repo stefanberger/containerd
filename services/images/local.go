@@ -18,7 +18,6 @@ package images
 
 import (
 	"context"
-	"fmt"
 
 	eventstypes "github.com/containerd/containerd/api/events"
 	imagesapi "github.com/containerd/containerd/api/services/images/v1"
@@ -183,18 +182,19 @@ func (l *local) Delete(ctx context.Context, req *imagesapi.DeleteImageRequest, _
 func (l *local) EncryptImage(ctx context.Context, req *imagesapi.EncryptImageRequest, _ ...grpc.CallOption) (*imagesapi.EncryptImageResponse, error) {
 	log.G(ctx).WithField("name", req.Name).Debugf("encrypt image")
 
-	var resp   imagesapi.EncryptImageResponse
+	var resp imagesapi.EncryptImageResponse
 
 	encrypted, err := l.store.EncryptImage(ctx, req.Name, req.NewName, &images.CryptoConfig{
-		Ec:	&images.EncryptConfig{
-			Recipients    : req.Cc.Recipients,
+		Ec: &images.EncryptConfig{
+			Recipients:     req.Cc.Recipients,
 			GPGPubRingFile: req.Cc.Gpgpubkeyring,
-			Operation     : req.Cc.Operation,
+			Operation:      req.Cc.Operation,
 		},
 	}, req.Layers, req.Platforms)
 	if err != nil {
 		return nil, errdefs.ToGRPC(err)
 	}
+
 	resp.Image = imageToProto(&encrypted)
 
 	if err := l.publisher.Publish(ctx, "/images/update", &eventstypes.ImageUpdate{
@@ -210,9 +210,7 @@ func (l *local) EncryptImage(ctx context.Context, req *imagesapi.EncryptImageReq
 func (l *local) DecryptImage(ctx context.Context, req *imagesapi.DecryptImageRequest, _ ...grpc.CallOption) (*imagesapi.DecryptImageResponse, error) {
 	log.G(ctx).WithField("name", req.Name).Debugf("decrypt image")
 
-	fmt.Printf("req.Platforms: %s\n", req.Platforms)
-
-	var resp   imagesapi.DecryptImageResponse
+	var resp imagesapi.DecryptImageResponse
 
 	keyIdMap := make(map[uint64]images.DecryptKeyData)
 
@@ -224,7 +222,7 @@ func (l *local) DecryptImage(ctx context.Context, req *imagesapi.DecryptImageReq
 	}
 
 	encrypted, err := l.store.DecryptImage(ctx, req.Name, req.NewName, &images.CryptoConfig{
-		Dc:	&images.DecryptConfig{
+		Dc: &images.DecryptConfig{
 			KeyIdMap: keyIdMap,
 		},
 	}, req.Layers, req.Platforms)
@@ -267,4 +265,3 @@ func (l *local) GetImageLayerInfo(ctx context.Context, req *imagesapi.GetImageLa
 
 	return &resp, nil
 }
-
