@@ -29,11 +29,16 @@ import (
 
 var layerinfoCommand = cli.Command{
 	Name:      "layerinfo",
-	Usage:     "get infomration about an image's layers",
+	Usage:     "get information about an image's layers",
 	ArgsUsage: "[flags] <local>",
 	Description: `Get encryption information about the layers of an image.
 
-	XYZ
+	Get information about the layers of an image and display with which
+	encryption technology the individual layers are encrypted with.
+	The user has control over the individual layers and the platforms they are
+	associated with and can retrieve information for them separately. If no
+	layers or platforms are specified, infomration for all layers and all
+	platforms will be retrieved.
 `,
 	Flags: append(commands.RegistryFlags, cli.IntSliceFlag{
 		Name:  "layer",
@@ -81,4 +86,3 @@ var layerinfoCommand = cli.Command{
 		return nil
 	},
 }
-
