@@ -21,6 +21,7 @@ import (
 	"syscall"
 
 	"github.com/containerd/containerd/cmd/ctr/commands"
+	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/images"
 	"github.com/pkg/errors"
 	"github.com/urfave/cli"
@@ -135,8 +136,8 @@ func addToSet(set, add []uint64) []uint64 {
 }
 
 // getPrivateKeys walks the list of layerInfos and determines which keys are on this system
-// and prompts for the passwords for those that are available. If one layer does not have
-// a private key an error is thrown.
+// and prompts for the passwords for those that are available. If we do not find a private
+// key on the system for a layer then an error is displayed.
 func getPrivateKeys(layerInfos []images.LayerInfo, gpgClient images.GPGClient) (map[uint64]images.DecryptKeyData, error) {
 	keyIdMap := make(map[uint64]images.DecryptKeyData)
 
@@ -178,7 +179,7 @@ func getPrivateKeys(layerInfos []images.LayerInfo, gpgClient images.GPGClient) (
 			break
 		}
 		if !found && len(layerInfo.KeyIds) > 0 {
-			return keyIdMap, fmt.Errorf("Missing key for decryption of layer %d of %s. Need one of the following keys: %v\n", layerInfo.Id, layerInfo.Platform, layerInfo.KeyIds)
+			return keyIdMap, errors.Wrapf(errdefs.ErrNotFound, "Missing key for decryption of layer %d of %s. Need one of the following keys: %v\n", layerInfo.Id, layerInfo.Platform, layerInfo.KeyIds)
 		}
 	}
 	return keyIdMap, nil
