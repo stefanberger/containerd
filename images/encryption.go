@@ -36,6 +36,10 @@ type EncryptConfig struct {
 	Recipients     []string
 	GPGPubRingFile []byte
 	Operation      int32
+	// for adding recipients on an already encrypted image we need the
+	// private keys for the layers to get to the symmetric key so we can
+	// (re)wrap it with the recpient's public key
+	Dc DecryptConfig
 }
 
 const (
@@ -136,9 +140,10 @@ func HandleEncrypt(ec *EncryptConfig, data []byte, keys [][]byte) ([]byte, [][]b
 	switch ec.Operation {
 	case OPERATION_ADD_RECIPIENTS:
 		if len(keys) > 0 {
-			return nil, nil, errors.Wrapf(errdefs.ErrNotImplemented, "Support for adding recipients is not implemented.\n")
+			wrappedKeys, err = addRecipientsToKeys(keys, filteredList, ec.Dc.KeyIdMap)
+		} else {
+			encBlob, wrappedKeys, err = encryptData(data, filteredList, nil)
 		}
-		encBlob, wrappedKeys, err = encryptData(data, filteredList, nil)
 	case OPERATION_REMOVE_RECIPIENTS:
 		wrappedKeys, err = removeRecipientsFromKeys(keys, filteredList)
 		// encBlob stays empty to indicate it wasn't touched
