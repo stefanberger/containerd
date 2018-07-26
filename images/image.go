@@ -348,7 +348,91 @@ func Check(ctx context.Context, provider content.Provider, image ocispec.Descrip
 	return true, required, present, missing, nil
 }
 
+// Children returns the immediate children of content described by the descriptor.
+func Children(ctx context.Context, provider content.Provider, desc ocispec.Descriptor) ([]ocispec.Descriptor, error) {
+	var descs []ocispec.Descriptor
+	switch desc.MediaType {
+	case MediaTypeDockerSchema2Manifest, ocispec.MediaTypeImageManifest:
+		p, err := content.ReadBlob(ctx, provider, desc)
+		if err != nil {
+			return nil, err
+		}
+
+		// TODO(stevvooe): We just assume oci manifest, for now. There may be
+		// subtle differences from the docker version.
+		var manifest ocispec.Manifest
+		if err := json.Unmarshal(p, &manifest); err != nil {
+			return nil, err
+		}
+
+		descs = append(descs, manifest.Config)
+		descs = append(descs, manifest.Layers...)
+	case MediaTypeDockerSchema2ManifestList, ocispec.MediaTypeImageIndex:
+		p, err := content.ReadBlob(ctx, provider, desc)
+		if err != nil {
+			return nil, err
+		}
+
+		var index ocispec.Index
+		if err := json.Unmarshal(p, &index); err != nil {
+			return nil, err
+		}
+
+		descs = append(descs, index.Manifests...)
+	case MediaTypeDockerSchema2Layer, MediaTypeDockerSchema2LayerGzip,
+		MediaTypeDockerSchema2LayerPGP, MediaTypeDockerSchema2LayerGzipPGP,
+		MediaTypeDockerSchema2LayerForeign, MediaTypeDockerSchema2LayerForeignGzip,
+		MediaTypeDockerSchema2Config, ocispec.MediaTypeImageConfig,
+		ocispec.MediaTypeImageLayer, ocispec.MediaTypeImageLayerGzip,
+		ocispec.MediaTypeImageLayerNonDistributable, ocispec.MediaTypeImageLayerNonDistributableGzip,
+		MediaTypeContainerd1Checkpoint, MediaTypeContainerd1CheckpointConfig:
+		// childless data types.
+		return nil, nil
+	default:
+		log.G(ctx).Warnf("encountered unknown type %v; children may not be fetched", desc.MediaType)
+	}
+
+	return descs, nil
+}
+
+// RootFS returns the unpacked diffids that make up and images rootfs.
+//
+// These are used to verify that a set of layers unpacked to the expected
+// values.
+func RootFS(ctx context.Context, provider content.Provider, configDesc ocispec.Descriptor) ([]digest.Digest, error) {
+	p, err := content.ReadBlob(ctx, provider, configDesc)
+	if err != nil {
+		return nil, err
+	}
+
+	var config ocispec.Image
+	if err := json.Unmarshal(p, &config); err != nil {
+		return nil, err
+	}
+	return config.RootFS.DiffIDs, nil
+}
+
+// IsCompressedDiff returns true if mediaType is a known compressed diff media type.
+// It returns false if the media type is a diff, but not compressed. If the media type
+// is not a known diff type, it returns errdefs.ErrNotImplemented
+func IsCompressedDiff(ctx context.Context, mediaType string) (bool, error) {
+	switch mediaType {
+	case ocispec.MediaTypeImageLayer, MediaTypeDockerSchema2Layer:
+	case ocispec.MediaTypeImageLayerGzip, MediaTypeDockerSchema2LayerGzip, MediaTypeDockerSchema2LayerGzipPGP:
+		return true, nil
+	default:
+		// Still apply all generic media types *.tar[.+]gzip and *.tar
+		if strings.HasSuffix(mediaType, ".tar.gzip") || strings.HasSuffix(mediaType, ".tar+gzip") {
+			return true, nil
+		} else if !strings.HasSuffix(mediaType, ".tar") {
+			return false, errdefs.ErrNotImplemented
+		}
+	}
+	return false, nil
+}
+
 // encryptLayer encrypts the layer using the CryptoConfig and creates a new OCI Descriptor.
+// A call to this function may also only manipulate the wrapped keys list.
 // The caller is expected to store the returned encrypted data and OCI Descriptor
 func encryptLayer(cc *CryptoConfig, data []byte, desc ocispec.Descriptor) (ocispec.Descriptor, []byte, error) {
 	var (
@@ -358,19 +442,24 @@ func encryptLayer(cc *CryptoConfig, data []byte, desc ocispec.Descriptor) (ocisp
 		err  error
 	)
 
-	if v, ok := desc.Annotations["org.opencontainers.image.pgp.keys"]; ok {
-		keys, err = decodeWrappedKeys(v)
-		if err != nil {
-			return ocispec.Descriptor{}, []byte{}, err
-		}
+	keys, err = getWrappedKeys(desc)
+	if err != nil {
+		return ocispec.Descriptor{}, []byte{}, err
 	}
 
 	p, keys, err := HandleEncrypt(cc.Ec, data, keys)
 	if err != nil {
 		return ocispec.Descriptor{}, []byte{}, err
 	}
-	size = int64(len(p))
-	d = digest.FromBytes(p)
+
+	// were data touched ?
+	if len(p) > 0 {
+		size = int64(len(p))
+		d = digest.FromBytes(p)
+	} else {
+		size = desc.Size
+		d = desc.Digest
+	}
 
 	newDesc := ocispec.Descriptor{
 		Digest:   d,
@@ -402,12 +491,10 @@ func decryptLayer(cc *CryptoConfig, data []byte, desc ocispec.Descriptor) (ocisp
 	if err != nil {
 		return ocispec.Descriptor{}, []byte{}, err
 	}
-	size := int64(len(p))
-	d := digest.FromBytes(p)
 
 	newDesc := ocispec.Descriptor{
-		Digest:   d,
-		Size:     size,
+		Digest:   digest.FromBytes(p),
+		Size:     int64(len(p)),
 		Platform: desc.Platform,
 	}
 
@@ -442,8 +529,7 @@ func cryptLayer(ctx context.Context, cs content.Store, desc ocispec.Descriptor, 
 	if err != nil {
 		return ocispec.Descriptor{}, err
 	}
-	// some operations, such as adding or removing recipients, may not touch
-	// the layer at all
+	// some operations, such as changing recipients, may not touch the layer at all
 	if len(p) > 0 {
 		ref := fmt.Sprintf("layer-%s", newDesc.Digest.String())
 		err = content.WriteBlob(ctx, cs, ref, bytes.NewReader(p), newDesc)
@@ -589,7 +675,7 @@ func cryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descripto
 		case MediaTypeDockerSchema2Config:
 			config = child
 		case MediaTypeDockerSchema2LayerGzip, MediaTypeDockerSchema2Layer:
-			if encrypt &&isUserSelectedLayer(layerNum, layersTotal, lf.Layers) && isUserSelectedPlatform(thisPlatform, lf.Platforms) {
+			if encrypt && isUserSelectedLayer(layerNum, layersTotal, lf.Layers) && isUserSelectedPlatform(thisPlatform, lf.Platforms) {
 				nl, err := cryptLayer(ctx, cs, child, cc, true)
 				if err != nil {
 					return ocispec.Descriptor{}, false, err
@@ -760,7 +846,7 @@ func GetImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descr
 				return []LayerInfo{}, err
 			}
 
-			if (platform != "") {
+			if platform != "" {
 				for i := 0; i < len(tmp); i++ {
 					tmp[i].Platform = platform
 				}
@@ -795,87 +881,4 @@ func GetImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descr
 	}
 
 	return lis, nil
-}
-
-// Children returns the immediate children of content described by the descriptor.
-func Children(ctx context.Context, provider content.Provider, desc ocispec.Descriptor) ([]ocispec.Descriptor, error) {
-	var descs []ocispec.Descriptor
-	switch desc.MediaType {
-	case MediaTypeDockerSchema2Manifest, ocispec.MediaTypeImageManifest:
-		p, err := content.ReadBlob(ctx, provider, desc)
-		if err != nil {
-			return nil, err
-		}
-
-		// TODO(stevvooe): We just assume oci manifest, for now. There may be
-		// subtle differences from the docker version.
-		var manifest ocispec.Manifest
-		if err := json.Unmarshal(p, &manifest); err != nil {
-			return nil, err
-		}
-
-		descs = append(descs, manifest.Config)
-		descs = append(descs, manifest.Layers...)
-	case MediaTypeDockerSchema2ManifestList, ocispec.MediaTypeImageIndex:
-		p, err := content.ReadBlob(ctx, provider, desc)
-		if err != nil {
-			return nil, err
-		}
-
-		var index ocispec.Index
-		if err := json.Unmarshal(p, &index); err != nil {
-			return nil, err
-		}
-
-		descs = append(descs, index.Manifests...)
-	case MediaTypeDockerSchema2Layer, MediaTypeDockerSchema2LayerGzip,
-		MediaTypeDockerSchema2LayerPGP, MediaTypeDockerSchema2LayerGzipPGP,
-		MediaTypeDockerSchema2LayerForeign, MediaTypeDockerSchema2LayerForeignGzip,
-		MediaTypeDockerSchema2Config, ocispec.MediaTypeImageConfig,
-		ocispec.MediaTypeImageLayer, ocispec.MediaTypeImageLayerGzip,
-		ocispec.MediaTypeImageLayerNonDistributable, ocispec.MediaTypeImageLayerNonDistributableGzip,
-		MediaTypeContainerd1Checkpoint, MediaTypeContainerd1CheckpointConfig:
-		// childless data types.
-		return nil, nil
-	default:
-		log.G(ctx).Warnf("encountered unknown type %v; children may not be fetched", desc.MediaType)
-	}
-
-	return descs, nil
-}
-
-// RootFS returns the unpacked diffids that make up and images rootfs.
-//
-// These are used to verify that a set of layers unpacked to the expected
-// values.
-func RootFS(ctx context.Context, provider content.Provider, configDesc ocispec.Descriptor) ([]digest.Digest, error) {
-	p, err := content.ReadBlob(ctx, provider, configDesc)
-	if err != nil {
-		return nil, err
-	}
-
-	var config ocispec.Image
-	if err := json.Unmarshal(p, &config); err != nil {
-		return nil, err
-	}
-	return config.RootFS.DiffIDs, nil
-}
-
-// IsCompressedDiff returns true if mediaType is a known compressed diff media type.
-// It returns false if the media type is a diff, but not compressed. If the media type
-// is not a known diff type, it returns errdefs.ErrNotImplemented
-func IsCompressedDiff(ctx context.Context, mediaType string) (bool, error) {
-	switch mediaType {
-	case ocispec.MediaTypeImageLayer, MediaTypeDockerSchema2Layer:
-	case ocispec.MediaTypeImageLayerGzip, MediaTypeDockerSchema2LayerGzip, MediaTypeDockerSchema2LayerGzipPGP:
-		return true, nil
-	default:
-		// Still apply all generic media types *.tar[.+]gzip and *.tar
-		if strings.HasSuffix(mediaType, ".tar.gzip") || strings.HasSuffix(mediaType, ".tar+gzip") {
-			return true, nil
-		} else if !strings.HasSuffix(mediaType, ".tar") {
-			return false, errdefs.ErrNotImplemented
-		}
-	}
-	return false, nil
 }
