@@ -108,7 +108,7 @@ var decryptCommand = cli.Command{
 				if err != nil {
 					return err
 				}
-				keydata, err := GetGPGPrivateKey(keyid, string(password))
+				keydata, err := images.GetGPGPrivateKey(keyid, string(password))
 				if err != nil {
 					return err
 				}
@@ -131,31 +131,6 @@ var decryptCommand = cli.Command{
 		}, context.IntSlice("layer"), context.StringSlice("platform"))
 		return err
 	},
-}
-
-// GetGPGPrivateKey gets the bytes of a specified keyid, supplying a passphrase
-func GetGPGPrivateKey(keyid uint64, password string) ([]byte, error) {
-	args := append([]string{"--pinentry-mode", "loopback", "--batch", "--passphrase", password, "--export-secret-key"}, fmt.Sprintf("0x%x", keyid))
-
-	cmd := exec.Command("gpg2", args...)
-
-	stdout, err := cmd.StdoutPipe()
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return nil, err
-	}
-	if err := cmd.Start(); err != nil {
-		return nil, err
-	}
-
-	keydata, err2 := ioutil.ReadAll(stdout)
-	message, _ := ioutil.ReadAll(stderr)
-
-	if err := cmd.Wait(); err != nil {
-		return nil, fmt.Errorf("Error from gpg2: %s\n", message)
-	}
-
-	return keydata, err2
 }
 
 // GetSecretKeyDetails retrives the secret key details of key with keyid.
