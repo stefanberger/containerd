@@ -2241,6 +2241,14 @@ file {
       type: TYPE_INT32
       json_name: "operation"
     }
+    field {
+      name: "dc"
+      number: 4
+      label: LABEL_OPTIONAL
+      type: TYPE_MESSAGE
+      type_name: ".containerd.services.images.v1.DecryptConfig"
+      json_name: "dc"
+    }
   }
   message_type {
     name: "DecryptKeyData"
@@ -2308,12 +2316,12 @@ file {
       json_name: "newName"
     }
     field {
-      name: "cc"
+      name: "ec"
       number: 3
       label: LABEL_OPTIONAL
       type: TYPE_MESSAGE
       type_name: ".containerd.services.images.v1.EncryptConfig"
-      json_name: "cc"
+      json_name: "ec"
     }
     field {
       name: "layers"
