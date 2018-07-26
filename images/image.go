@@ -67,7 +67,7 @@ type LayerInfo struct {
 	KeyIds []uint64
 	// The Digest of the layer
 	Digest string
-	// The Encryption algorithm used for encrypting the layer
+	// The Encryption method used for encrypting the layer
 	Encryption string
 	// The size of the layer file
 	FileSize int64
@@ -76,9 +76,10 @@ type LayerInfo struct {
 }
 
 type LayerFilter struct {
-	// IDs of layers to touch
+	// IDs of layers to touch; may be negative number to start from topmost layer
+	// empty array means 'all layers'
 	Layers []int32
-	// Platforms to touch
+	// Platforms to touch; empty array means 'all platforms'
 	Platforms []ocispec.Platform
 }
 
@@ -566,16 +567,13 @@ func assembleEncryptedMessage(encBody []byte, keys [][]byte) []byte {
 // encodeWrappedKeys encodes wrapped openpgp keys to a string readable ','
 // separated base64 strings.
 func encodeWrappedKeys(keys [][]byte) string {
-	keyString := ""
+	var keyArray []string
+
 	for _, k := range keys {
-		if keyString == "" {
-			keyString += base64.StdEncoding.EncodeToString(k)
-		} else {
-			keyString += "," + base64.StdEncoding.EncodeToString(k)
-		}
+		keyArray = append(keyArray, base64.StdEncoding.EncodeToString(k))
 	}
 
-	return keyString
+	return strings.Join(keyArray, ",")
 }
 
 // decodeWrappedKeys decodes wrapped openpgp keys from string readable ','
@@ -595,7 +593,7 @@ func decodeWrappedKeys(keys string) ([][]byte, error) {
 	return keyBytes, nil
 }
 
-// isDecriptorALayer determines whether the given Descriptor describes a layer
+// isDecriptorALayer determines whether the given Descriptor describes an image layer
 func isDescriptorALayer(desc ocispec.Descriptor) bool {
 	switch desc.MediaType {
 	case MediaTypeDockerSchema2LayerGzip, MediaTypeDockerSchema2Layer,
@@ -617,16 +615,15 @@ func countLayers(desc []ocispec.Descriptor) int32 {
 	return c
 }
 
-// isUserSelectedLayer checks whether we need to modify this layer given its number
+// isUserSelectedLayer checks whether the a layer is user selected given its number
 // A layer can be described with its (positive) index number or its negative number, which
-// is counted relative to the last one
+// is counted relative to the topmost one (-1)
 func isUserSelectedLayer(layerNum, layersTotal int32, layers []int32) bool {
 	if len(layers) == 0 {
 		// convenience for the user; none given means 'all'
 		return true
 	}
 	negNumber := layerNum - layersTotal
-	fmt.Printf("%d vs %d\n", layerNum, negNumber)
 
 	for _, l := range layers {
 		if l == negNumber || l == layerNum {
@@ -664,7 +661,6 @@ func cryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descripto
 
 	layersTotal := countLayers(children)
 
-	//fmt.Printf("metadata/image.go EncryptChildren(): got %d children\n", len(children))
 	var newLayers []ocispec.Descriptor
 	var config ocispec.Descriptor
 	modified := false
@@ -705,7 +701,7 @@ func cryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descripto
 	}
 
 	if modified && len(newLayers) > 0 {
-		nM := ocispec.Manifest{
+		newManifest := ocispec.Manifest{
 			Versioned: specs.Versioned{
 				SchemaVersion: 2,
 			},
@@ -713,30 +709,29 @@ func cryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descripto
 			Layers: newLayers,
 		}
 
-		mb, err := json.MarshalIndent(nM, "", "   ")
+		mb, err := json.MarshalIndent(newManifest, "", "   ")
 		if err != nil {
 			return ocispec.Descriptor{}, false, errors.Wrap(err, "failed to marshal image")
 		}
 
-		nDesc := ocispec.Descriptor{
-			MediaType: MediaTypeDockerSchema2Manifest, //ocispec.MediaTypeImageManifest,//MediaTypeDockerSchema2Manifest,
+		newDesc := ocispec.Descriptor{
+			MediaType: MediaTypeDockerSchema2Manifest,
 			Size:      int64(len(mb)),
 			Digest:    digest.Canonical.FromBytes(mb),
 			Platform:  desc.Platform,
 		}
+
 		labels := map[string]string{}
-		labels["containerd.io/gc.ref.content.0"] = nM.Config.Digest.String()
-		for i, ch := range nM.Layers {
+		labels["containerd.io/gc.ref.content.0"] = newManifest.Config.Digest.String()
+		for i, ch := range newManifest.Layers {
 			labels[fmt.Sprintf("containerd.io/gc.ref.content.%d", i+1)] = ch.Digest.String()
 		}
 
-		fmt.Printf("   old desc %s now written as %s\n", desc.Digest, nDesc.Digest)
-
-		ref := fmt.Sprintf("manifest-%s", nDesc.Digest.String())
-		if err := content.WriteBlob(ctx, cs, ref, bytes.NewReader(mb), nDesc, content.WithLabels(labels)); err != nil {
+		ref := fmt.Sprintf("manifest-%s", newDesc.Digest.String())
+		if err := content.WriteBlob(ctx, cs, ref, bytes.NewReader(mb), newDesc, content.WithLabels(labels)); err != nil {
 			return ocispec.Descriptor{}, false, errors.Wrap(err, "failed to write config")
 		}
-		return nDesc, true, nil
+		return newDesc, true, nil
 	}
 
 	return desc, modified, nil
@@ -787,7 +782,6 @@ func CryptManifestList(ctx context.Context, cs content.Store, desc ocispec.Descr
 			Size:      int64(len(mb)),
 			Digest:    digest.Canonical.FromBytes(mb),
 		}
-		fmt.Printf("   old Index %s now written as %s\n", desc.Digest, nDesc.Digest)
 
 		labels := map[string]string{}
 		for i, m := range newIndex.Manifests {
@@ -864,20 +858,20 @@ func GetImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descr
 		lis = append(lis, li)
 	case MediaTypeDockerSchema2Config:
 	case MediaTypeDockerSchema2LayerPGP, MediaTypeDockerSchema2LayerGzipPGP:
-		kids, err := GetKeyIds(desc)
+		keyIds, err := GetKeyIds(desc)
 		if err != nil {
 			return []LayerInfo{}, err
 		}
 		li := LayerInfo{
-			KeyIds:     kids,
+			KeyIds:     keyIds,
 			Digest:     desc.Digest.String(),
-			Encryption: "gpg",
+			Encryption: "pgp",
 			FileSize:   desc.Size,
 			Id:         uint32(layerNum),
 		}
 		lis = append(lis, li)
 	default:
-		return []LayerInfo{}, errors.Wrapf(nil, "GetImageLayerInfo: Unhandled media type %s", desc.MediaType)
+		return []LayerInfo{}, errors.Wrapf(errdefs.ErrInvalidArgument, "GetImageLayerInfo: Unhandled media type %s", desc.MediaType)
 	}
 
 	return lis, nil
