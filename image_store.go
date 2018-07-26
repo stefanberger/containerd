@@ -126,13 +126,26 @@ func imageFromProto(imagepb *imagesapi.Image) images.Image {
 }
 
 func (s *remoteImages) EncryptImage(ctx context.Context, name, newName string, cc *images.CryptoConfig, layers []int32, platforms []string) (images.Image, error) {
+	keyIdMap := make(map[uint64]*imagesapi.DecryptKeyData)
+	if cc.Dc != nil {
+		for k, v := range cc.Dc.KeyIdMap {
+			keyIdMap[k] = &imagesapi.DecryptKeyData{
+				KeyData:         v.KeyData,
+				KeyDataPassword: v.KeyDataPassword,
+			}
+		}
+	}
+
 	resp, err := s.client.EncryptImage(ctx, &imagesapi.EncryptImageRequest{
 		Name:    name,
 		NewName: newName,
-		Cc: &imagesapi.EncryptConfig{
+		Ec: &imagesapi.EncryptConfig{
 			Recipients:    cc.Ec.Recipients,
 			Gpgpubkeyring: cc.Ec.GPGPubRingFile,
 			Operation:     cc.Ec.Operation,
+			Dc: &imagesapi.DecryptConfig{
+				KeyIdMap: keyIdMap,
+			},
 		},
 		Layers:    layers,
 		Platforms: platforms,

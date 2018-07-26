@@ -52,6 +52,10 @@ func encryptData(data []byte, recipients openpgp.EntityList, symKey []byte) (enc
 	return encBlob, wrappedKeys, nil
 }
 
+func addRecipientsToKeys(keys [][]byte, newRecipients openpgp.EntityList, keyIdMap map[uint64]DecryptKeyData) ([][]byte, error) {
+	return [][]byte{}, errors.Wrapf(errdefs.ErrNotImplemented, "Adding recipients is not supported\n")
+}
+
 func removeRecipientsFromKeys(keys [][]byte, removeRecipients openpgp.EntityList) ([][]byte, error) {
 	var wrappedKeys [][]byte
 
