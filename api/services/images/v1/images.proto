@@ -135,6 +135,8 @@ message EncryptConfig {
 	repeated string recipients = 1;
 	bytes gpgpubkeyring = 2;
 	int32 operation = 3;
+
+	DecryptConfig dc = 4;
 }
 
 // DecryptKeyData holds the private key data and the password for the private key
@@ -153,7 +155,7 @@ message EncryptImageRequest {
 	string name = 1;
 	string newName = 2;
 
-	EncryptConfig cc = 3;
+	EncryptConfig ec = 3;
 	repeated int32 layers = 4;
 	repeated string platforms = 5;
 }

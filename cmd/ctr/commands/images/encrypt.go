@@ -111,14 +111,27 @@ var encryptCommand = cli.Command{
 			operation = images.OPERATION_REMOVE_RECIPIENTS
 		}
 
+		layers32 := commands.IntToInt32Array(context.IntSlice("layer"))
+
+		keyIdMap := make(map[uint64]images.DecryptKeyData)
+		if operation == images.OPERATION_ADD_RECIPIENTS {
+			layerInfos, err := client.ImageService().GetImageLayerInfo(ctx, local, layers32, context.StringSlice("platform"))
+			if err != nil {
+				return err
+			}
+			keyIdMap, err = getPrivateKeys(layerInfos, gpgClient)
+		}
+
 		cc := &images.CryptoConfig{
 			Ec: &images.EncryptConfig{
 				GPGPubRingFile: gpgPubRingFile,
 				Recipients:     recipients,
 				Operation:      operation,
+				Dc: images.DecryptConfig{
+					KeyIdMap: keyIdMap,
+				},
 			},
 		}
-		layers32 := commands.IntToInt32Array(context.IntSlice("layer"))
 
 		_, err = client.ImageService().EncryptImage(ctx, local, newName, cc, layers32, context.StringSlice("platform"))
 		if err != nil {
