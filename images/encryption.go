@@ -23,7 +23,6 @@ import (
 	"net/mail"
 	"strings"
 
-	"github.com/mitchellh/go-homedir"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"golang.org/x/crypto/openpgp"
 	"golang.org/x/crypto/openpgp/packet"
@@ -61,20 +60,6 @@ type DecryptConfig struct {
 type CryptoConfig struct {
 	Ec *EncryptConfig
 	Dc *DecryptConfig
-}
-
-// ReadGPGPubRingFile reads the GPG public key ring file
-func ReadGPGPubRingFile() ([]byte, error) {
-	home, err := homedir.Dir()
-	if err != nil {
-		return nil, err
-	}
-	pubring := fmt.Sprintf("%s/.gnupg/pubring.gpg", home)
-	gpgPubRingFile, err := ioutil.ReadFile(pubring)
-	if err != nil {
-		return nil, fmt.Errorf("Could not read Public keyring file %s: %v", pubring, err)
-	}
-	return gpgPubRingFile, nil
 }
 
 // createEntityList creates the opengpg EntityList by reading the KeyRing
@@ -136,9 +121,9 @@ func createEntityList(ec *EncryptConfig) (openpgp.EntityList, error) {
 // the list of recipients' keys
 func HandleEncrypt(ec *EncryptConfig, data []byte, keys [][]byte) ([]byte, [][]byte, error) {
 	var (
-		encBlob []byte
+		encBlob     []byte
 		wrappedKeys [][]byte
-		err error
+		err         error
 	)
 
 	filteredList, err := createEntityList(ec)
@@ -149,7 +134,7 @@ func HandleEncrypt(ec *EncryptConfig, data []byte, keys [][]byte) ([]byte, [][]b
 		return nil, nil, fmt.Errorf("No keys were found to encrypt message to.\n")
 	}
 
-	switch (ec.Operation) {
+	switch ec.Operation {
 	case OPERATION_ADD_RECIPIENTS:
 		if len(keys) > 0 {
 			return nil, nil, fmt.Errorf("Support for adding recipients is not implemented.\n")
