@@ -18,12 +18,13 @@ package images
 
 import (
 	"bytes"
-	"fmt"
 	"io/ioutil"
 	"net/mail"
 	"strings"
 
+	"github.com/containerd/containerd/errdefs"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/pkg/errors"
 	"golang.org/x/crypto/openpgp"
 	"golang.org/x/crypto/openpgp/packet"
 )
@@ -109,7 +110,7 @@ func createEntityList(ec *EncryptConfig) (openpgp.EntityList, error) {
 	}
 
 	if notFound {
-		return nil, fmt.Errorf(buffer.String())
+		return nil, errors.Wrapf(errdefs.ErrNotFound, buffer.String())
 	}
 
 	return filteredList, nil
@@ -129,13 +130,13 @@ func HandleEncrypt(ec *EncryptConfig, data []byte, keys [][]byte) ([]byte, [][]b
 		return nil, nil, err
 	}
 	if len(filteredList) == 0 {
-		return nil, nil, fmt.Errorf("No keys were found to encrypt message to.\n")
+		return nil, nil, errors.Wrapf(errdefs.ErrInvalidArgument, "No keys were found to encrypt message to.\n")
 	}
 
 	switch ec.Operation {
 	case OPERATION_ADD_RECIPIENTS:
 		if len(keys) > 0 {
-			return nil, nil, fmt.Errorf("Support for adding recipients is not implemented.\n")
+			return nil, nil, errors.Wrapf(errdefs.ErrNotImplemented, "Support for adding recipients is not implemented.\n")
 		}
 		encBlob, wrappedKeys, err = encryptData(data, filteredList, nil)
 	case OPERATION_REMOVE_RECIPIENTS:
@@ -183,7 +184,7 @@ func Decrypt(dc *DecryptConfig, encBody []byte, desc ocispec.Descriptor) ([]byte
 			return ioutil.ReadAll(md.UnverifiedBody)
 		}
 	}
-	return []byte{}, fmt.Errorf("No suitable decryption key was found.")
+	return []byte{}, errors.Wrapf(errdefs.ErrNotFound, "No suitable decryption key was found.")
 }
 
 // GetKeyIds gets the Key IDs for which the data are encrypted
