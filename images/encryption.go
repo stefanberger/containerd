@@ -79,8 +79,8 @@ func ReadGPGPubRingFile() ([]byte, error) {
 
 // createEntityList creates the opengpg EntityList by reading the KeyRing
 // first and then filtering out recipients' keys
-func createEntityList(cc *CryptoConfig) (openpgp.EntityList, error) {
-	r := bytes.NewReader(cc.Ec.GPGPubRingFile)
+func createEntityList(ec *EncryptConfig) (openpgp.EntityList, error) {
+	r := bytes.NewReader(ec.GPGPubRingFile)
 
 	entityList, err := openpgp.ReadKeyRing(r)
 	if err != nil {
@@ -88,7 +88,7 @@ func createEntityList(cc *CryptoConfig) (openpgp.EntityList, error) {
 	}
 
 	rSet := make(map[string]int)
-	for _, r := range cc.Ec.Recipients {
+	for _, r := range ec.Recipients {
 		rSet[r] = 0
 	}
 
@@ -100,7 +100,7 @@ func createEntityList(cc *CryptoConfig) (openpgp.EntityList, error) {
 			if err != nil {
 				return nil, err
 			}
-			for _, r := range cc.Ec.Recipients {
+			for _, r := range ec.Recipients {
 				if strings.Compare(addr.Name, r) == 0 || strings.Compare(addr.Address, r) == 0 {
 					fmt.Printf(" TAKING key of %s\n", k)
 					filteredList = append(filteredList, entity)
@@ -134,14 +134,14 @@ func createEntityList(cc *CryptoConfig) (openpgp.EntityList, error) {
 
 // HandleEncrypt encrypts a byte array using data from the CryptoConfig and also manages
 // the list of recipients' keys
-func HandleEncrypt(cc *CryptoConfig, data []byte, keys [][]byte) ([]byte, [][]byte, error) {
+func HandleEncrypt(ec *EncryptConfig, data []byte, keys [][]byte) ([]byte, [][]byte, error) {
 	var (
 		encBlob []byte
 		wrappedKeys [][]byte
 		err error
 	)
 
-	filteredList, err := createEntityList(cc)
+	filteredList, err := createEntityList(ec)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -149,10 +149,10 @@ func HandleEncrypt(cc *CryptoConfig, data []byte, keys [][]byte) ([]byte, [][]by
 		return nil, nil, fmt.Errorf("No keys were found to encrypt message to.\n")
 	}
 
-	switch (cc.Ec.Operation) {
+	switch (ec.Operation) {
 	case OPERATION_ADD_RECIPIENTS:
 		if len(keys) > 0 {
-			return nil, nil, fmt.Errorf("Refusing to encrypt an already encrypted layer.\n")
+			return nil, nil, fmt.Errorf("Support for adding recipients is not implemented.\n")
 		}
 		encBlob, wrappedKeys, err = encryptData(data, filteredList, nil)
 	case OPERATION_REMOVE_RECIPIENTS:
@@ -168,8 +168,7 @@ func HandleEncrypt(cc *CryptoConfig, data []byte, keys [][]byte) ([]byte, [][]by
 }
 
 // Decrypt decrypts a byte array using data from the CryptoConfig
-func Decrypt(cc *CryptoConfig, encBody []byte, desc ocispec.Descriptor) ([]byte, error) {
-	dc := cc.Dc
+func Decrypt(dc *DecryptConfig, encBody []byte, desc ocispec.Descriptor) ([]byte, error) {
 	keyIds, err := GetKeyIds(desc)
 	if err != nil {
 		return nil, err
