@@ -193,7 +193,7 @@ func (l *local) EncryptImage(ctx context.Context, req *imagesapi.EncryptImageReq
 			GPGPubRingFile: req.Cc.Gpgpubkeyring,
 			Operation     : req.Cc.Operation,
 		},
-	}, layers32ToLayers(req.Layers), req.Platforms)
+	}, req.Layers, req.Platforms)
 	if err != nil {
 		return nil, errdefs.ToGRPC(err)
 	}
@@ -229,7 +229,7 @@ func (l *local) DecryptImage(ctx context.Context, req *imagesapi.DecryptImageReq
 		Dc:	&images.DecryptConfig{
 			KeyIdMap: keyIdMap,
 		},
-	}, layers32ToLayers(req.Layers), req.Platforms)
+	}, req.Layers, req.Platforms)
 	if err != nil {
 		return nil, errdefs.ToGRPC(err)
 	}
@@ -250,7 +250,7 @@ func (l *local) GetImageLayerInfo(ctx context.Context, req *imagesapi.GetImageLa
 
 	var resp imagesapi.GetImageLayerInfoResponse
 
-	lis, err := l.store.GetImageLayerInfo(ctx, req.Name, layers32ToLayers(req.Layers), req.Platforms)
+	lis, err := l.store.GetImageLayerInfo(ctx, req.Name, req.Layers, req.Platforms)
 	if err != nil {
 		return nil, errdefs.ToGRPC(err)
 	}
@@ -270,11 +270,3 @@ func (l *local) GetImageLayerInfo(ctx context.Context, req *imagesapi.GetImageLa
 	return &resp, nil
 }
 
-func layers32ToLayers(layers []int32) []int {
-	var l []int
-
-	for _, layer := range layers{
-		l = append(l, int(layer))
-	}
-	return l;
-}
