@@ -10,6 +10,8 @@ import (
 
 	"crypto"
 	"crypto/rand"
+	"github.com/containerd/containerd/errdefs"
+	"github.com/pkg/errors"
 	"golang.org/x/crypto/openpgp"
 	"golang.org/x/crypto/openpgp/packet"
 )
@@ -57,7 +59,7 @@ func removeRecipientsFromKeys(keys [][]byte, removeRecipients openpgp.EntityList
 		ekbuf := bytes.NewBuffer(ek)
 		p, err := packet.Read(ekbuf)
 		if err != nil {
-			return [][]byte{}, fmt.Errorf("Err reading enc key packet: %v", err)
+			return [][]byte{}, errors.Wrapf(errdefs.ErrInvalidArgument, "Err reading enc key packet: %v", err)
 		}
 		pek := p.(*packet.EncryptedKey)
 
@@ -97,7 +99,7 @@ func decryptData(encBlob []byte, wrappedKeys [][]byte, kring openpgp.EntityList)
 	promptFunc := func(key []openpgp.Key, symm bool) ([]byte, error) {
 		for _, k := range key {
 			if symm {
-				return nil, fmt.Errorf("Not handled")
+				return nil, errors.Wrapf(errdefs.ErrNotImplemented, "Not handled")
 			} else {
 				k.PrivateKey.Decrypt([]byte("hidden!"))
 			}
@@ -107,12 +109,12 @@ func decryptData(encBlob []byte, wrappedKeys [][]byte, kring openpgp.EntityList)
 	messageIn := bytes.NewBuffer(message)
 	md, err := openpgp.ReadMessage(messageIn, kring, promptFunc, DefaultEncryptConfig)
 	if err != nil {
-		return nil, fmt.Errorf("Unable to read message: %v", err)
+		return nil, errors.Wrapf(err, "Unable to read message: %v", err)
 	}
 
 	plaintext, err := ioutil.ReadAll(md.UnverifiedBody)
 	if err != nil {
-		return nil, fmt.Errorf("error reading encrypted contents: %s", err)
+		return nil, errors.Wrapf(err, "error reading encrypted contents: %s", err)
 	}
 
 	return plaintext, nil

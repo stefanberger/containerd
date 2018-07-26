@@ -29,9 +29,18 @@ var encryptCommand = cli.Command{
 	Name:      "encrypt",
 	Usage:     "encrypt an image locally",
 	ArgsUsage: "[flags] <local> <new name>",
-	Description: `Encrypt and image.
+	Description: `Encrypt an image locally.
 
-	XYZ
+	Encrypt an image using public keys managed by GPG.
+	The user must provide recpients who will be able to decrypt the image using
+	their GPG-managed private key. For this the user's GPG keyring must hold the public
+	keys of the recipients.
+	The user has control over the individual layers and the platforms they are
+	associated with and can encrypt them separately. If no layers or platforms are
+	specified, all layers for all platforms will be encrypted.
+	This tool also allows management of the recipients of the image through changes
+	to the list of recipients.
+	Once the image has been encrypted it may be pushed to a registry.
 `,
 	Flags: append(commands.RegistryFlags, cli.StringSliceFlag{
 		Name:  "recipient",
@@ -45,10 +54,16 @@ var encryptCommand = cli.Command{
 	}, cli.BoolFlag{
 		Name:  "remove",
 		Usage: "Remove the given set of recipients",
+	}, cli.StringFlag{
+		Name:  "gpg-homedir",
+		Usage: "The GPG homedir to use; by default gpg uses ~/.gnupg",
+	}, cli.StringFlag{
+		Name:  "gpg-version",
+		Usage: "The GPG version (\"v1\" or \"v2\"), default will make an educated guess",
 	}),
 	Action: func(context *cli.Context) error {
 		var (
-			local = context.Args().First()
+			local   = context.Args().First()
 			newName = context.Args().Get(1)
 		)
 		if local == "" {
@@ -57,7 +72,7 @@ var encryptCommand = cli.Command{
 		if newName != "" {
 			fmt.Printf("Encrypting %s to %s\n", local, newName)
 		} else {
-			fmt.Printf("Encrypting %s and replacing it with the encrypted image\n", local);
+			fmt.Printf("Encrypting %s and replacing it with the encrypted image\n", local)
 		}
 		client, ctx, cancel, err := commands.NewClient(context)
 		if err != nil {
@@ -67,10 +82,26 @@ var encryptCommand = cli.Command{
 
 		recipients := context.StringSlice("recipient")
 		if len(recipients) == 0 {
-			return errors.New("no recipients given -- nothing to do")			
+			return errors.New("no recipients given -- nothing to do")
 		}
 
-		gpgPubRingFile, err := images.ReadGPGPubRingFile()
+		// Create gpg client
+		gpgVersion := context.String("gpg-version")
+		v := new(images.GPGVersion)
+		switch gpgVersion {
+		case "v1":
+			*v = images.GPGv1
+		case "v2":
+			*v = images.GPGv2
+		default:
+			v = nil
+		}
+		gpgClient, err := images.NewGPGClient(v, context.String("gpg-homedir"))
+		if err != nil {
+			return errors.New("Unable to create GPG Client")
+		}
+
+		gpgPubRingFile, err := gpgClient.ReadGPGPubRingFile()
 		if err != nil {
 			return err
 		}
@@ -81,7 +112,7 @@ var encryptCommand = cli.Command{
 		}
 
 		cc := &images.CryptoConfig{
-			Ec:	&images.EncryptConfig{
+			Ec: &images.EncryptConfig{
 				GPGPubRingFile: gpgPubRingFile,
 				Recipients:     recipients,
 				Operation:      operation,
@@ -96,4 +127,3 @@ var encryptCommand = cli.Command{
 		return nil
 	},
 }
-
