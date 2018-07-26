@@ -356,7 +356,7 @@ func encryptLayer(cc *CryptoConfig, data []byte, desc ocispec.Descriptor) (ocisp
 		}
 	}
 
-	p, keys, err := HandleEncrypt(cc, data, keys)
+	p, keys, err := HandleEncrypt(cc.Ec, data, keys)
 	if err != nil {
 		return ocispec.Descriptor{}, []byte{}, err
 	}
@@ -389,7 +389,7 @@ func encryptLayer(cc *CryptoConfig, data []byte, desc ocispec.Descriptor) (ocisp
 // decryptLayer decrypts the layer using the CryptoConfig and creates a new OCI Descriptor.
 // The caller is expected to store the returned plain data and OCI Descriptor
 func decryptLayer(cc *CryptoConfig, data []byte, desc ocispec.Descriptor) (ocispec.Descriptor, []byte, error) {
-	p, err := Decrypt(cc, data, desc)
+	p, err := Decrypt(cc.Dc, data, desc)
 	if err != nil {
 		return ocispec.Descriptor{}, []byte{}, err
 	}
