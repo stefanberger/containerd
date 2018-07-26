@@ -130,18 +130,21 @@ message DeleteImageRequest {
 	bool sync = 2;
 }
 
-// CryptConfig serves to pass keys used for encryption and decryption
+// EncryptConfig holds recipients' identifiers and the gpg public key ring
 message EncryptConfig {
 	repeated string recipients = 1;
 	bytes gpgpubkeyring = 2;
 	int32 operation = 3;
 }
 
+// DecryptKeyData holds the private key data and the password for the private key
 message DecryptKeyData {
 	bytes keyData = 1;
 	bytes keyDataPassword = 2;
 }
 
+// DecrypConfig holds the Ids of public keys and their corresponding private keys
+// needed for decrypting data
 message DecryptConfig {
 	map<uint64, DecryptKeyData> keyIdMap = 1;
 }
