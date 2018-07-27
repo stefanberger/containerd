@@ -48,9 +48,7 @@ var layerinfoCommand = cli.Command{
 		Usage: "For which platform to get the layer info; by default info for all platforms is retrieved",
 	}),
 	Action: func(context *cli.Context) error {
-		var (
-			local = context.Args().First()
-		)
+		local := context.Args().First()
 		if local == "" {
 			return errors.New("please provide the name of an image to decrypt")
 		}
