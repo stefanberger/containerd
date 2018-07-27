@@ -4,10 +4,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os/exec"
-
-	"github.com/containerd/containerd/errdefs"
-	"github.com/mitchellh/go-homedir"
-	"github.com/pkg/errors"
 )
 
 // GPGVersion enum representing the versino of GPG client to use.
@@ -32,14 +28,17 @@ type GPGClient interface {
 	GetSecretKeyDetails(keyid uint64) ([]byte, bool, error)
 }
 
-// TODO: add comment and make private
+// gpgClient contains generic gpg client information
 type gpgClient struct {
 	gpgHomeDir string
 }
+
+// gpgv2Client is a gpg2 client
 type gpgv2Client struct {
 	gpgClient
 }
 
+// gpgv1Client is a gpg client
 type gpgv1Client struct {
 	gpgClient
 }
@@ -81,8 +80,13 @@ func NewGPGClient(version *GPGVersion, homedir string) (GPGClient, error) {
 }
 
 // GetGPGPrivateKey gets the bytes of a specified keyid, supplying a passphrase
-func (_ *gpgv2Client) GetGPGPrivateKey(keyid uint64, passphrase string) ([]byte, error) {
-	args := append([]string{"--pinentry-mode", "loopback", "--batch", "--passphrase", passphrase, "--export-secret-key"}, fmt.Sprintf("0x%x", keyid))
+func (gc *gpgv2Client) GetGPGPrivateKey(keyid uint64, passphrase string) ([]byte, error) {
+	args := []string{}
+	if gc.gpgHomeDir != "" {
+		args = append(args, []string{"--homedir", gc.gpgHomeDir}...)
+	}
+
+	args = append(args, []string{"--pinentry-mode", "loopback", "--batch", "--passphrase", passphrase, "--export-secret-key", fmt.Sprintf("0x%x", keyid)}...)
 
 	cmd := exec.Command("gpg2", args...)
 
@@ -106,17 +110,32 @@ func (_ *gpgv2Client) GetGPGPrivateKey(keyid uint64, passphrase string) ([]byte,
 }
 
 // ReadGPGPubRingFile reads the GPG public key ring file
-func (_ *gpgv2Client) ReadGPGPubRingFile() ([]byte, error) {
-	home, err := homedir.Dir()
+func (gc *gpgv2Client) ReadGPGPubRingFile() ([]byte, error) {
+	args := []string{}
+	if gc.gpgHomeDir != "" {
+		args = append(args, []string{"--homedir", gc.gpgHomeDir}...)
+	}
+	args = append(args, []string{"--batch", "--export"}...)
+
+	cmd := exec.Command("gpg2", args...)
+
+	stdout, err := cmd.StdoutPipe()
+	stderr, err := cmd.StderrPipe()
 	if err != nil {
 		return nil, err
 	}
-	pubring := fmt.Sprintf("%s/.gnupg/pubring.gpg", home)
-	gpgPubRingFile, err := ioutil.ReadFile(pubring)
-	if err != nil {
-		return nil, fmt.Errorf("Could not read Public keyring file %s: %v", pubring, err)
+	if err := cmd.Start(); err != nil {
+		return nil, err
 	}
-	return gpgPubRingFile, nil
+
+	keydata, err2 := ioutil.ReadAll(stdout)
+	message, _ := ioutil.ReadAll(stderr)
+
+	if err := cmd.Wait(); err != nil {
+		return nil, fmt.Errorf("Error from gpg2: %s\n", message)
+	}
+
+	return keydata, err2
 }
 
 // GetSecretKeyDetails retrives the secret key details of key with keyid.
@@ -151,10 +170,14 @@ func (gc *gpgv2Client) GetSecretKeyDetails(keyid uint64) ([]byte, bool, error) {
 }
 
 // GetGPGPrivateKey gets the bytes of a specified keyid, supplying a passphrase
-func (_ *gpgv1Client) GetGPGPrivateKey(keyid uint64, passphrase string) ([]byte, error) {
-	args := append([]string{"--pinentry-mode", "loopback", "--batch", "--passphrase", passphrase, "--export-secret-key"}, fmt.Sprintf("0x%x", keyid))
+func (gc *gpgv1Client) GetGPGPrivateKey(keyid uint64, _ string) ([]byte, error) {
+	args := []string{}
+	if gc.gpgHomeDir != "" {
+		args = append(args, []string{"--homedir", gc.gpgHomeDir}...)
+	}
+	args = append(args, []string{"--batch", "--export-secret-key", fmt.Sprintf("0x%x", keyid)}...)
 
-	cmd := exec.Command("gpg2", args...)
+	cmd := exec.Command("gpg", args...)
 
 	stdout, err := cmd.StdoutPipe()
 	stderr, err := cmd.StderrPipe()
@@ -169,26 +192,39 @@ func (_ *gpgv1Client) GetGPGPrivateKey(keyid uint64, passphrase string) ([]byte,
 	message, _ := ioutil.ReadAll(stderr)
 
 	if err := cmd.Wait(); err != nil {
-		return nil, errors.Wrapf(errdefs.ErrUnknown, "Error from gpg2: %s\n", message)
+		return nil, fmt.Errorf("Error from gpg2: %s\n", message)
 	}
 
 	return keydata, err2
 }
 
 // ReadGPGPubRingFile reads the GPG public key ring file
-func (_ *gpgv1Client) ReadGPGPubRingFile() ([]byte, error) {
-	var pubringfn string
-	home, err := homedir.Dir()
+func (gc *gpgv1Client) ReadGPGPubRingFile() ([]byte, error) {
+	args := []string{}
+	if gc.gpgHomeDir != "" {
+		args = append(args, []string{"--homedir", gc.gpgHomeDir}...)
+	}
+	args = append(args, []string{"--batch", "--export"}...)
+
+	cmd := exec.Command("gpg", args...)
+
+	stdout, err := cmd.StdoutPipe()
+	stderr, err := cmd.StderrPipe()
 	if err != nil {
 		return nil, err
-		pubringfn = fmt.Sprintf("%s/.gnupg/pubring.gpg", home)
+	}
+	if err := cmd.Start(); err != nil {
+		return nil, err
 	}
 
-	gpgPubRingFile, err := ioutil.ReadFile(pubringfn)
-	if err != nil {
-		return nil, errors.Wrapf(errdefs.ErrInvalidArgument, "Could not read Public keyring file %s: %v", pubringfn, err)
+	keydata, err2 := ioutil.ReadAll(stdout)
+	message, _ := ioutil.ReadAll(stderr)
+
+	if err := cmd.Wait(); err != nil {
+		return nil, fmt.Errorf("Error from gpg2: %s\n", message)
 	}
-	return gpgPubRingFile, nil
+
+	return keydata, err2
 }
 
 // GetSecretKeyDetails retrives the secret key details of key with keyid.
@@ -201,7 +237,7 @@ func (gc *gpgv1Client) GetSecretKeyDetails(keyid uint64) ([]byte, bool, error) {
 	}
 	args = append(args, "-K", fmt.Sprintf("0x%x", keyid))
 
-	cmd := exec.Command("gpg2", args...)
+	cmd := exec.Command("gpg", args...)
 
 	stdout, err := cmd.StdoutPipe()
 	stderr, err := cmd.StderrPipe()
@@ -216,7 +252,7 @@ func (gc *gpgv1Client) GetSecretKeyDetails(keyid uint64) ([]byte, bool, error) {
 	message, _ := ioutil.ReadAll(stderr)
 
 	if err := cmd.Wait(); err != nil {
-		return nil, false, fmt.Errorf("Error from gpg2: %s\n", message)
+		return nil, false, fmt.Errorf("Error from gpg2: %s", message)
 	}
 
 	return keydata, err2 == nil, err2
