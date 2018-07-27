@@ -762,7 +762,7 @@ func CryptManifestList(ctx context.Context, cs content.Store, desc ocispec.Descr
 			return ocispec.Descriptor{}, false, errors.Wrap(err, "failed to marshal index")
 		}
 
-		nDesc := ocispec.Descriptor{
+		newDesc := ocispec.Descriptor{
 			MediaType: desc.MediaType,
 			Size:      int64(len(mb)),
 			Digest:    digest.Canonical.FromBytes(mb),
@@ -773,11 +773,11 @@ func CryptManifestList(ctx context.Context, cs content.Store, desc ocispec.Descr
 			labels[fmt.Sprintf("containerd.io/gc.ref.content.%d", i)] = m.Digest.String()
 		}
 
-		ref := fmt.Sprintf("index-%s", nDesc.Digest.String())
-		if err := content.WriteBlob(ctx, cs, ref, bytes.NewReader(mb), nDesc, content.WithLabels(labels)); err != nil {
+		ref := fmt.Sprintf("index-%s", newDesc.Digest.String())
+		if err := content.WriteBlob(ctx, cs, ref, bytes.NewReader(mb), newDesc, content.WithLabels(labels)); err != nil {
 			return ocispec.Descriptor{}, false, errors.Wrap(err, "failed to write index")
 		}
-		return nDesc, true, nil
+		return newDesc, true, nil
 	}
 
 	return desc, false, nil
