@@ -54,14 +54,12 @@ var decryptCommand = cli.Command{
 		Usage: "The GPG version (\"v1\" or \"v2\"), default will make an educated guess",
 	}),
 	Action: func(context *cli.Context) error {
-		var (
-			local   = context.Args().First()
-			newName = context.Args().Get(1)
-		)
-		fmt.Printf("pl: %s\n", context.StringSlice("platform"))
+		local := context.Args().First()
 		if local == "" {
 			return errors.New("please provide the name of an image to decrypt")
 		}
+
+		newName := context.Args().Get(1)
 		if newName != "" {
 			fmt.Printf("Decrypting %s to %s\n", local, newName)
 		} else {
@@ -108,13 +106,15 @@ var decryptCommand = cli.Command{
 		}
 
 		keyIdMap, err := getPrivateKeys(layerInfos, gpgClient)
-
 		fmt.Printf("\n")
-		_, err = client.ImageService().DecryptImage(ctx, local, newName, &images.CryptoConfig{
+
+		cc := &images.CryptoConfig{
 			Dc: &images.DecryptConfig{
 				KeyIdMap: keyIdMap,
 			},
-		}, layers32, context.StringSlice("platform"))
+		}
+		_, err = client.ImageService().DecryptImage(ctx, local, newName, cc, layers32, context.StringSlice("platform"))
+
 		return err
 	},
 }

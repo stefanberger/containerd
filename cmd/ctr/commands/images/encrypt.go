@@ -62,13 +62,12 @@ var encryptCommand = cli.Command{
 		Usage: "The GPG version (\"v1\" or \"v2\"), default will make an educated guess",
 	}),
 	Action: func(context *cli.Context) error {
-		var (
-			local   = context.Args().First()
-			newName = context.Args().Get(1)
-		)
+		local := context.Args().First()
 		if local == "" {
 			return errors.New("please provide the name of an image to encrypt")
 		}
+
+		newName := context.Args().Get(1)
 		if newName != "" {
 			fmt.Printf("Encrypting %s to %s\n", local, newName)
 		} else {
@@ -132,11 +131,8 @@ var encryptCommand = cli.Command{
 				},
 			},
 		}
-
 		_, err = client.ImageService().EncryptImage(ctx, local, newName, cc, layers32, context.StringSlice("platform"))
-		if err != nil {
-			return err
-		}
-		return nil
+
+		return err
 	},
 }
