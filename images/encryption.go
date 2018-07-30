@@ -170,7 +170,12 @@ func Decrypt(dc *DecryptConfig, encBody []byte, desc ocispec.Descriptor, layerNu
 	index := fmt.Sprintf("%s:%d", platform, layerNum)
 	r := bytes.NewReader(data)
 
-	md, err := ReadMessage(r, dc.LayerSymKeyMap[index].SymKeyData, packet.CipherFunction(dc.LayerSymKeyMap[index].SymKeyCipher))
+	symKey := dc.LayerSymKeyMap[index].SymKeyData
+	if len(symKey) == 0 {
+		return nil, errors.New("Unable to retrieve symkey for layer")
+	}
+
+	md, err := ReadMessage(r, symKey, packet.CipherFunction(dc.LayerSymKeyMap[index].SymKeyCipher))
 	if err != nil {
 		return []byte{}, err
 	}
