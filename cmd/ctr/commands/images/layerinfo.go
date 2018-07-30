@@ -20,9 +20,11 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"text/tabwriter"
 
 	"github.com/containerd/containerd/cmd/ctr/commands"
+	"github.com/containerd/containerd/images"
 	"github.com/pkg/errors"
 	"github.com/urfave/cli"
 )
@@ -71,14 +73,16 @@ var layerinfoCommand = cli.Command{
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', tabwriter.AlignRight)
 		fmt.Fprintf(w, "#\tDIGEST\tPLATFORM\tSIZE\tENCRYPTION\tKEY IDS\t\n")
 		for _, layer := range LayerInfos {
-			keyids := ""
-			for _, keyid := range layer.KeyIds {
-				if keyids != "" {
-					keyids = keyids + ", "
-				}
-				keyids = keyids + "0x" + strconv.FormatUint(keyid, 16)
+			keyIds, err := images.WrappedKeysToKeyIds(layer.WrappedKeys)
+			if err != nil {
+				return err
 			}
-			fmt.Fprintf(w, "%d\t%s\t%s\t%d\t%s\t%s\t\n", layer.Id, layer.Digest, layer.Platform, layer.FileSize, layer.Encryption, keyids)
+
+			var array []string
+			for _, keyid := range keyIds {
+				array = append(array, "0x"+strconv.FormatUint(keyid, 16))
+			}
+			fmt.Fprintf(w, "%d\t%s\t%s\t%d\t%s\t%s\t\n", layer.Id, layer.Digest, layer.Platform, layer.FileSize, layer.Encryption, strings.Join(array, ", "))
 		}
 		w.Flush()
 		return nil
