@@ -333,27 +333,26 @@ ParsePackets:
 		return []byte{}, 0, errors.Wrapf(err, "Could not read keyring")
 	}
 	// decrypt them
-	entity := entityList[0]
-	entity.PrivateKey.Decrypt(keyDataPassword)
-	for _, subkey := range entity.Subkeys {
-		subkey.PrivateKey.Decrypt(keyDataPassword)
-	}
-
-	// try with another key
-	decrypted := false
-	for _, subkey := range entity.Subkeys {
-		if (subkey.Sig.FlagsValid &&
-			subkey.Sig.FlagEncryptCommunications &&
-			subkey.PublicKey.PubKeyAlgo.CanEncrypt()) {
-			err = ek.Decrypt(subkey.PrivateKey, config)
-			if err == nil {
-				decrypted = true
-				break
+	decKeys := entityList.KeysByIdUsage(ek.KeyId, packet.KeyFlagEncryptCommunications)
+	for _, k := range decKeys {
+		if k.PrivateKey.Encrypted {
+			if err := k.PrivateKey.Decrypt(keyDataPassword); err != nil {
+				return []byte{}, 0, errors.Wrapf(err, "passphrase invalid for private key")
 			}
 		}
 	}
+	decrypted := false
+
+	for _, k := range decKeys {
+		err = ek.Decrypt(k.PrivateKey, config)
+		if err == nil {
+			decrypted = true
+			break
+		}
+	}
+
 	if !decrypted {
-		return []byte{}, 0, errors.Wrapf(err, "could not decrypt symmetric key")
+		return []byte{}, 0, errors.New("could not successfully decrypt symmetric key, no valid keys usable")
 	}
 
 	return ek.Key, ek.CipherFunc, nil
@@ -384,6 +383,8 @@ ParsePackets:
 	if se == nil {
 		return nil, errors.Wrapf(errdefs.ErrNotFound, "No symmetrically encrypted data found.")
 	}
+
+	fmt.Printf("Symkey :%v", symKey)
 
 	decrypted, err := se.Decrypt(symKeyCipher, symKey)
 	if err != nil {
