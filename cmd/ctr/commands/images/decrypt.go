@@ -106,6 +106,9 @@ var decryptCommand = cli.Command{
 		}
 
 		layerSymKeyMap, err := getSymmetricKeys(layerInfos, gpgClient)
+		if err != nil {
+			return err
+		}
 		fmt.Printf("\n")
 
 		cc := &images.CryptoConfig{
