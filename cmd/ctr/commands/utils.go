@@ -16,12 +16,24 @@
 
 package commands
 
+import (
+	"fmt"
+)
+
 func IntToInt32Array(in []int) []int32 {
 	var ret []int32
 
-	for _, v := range in{
+	for _, v := range in {
 		ret = append(ret, int32(v))
 	}
 	return ret
 }
 
+func Uint64ToStringArray(format string, in []uint64) []string {
+	var ret []string
+
+	for _, v := range in {
+		ret = append(ret, fmt.Sprintf(format, v))
+	}
+	return ret
+}

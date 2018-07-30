@@ -18,6 +18,7 @@ package images
 
 import (
 	"fmt"
+	"strings"
 	"syscall"
 
 	"github.com/containerd/containerd/cmd/ctr/commands"
@@ -209,8 +210,9 @@ func getSymmetricKeys(layerInfos []images.LayerInfo, gpgClient images.GPGClient)
 		}
 		if !found && len(layerInfo.WrappedKeys) > 0 {
 			keyIds, _ := images.WrappedKeysToKeyIds(layerInfo.WrappedKeys)
+			kIds := commands.Uint64ToStringArray("0x%x", keyIds)
 
-			return layerSymkeyMap, errors.Wrapf(errdefs.ErrNotFound, "Missing key for decryption of layer %d of %s. Need one of the following keys: %v\n", layerInfo.Id, layerInfo.Platform, keyIds)
+			return layerSymkeyMap, errors.Wrapf(errdefs.ErrNotFound, "Missing key for decryption of layer %d of %s. Need one of the following keys: %v\n", layerInfo.Id, layerInfo.Platform, strings.Join(kIds, ", "))
 		}
 	}
 	return layerSymkeyMap, nil
