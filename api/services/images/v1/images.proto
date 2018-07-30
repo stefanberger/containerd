@@ -141,14 +141,14 @@ message EncryptConfig {
 
 // DecryptKeyData holds the private key data and the password for the private key
 message DecryptKeyData {
-	bytes keyData = 1;
-	bytes keyDataPassword = 2;
+	bytes symKeyData = 1;
+	uint32 symKeyCipher = 2;
 }
 
 // DecrypConfig holds the Ids of public keys and their corresponding private keys
 // needed for decrypting data
 message DecryptConfig {
-	map<uint64, DecryptKeyData> keyIdMap = 1;
+	map<string, DecryptKeyData> layerSymKeyMap = 1;
 }
 
 message EncryptImageRequest {
@@ -185,7 +185,7 @@ message GetImageLayerInfoRequest {
 
 message LayerInfo {
 	uint32 id = 1;
-	repeated uint64 keyIds = 2;
+	repeated bytes WrappedKeys = 2;
 	string digest = 3;
 	string encryption = 4;
 	int64 fileSize = 5;

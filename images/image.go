@@ -63,8 +63,8 @@ type Image struct {
 type LayerInfo struct {
 	// The Id of the layer starting at 0
 	Id uint32
-	// An array of KeyIds to which the layer is encrypted
-	KeyIds []uint64
+	// Array of wrapped keys from which KeyIds can be derived
+	WrappedKeys [][]byte
 	// The Digest of the layer
 	Digest string
 	// The Encryption method used for encrypting the layer
@@ -487,8 +487,8 @@ func encryptLayer(cc *CryptoConfig, data []byte, desc ocispec.Descriptor) (ocisp
 
 // decryptLayer decrypts the layer using the CryptoConfig and creates a new OCI Descriptor.
 // The caller is expected to store the returned plain data and OCI Descriptor
-func decryptLayer(cc *CryptoConfig, data []byte, desc ocispec.Descriptor) (ocispec.Descriptor, []byte, error) {
-	p, err := Decrypt(cc.Dc, data, desc)
+func decryptLayer(cc *CryptoConfig, data []byte, desc ocispec.Descriptor, layerNum int32, platform *ocispec.Platform) (ocispec.Descriptor, []byte, error) {
+	p, err := Decrypt(cc.Dc, data, desc, layerNum, platforms.Format(*platform))
 	if err != nil {
 		return ocispec.Descriptor{}, []byte{}, err
 	}
@@ -511,7 +511,7 @@ func decryptLayer(cc *CryptoConfig, data []byte, desc ocispec.Descriptor) (ocisp
 }
 
 // cryptLayer handles the changes due to encryption or decryption of a layer
-func cryptLayer(ctx context.Context, cs content.Store, desc ocispec.Descriptor, cc *CryptoConfig, encrypt bool) (ocispec.Descriptor, error) {
+func cryptLayer(ctx context.Context, cs content.Store, desc ocispec.Descriptor, cc *CryptoConfig, layerNum int32, platform *ocispec.Platform, encrypt bool) (ocispec.Descriptor, error) {
 	var (
 		p       []byte
 		newDesc ocispec.Descriptor
@@ -525,7 +525,7 @@ func cryptLayer(ctx context.Context, cs content.Store, desc ocispec.Descriptor, 
 	if encrypt {
 		newDesc, p, err = encryptLayer(cc, data, desc)
 	} else {
-		newDesc, p, err = decryptLayer(cc, data, desc)
+		newDesc, p, err = decryptLayer(cc, data, desc, layerNum, platform)
 	}
 	if err != nil {
 		return ocispec.Descriptor{}, err
@@ -672,7 +672,7 @@ func cryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descripto
 			config = child
 		case MediaTypeDockerSchema2LayerGzip, MediaTypeDockerSchema2Layer:
 			if encrypt && isUserSelectedLayer(layerNum, layersTotal, lf.Layers) && isUserSelectedPlatform(thisPlatform, lf.Platforms) {
-				nl, err := cryptLayer(ctx, cs, child, cc, true)
+				nl, err := cryptLayer(ctx, cs, child, cc, layerNum, thisPlatform, true)
 				if err != nil {
 					return ocispec.Descriptor{}, false, err
 				}
@@ -685,7 +685,7 @@ func cryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descripto
 		case MediaTypeDockerSchema2LayerGzipPGP, MediaTypeDockerSchema2LayerPGP:
 			// this one can be decrypted but also its recpients list changed
 			if isUserSelectedLayer(layerNum, layersTotal, lf.Layers) && isUserSelectedPlatform(thisPlatform, lf.Platforms) {
-				nl, err := cryptLayer(ctx, cs, child, cc, encrypt)
+				nl, err := cryptLayer(ctx, cs, child, cc, layerNum, thisPlatform, encrypt)
 				if err != nil {
 					return ocispec.Descriptor{}, false, err
 				}
@@ -849,25 +849,25 @@ func GetImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descr
 		}
 	case MediaTypeDockerSchema2Layer, MediaTypeDockerSchema2LayerGzip:
 		li := LayerInfo{
-			KeyIds:     []uint64{},
-			Digest:     desc.Digest.String(),
-			Encryption: "",
-			FileSize:   desc.Size,
-			Id:         uint32(layerNum),
+			WrappedKeys: [][]byte{},
+			Digest:      desc.Digest.String(),
+			Encryption:  "",
+			FileSize:    desc.Size,
+			Id:          uint32(layerNum),
 		}
 		lis = append(lis, li)
 	case MediaTypeDockerSchema2Config:
 	case MediaTypeDockerSchema2LayerPGP, MediaTypeDockerSchema2LayerGzipPGP:
-		keyIds, err := GetKeyIds(desc)
+		wrappedKeys, err := getWrappedKeys(desc)
 		if err != nil {
 			return []LayerInfo{}, err
 		}
 		li := LayerInfo{
-			KeyIds:     keyIds,
-			Digest:     desc.Digest.String(),
-			Encryption: "pgp",
-			FileSize:   desc.Size,
-			Id:         uint32(layerNum),
+			WrappedKeys: wrappedKeys,
+			Digest:      desc.Digest.String(),
+			Encryption:  "pgp",
+			FileSize:    desc.Size,
+			Id:          uint32(layerNum),
 		}
 		lis = append(lis, li)
 	default:
