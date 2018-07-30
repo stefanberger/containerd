@@ -212,7 +212,7 @@ func getSymmetricKeys(layerInfos []images.LayerInfo, gpgClient images.GPGClient)
 			keyIds, _ := images.WrappedKeysToKeyIds(layerInfo.WrappedKeys)
 			kIds := commands.Uint64ToStringArray("0x%x", keyIds)
 
-			return layerSymkeyMap, errors.Wrapf(errdefs.ErrNotFound, "Missing key for decryption of layer %d of %s. Need one of the following keys: %v\n", layerInfo.Id, layerInfo.Platform, strings.Join(kIds, ", "))
+			return layerSymkeyMap, errors.Wrapf(errdefs.ErrNotFound, "Missing key for decryption of layer %d of %s. Need one of the following keys: %s", layerInfo.Id, layerInfo.Platform, strings.Join(kIds, ", "))
 		}
 	}
 	return layerSymkeyMap, nil
