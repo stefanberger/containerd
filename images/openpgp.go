@@ -358,7 +358,8 @@ ParsePackets:
 	return ek.Key, ek.CipherFunc, nil
 }
 
-// ReadMessage reads an OpenPGP byte stream and decrypts it with the given symmetric key and cipher
+// ReadMessage reads an OpenPGP byte stream and decrypts the SymmetricallyEncrypted
+// path with the given symmetric key and cipher
 func ReadMessage(r io.Reader, symKey []byte, symKeyCipher packet.CipherFunction) (*openpgp.MessageDetails, error) {
 	var se *packet.SymmetricallyEncrypted
 
