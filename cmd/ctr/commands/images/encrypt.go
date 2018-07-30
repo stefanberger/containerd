@@ -112,13 +112,13 @@ var encryptCommand = cli.Command{
 
 		layers32 := commands.IntToInt32Array(context.IntSlice("layer"))
 
-		keyIdMap := make(map[uint64]images.DecryptKeyData)
+		layerSymKeyMap := make(map[string]images.DecryptKeyData)
 		if operation == images.OPERATION_ADD_RECIPIENTS {
 			layerInfos, err := client.ImageService().GetImageLayerInfo(ctx, local, layers32, context.StringSlice("platform"))
 			if err != nil {
 				return err
 			}
-			keyIdMap, err = getPrivateKeys(layerInfos, gpgClient)
+			layerSymKeyMap, err = getSymmetricKeys(layerInfos, gpgClient)
 		}
 
 		cc := &images.CryptoConfig{
@@ -127,7 +127,7 @@ var encryptCommand = cli.Command{
 				Recipients:     recipients,
 				Operation:      operation,
 				Dc: images.DecryptConfig{
-					KeyIdMap: keyIdMap,
+					LayerSymKeyMap: layerSymKeyMap,
 				},
 			},
 		}

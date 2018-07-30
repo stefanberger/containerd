@@ -126,14 +126,9 @@ func imageFromProto(imagepb *imagesapi.Image) images.Image {
 }
 
 func (s *remoteImages) EncryptImage(ctx context.Context, name, newName string, cc *images.CryptoConfig, layers []int32, platforms []string) (images.Image, error) {
-	keyIdMap := make(map[uint64]*imagesapi.DecryptKeyData)
+	layerSymKeyMap := make(map[string]*imagesapi.DecryptKeyData)
 	if cc.Dc != nil {
-		for k, v := range cc.Dc.KeyIdMap {
-			keyIdMap[k] = &imagesapi.DecryptKeyData{
-				KeyData:         v.KeyData,
-				KeyDataPassword: v.KeyDataPassword,
-			}
-		}
+		layerSymKeyMap = convLayerSymKeyMap(cc.Dc.LayerSymKeyMap)
 	}
 
 	resp, err := s.client.EncryptImage(ctx, &imagesapi.EncryptImageRequest{
@@ -144,7 +139,7 @@ func (s *remoteImages) EncryptImage(ctx context.Context, name, newName string, c
 			Gpgpubkeyring: cc.Ec.GPGPubRingFile,
 			Operation:     cc.Ec.Operation,
 			Dc: &imagesapi.DecryptConfig{
-				KeyIdMap: keyIdMap,
+				LayerSymKeyMap: layerSymKeyMap,
 			},
 		},
 		Layers:    layers,
@@ -158,19 +153,13 @@ func (s *remoteImages) EncryptImage(ctx context.Context, name, newName string, c
 }
 
 func (s *remoteImages) DecryptImage(ctx context.Context, name, newName string, cc *images.CryptoConfig, layers []int32, platforms []string) (images.Image, error) {
-	keyIdMap := make(map[uint64]*imagesapi.DecryptKeyData)
-	for k, v := range cc.Dc.KeyIdMap {
-		keyIdMap[k] = &imagesapi.DecryptKeyData{
-			KeyData:         v.KeyData,
-			KeyDataPassword: v.KeyDataPassword,
-		}
-	}
+	layerSymKeyMap := convLayerSymKeyMap(cc.Dc.LayerSymKeyMap)
 
 	resp, err := s.client.DecryptImage(ctx, &imagesapi.DecryptImageRequest{
 		Name:    name,
 		NewName: newName,
 		Dc: &imagesapi.DecryptConfig{
-			KeyIdMap: keyIdMap,
+			LayerSymKeyMap: layerSymKeyMap,
 		},
 		Layers:    layers,
 		Platforms: platforms,
@@ -195,7 +184,7 @@ func (s *remoteImages) GetImageLayerInfo(ctx context.Context, name string, layer
 	li := make([]images.LayerInfo, len(resp.LayerInfo))
 	for i := 0; i < len(resp.LayerInfo); i++ {
 		li[i].Id = resp.LayerInfo[i].ID
-		li[i].KeyIds = resp.LayerInfo[i].KeyIds
+		li[i].WrappedKeys = resp.LayerInfo[i].WrappedKeys
 		li[i].Digest = resp.LayerInfo[i].Digest
 		li[i].Encryption = resp.LayerInfo[i].Encryption
 		li[i].FileSize = resp.LayerInfo[i].FileSize
@@ -203,6 +192,18 @@ func (s *remoteImages) GetImageLayerInfo(ctx context.Context, name string, layer
 	}
 
 	return li, nil
+}
+
+func convLayerSymKeyMap(layerSymKeyMap map[string]images.DecryptKeyData) map[string]*imagesapi.DecryptKeyData {
+	layerSymKeyMapOut := make(map[string]*imagesapi.DecryptKeyData)
+
+	for k, v := range layerSymKeyMap {
+		layerSymKeyMapOut[k] = &imagesapi.DecryptKeyData{
+			SymKeyData:   v.SymKeyData,
+			SymKeyCipher: uint32(v.SymKeyCipher),
+		}
+	}
+	return layerSymKeyMapOut
 }
 
 func imagesFromProto(imagespb []imagesapi.Image) []images.Image {

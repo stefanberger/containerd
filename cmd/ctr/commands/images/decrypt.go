@@ -96,7 +96,7 @@ var decryptCommand = cli.Command{
 
 		isEncrypted := false
 		for i := 0; i < len(layerInfos); i++ {
-			if len(layerInfos[i].KeyIds) > 0 {
+			if len(layerInfos[i].WrappedKeys) > 0 {
 				isEncrypted = true
 			}
 		}
@@ -105,12 +105,12 @@ var decryptCommand = cli.Command{
 			return nil
 		}
 
-		keyIdMap, err := getPrivateKeys(layerInfos, gpgClient)
+		layerSymKeyMap, err := getSymmetricKeys(layerInfos, gpgClient)
 		fmt.Printf("\n")
 
 		cc := &images.CryptoConfig{
 			Dc: &images.DecryptConfig{
-				KeyIdMap: keyIdMap,
+				LayerSymKeyMap: layerSymKeyMap,
 			},
 		}
 		_, err = client.ImageService().DecryptImage(ctx, local, newName, cc, layers32, context.StringSlice("platform"))
@@ -135,21 +135,33 @@ func addToSet(set, add []uint64) []uint64 {
 	return set
 }
 
-// getPrivateKeys walks the list of layerInfos and determines which keys are on this system
-// and prompts for the passwords for those that are available. If we do not find a private
-// key on the system for a layer then an error is displayed.
-func getPrivateKeys(layerInfos []images.LayerInfo, gpgClient images.GPGClient) (map[uint64]images.DecryptKeyData, error) {
-	keyIdMap := make(map[uint64]images.DecryptKeyData)
+// getSymmetricKeys walks the list of layerInfos and tries to decrypt the
+// wrapped symmetric keys. For this it determines which private keys are on
+// this system and prompts for the passwords for those that are available.
+// If we do not find a private key on the system for getting to the symmetric
+// key of a layer then an error is generated. Otherwise the wrapped symmetric
+// key is decrypted using the private key and added to a map that describes
+// the layer by platform name and layer number as key and the symmetric key
+// data as value
+func getSymmetricKeys(layerInfos []images.LayerInfo, gpgClient images.GPGClient) (map[string]images.DecryptKeyData, error) {
+	type PrivKeyData struct {
+		KeyData         []byte
+		KeyDataPassword []byte
+	}
+	var pkd PrivKeyData
+	keyIdPasswordMap := make(map[uint64]PrivKeyData)
+	layerSymkeyMap := make(map[string]images.DecryptKeyData)
 
-	// we need one key per encrypted layer
+	// we need to decrypt one symmetric key per encrypted layer per platform
 	for _, layerInfo := range layerInfos {
+
+		keyIds, err := images.WrappedKeysToKeyIds(layerInfo.WrappedKeys)
+		if err != nil {
+			return layerSymkeyMap, err
+		}
+
 		found := false
-		for _, keyid := range layerInfo.KeyIds {
-			if _, ok := keyIdMap[keyid]; ok {
-				// password already there
-				found = true
-				break
-			}
+		for _, keyid := range keyIds {
 			// do we have this key?
 			keyinfo, haveKey, err := gpgClient.GetSecretKeyDetails(keyid)
 			// this may fail if the key is not here; we ignore the error
@@ -158,29 +170,45 @@ func getPrivateKeys(layerInfos []images.LayerInfo, gpgClient images.GPGClient) (
 				continue
 			}
 
-			fmt.Printf("Passphrase required for Key id 0x%x: \n%v", keyid, string(keyinfo))
-			fmt.Printf("Enter passphrase for key with Id 0x%x: ", keyid)
+			var ok bool
+			if pkd, ok = keyIdPasswordMap[keyid]; !ok {
+				fmt.Printf("Passphrase required for Key id 0x%x: \n%v", keyid, string(keyinfo))
+				fmt.Printf("Enter passphrase for key with Id 0x%x: ", keyid)
 
-			password, err := terminal.ReadPassword(int(syscall.Stdin))
-			fmt.Printf("\n")
-			if err != nil {
-				return keyIdMap, err
+				password, err := terminal.ReadPassword(int(syscall.Stdin))
+				fmt.Printf("\n")
+				if err != nil {
+					return layerSymkeyMap, err
+				}
+				keydata, err := gpgClient.GetGPGPrivateKey(keyid, string(password))
+				if err != nil {
+					return layerSymkeyMap, err
+				}
+				pkd = PrivKeyData{
+					KeyData:         keydata,
+					KeyDataPassword: password,
+				}
+				keyIdPasswordMap[keyid] = pkd
 			}
 
-			keydata, err := gpgClient.GetGPGPrivateKey(keyid, string(password))
+			symKeyData, symKeyCipher, err := images.DecryptSymmetricKey(layerInfo.WrappedKeys, keyid, pkd.KeyData, pkd.KeyDataPassword, nil)
 			if err != nil {
-				return keyIdMap, err
+				return layerSymkeyMap, err
 			}
-			keyIdMap[keyid] = images.DecryptKeyData{
-				KeyData:         keydata,
-				KeyDataPassword: password,
+
+			index := fmt.Sprintf("%s:%d", layerInfo.Platform, layerInfo.Id)
+			layerSymkeyMap[index] = images.DecryptKeyData{
+				SymKeyData:   symKeyData,
+				SymKeyCipher: uint8(symKeyCipher),
 			}
 			found = true
 			break
 		}
-		if !found && len(layerInfo.KeyIds) > 0 {
-			return keyIdMap, errors.Wrapf(errdefs.ErrNotFound, "Missing key for decryption of layer %d of %s. Need one of the following keys: %v\n", layerInfo.Id, layerInfo.Platform, layerInfo.KeyIds)
+		if !found && len(layerInfo.WrappedKeys) > 0 {
+			keyIds, _ := images.WrappedKeysToKeyIds(layerInfo.WrappedKeys)
+
+			return layerSymkeyMap, errors.Wrapf(errdefs.ErrNotFound, "Missing key for decryption of layer %d of %s. Need one of the following keys: %v\n", layerInfo.Id, layerInfo.Platform, keyIds)
 		}
 	}
-	return keyIdMap, nil
+	return layerSymkeyMap, nil
 }

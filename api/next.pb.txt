@@ -2288,37 +2288,37 @@ file {
   message_type {
     name: "DecryptKeyData"
     field {
-      name: "keyData"
+      name: "symKeyData"
       number: 1
       label: LABEL_OPTIONAL
       type: TYPE_BYTES
-      json_name: "keyData"
+      json_name: "symKeyData"
     }
     field {
-      name: "keyDataPassword"
+      name: "symKeyCipher"
       number: 2
       label: LABEL_OPTIONAL
-      type: TYPE_BYTES
-      json_name: "keyDataPassword"
+      type: TYPE_UINT32
+      json_name: "symKeyCipher"
     }
   }
   message_type {
     name: "DecryptConfig"
     field {
-      name: "keyIdMap"
+      name: "layerSymKeyMap"
       number: 1
       label: LABEL_REPEATED
       type: TYPE_MESSAGE
-      type_name: ".containerd.services.images.v1.DecryptConfig.KeyIdMapEntry"
-      json_name: "keyIdMap"
+      type_name: ".containerd.services.images.v1.DecryptConfig.LayerSymKeyMapEntry"
+      json_name: "layerSymKeyMap"
     }
     nested_type {
-      name: "KeyIdMapEntry"
+      name: "LayerSymKeyMapEntry"
       field {
         name: "key"
         number: 1
         label: LABEL_OPTIONAL
-        type: TYPE_UINT64
+        type: TYPE_STRING
         json_name: "key"
       }
       field {
@@ -2474,11 +2474,11 @@ file {
       json_name: "id"
     }
     field {
-      name: "keyIds"
+      name: "WrappedKeys"
       number: 2
       label: LABEL_REPEATED
-      type: TYPE_UINT64
-      json_name: "keyIds"
+      type: TYPE_BYTES
+      json_name: "WrappedKeys"
     }
     field {
       name: "digest"
