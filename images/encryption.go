@@ -38,8 +38,8 @@ type EncryptConfig struct {
 	GPGPubRingFile []byte
 	Operation      int32
 	// for adding recipients on an already encrypted image we need the
-	// private keys for the layers to get to the symmetric key so we can
-	// (re)wrap it with the recpient's public key
+	// symmetric keys for the layers so we can wrap them with the recpient's
+	// public key
 	Dc DecryptConfig
 }
 
@@ -49,14 +49,15 @@ const (
 )
 
 // DecryptKeyData stores private key data for decryption and the necessary password
-// for being able to access/decrypt the private key data
+// for being able to access/decrypt the private key data.
 type DecryptKeyData struct {
 	SymKeyData   []byte
 	SymKeyCipher uint8
 }
 
-// DecryptConfig stores the platform layer number of keys needed for decryption as
-// keys of a map and the actual symmetric key data as value
+// DecryptConfig stores the platform and layer number encode in a string as a
+// key to the map. The symmetric key needed for decrypting a platform specific
+// layer is stored as value.
 type DecryptConfig struct {
 	LayerSymKeyMap map[string]DecryptKeyData
 }
@@ -121,8 +122,9 @@ func createEntityList(ec *EncryptConfig) (openpgp.EntityList, error) {
 	return filteredList, nil
 }
 
-// HandleEncrypt encrypts a byte array using data from the EncryptConfig and also manages
-// the list of recipients' keys
+// HandleEncrypt encrypts a byte array using data from the EncryptConfig. It
+// also manages the list of recipients' keys by enabling removal or addition
+// of recipients.
 func HandleEncrypt(ec *EncryptConfig, data []byte, keys [][]byte) ([]byte, [][]byte, error) {
 	var (
 		encBlob     []byte
