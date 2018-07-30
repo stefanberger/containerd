@@ -18,6 +18,7 @@ package images
 
 import (
 	"bytes"
+	"fmt"
 	"io/ioutil"
 	"net/mail"
 	"strings"
@@ -50,14 +51,14 @@ const (
 // DecryptKeyData stores private key data for decryption and the necessary password
 // for being able to access/decrypt the private key data
 type DecryptKeyData struct {
-	KeyData         []byte
-	KeyDataPassword []byte
+	SymKeyData   []byte
+	SymKeyCipher uint8
 }
 
-// DecryptConfig stores the KeyIDs of keys needed for decryption as keys of
-// a map and the actual private key data in the values
+// DecryptConfig stores the platform layer number of keys needed for decryption as
+// keys of a map and the actual symmetric key data as value
 type DecryptConfig struct {
-	KeyIdMap map[uint64]DecryptKeyData
+	LayerSymKeyMap map[string]DecryptKeyData
 }
 
 // CryptoConfig is a common wrapper for EncryptConfig and DecrypConfig that can
@@ -140,7 +141,7 @@ func HandleEncrypt(ec *EncryptConfig, data []byte, keys [][]byte) ([]byte, [][]b
 	switch ec.Operation {
 	case OPERATION_ADD_RECIPIENTS:
 		if len(keys) > 0 {
-			wrappedKeys, err = addRecipientsToKeys(keys, filteredList, ec.Dc.KeyIdMap)
+			wrappedKeys, err = addRecipientsToKeys(keys, filteredList, ec.Dc.LayerSymKeyMap)
 		} else {
 			encBlob, wrappedKeys, err = encryptData(data, filteredList, nil)
 		}
@@ -157,11 +158,7 @@ func HandleEncrypt(ec *EncryptConfig, data []byte, keys [][]byte) ([]byte, [][]b
 }
 
 // Decrypt decrypts a byte array using data from the DecryptConfig
-func Decrypt(dc *DecryptConfig, encBody []byte, desc ocispec.Descriptor) ([]byte, error) {
-	keyIds, err := GetKeyIds(desc)
-	if err != nil {
-		return nil, err
-	}
+func Decrypt(dc *DecryptConfig, encBody []byte, desc ocispec.Descriptor, layerNum int32, platform string) ([]byte, error) {
 
 	keys, err := getWrappedKeys(desc)
 	if err != nil {
@@ -169,57 +166,13 @@ func Decrypt(dc *DecryptConfig, encBody []byte, desc ocispec.Descriptor) ([]byte
 	}
 
 	data := assembleEncryptedMessage(encBody, keys)
-	// decrypt with the right key
-	for _, keyId := range keyIds {
-		if keydata, ok := dc.KeyIdMap[keyId]; ok {
-			r := bytes.NewReader(keydata.KeyData)
-			entityList, err := openpgp.ReadKeyRing(r)
-			if err != nil {
-				return []byte{}, err
-			}
-			entity := entityList[0]
-			entity.PrivateKey.Decrypt(keydata.KeyDataPassword)
-			for _, subkey := range entity.Subkeys {
-				subkey.PrivateKey.Decrypt(keydata.KeyDataPassword)
-			}
-			md, err := openpgp.ReadMessage(bytes.NewBuffer(data), entityList, nil, nil)
-			if err != nil {
-				return []byte{}, err
-			}
-			return ioutil.ReadAll(md.UnverifiedBody)
-		}
-	}
-	return []byte{}, errors.Wrapf(errdefs.ErrNotFound, "No suitable decryption key was found.")
-}
 
-// GetKeyIds gets the Key IDs for which the data are encrypted
-func GetKeyIds(desc ocispec.Descriptor) ([]uint64, error) {
-	var keyids []uint64
+	index := fmt.Sprintf("%s:%d", platform, layerNum)
+	r := bytes.NewReader(data)
 
-	keys, err := getWrappedKeys(desc)
+	md, err := ReadMessage(r, dc.LayerSymKeyMap[index].SymKeyData, packet.CipherFunction(dc.LayerSymKeyMap[index].SymKeyCipher))
 	if err != nil {
-		return nil, err
+		return []byte{}, err
 	}
-
-	kbytes := make([]byte, 0)
-	for _, k := range keys {
-		kbytes = append(kbytes, k...)
-	}
-	kbuf := bytes.NewBuffer(kbytes)
-
-	packets := packet.NewReader(kbuf)
-ParsePackets:
-	for {
-		p, err := packets.Next()
-		if err != nil {
-			break ParsePackets
-		}
-		switch p := p.(type) {
-		case *packet.EncryptedKey:
-			keyids = append(keyids, p.KeyId)
-		case *packet.SymmetricallyEncrypted:
-			break ParsePackets
-		}
-	}
-	return keyids, nil
+	return ioutil.ReadAll(md.UnverifiedBody)
 }

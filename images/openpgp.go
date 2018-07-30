@@ -1,10 +1,57 @@
+/*
+   Copyright The containerd Authors.
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+
+
+   Some parts of this file were copied from golang's openpgp implementation
+   which is under the following license:
+
+   Copyright (c) 2009 The Go Authors. All rights reserved.
+
+   Redistribution and use in source and binary forms, with or without
+   modification, are permitted provided that the following conditions are
+   met:
+
+      * Redistributions of source code must retain the above copyright
+   notice, this list of conditions and the following disclaimer.
+      * Redistributions in binary form must reproduce the above
+   copyright notice, this list of conditions and the following disclaimer
+   in the documentation and/or other materials provided with the
+   distribution.
+      * Neither the name of Google Inc. nor the names of its
+   contributors may be used to endorse or promote products derived from
+   this software without specific prior written permission.
+
+   THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+   "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+   LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+   A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+   OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+   SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+   LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+   DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+   THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+   (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+
 package images
 
 import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"time"
 
@@ -52,7 +99,7 @@ func encryptData(data []byte, recipients openpgp.EntityList, symKey []byte) (enc
 	return encBlob, wrappedKeys, nil
 }
 
-func addRecipientsToKeys(keys [][]byte, newRecipients openpgp.EntityList, keyIdMap map[uint64]DecryptKeyData) ([][]byte, error) {
+func addRecipientsToKeys(keys [][]byte, newRecipients openpgp.EntityList, keyIdMap map[string]DecryptKeyData) ([][]byte, error) {
 	return [][]byte{}, errors.Wrapf(errdefs.ErrNotImplemented, "Adding recipients is not supported\n")
 }
 
@@ -74,54 +121,6 @@ func removeRecipientsFromKeys(keys [][]byte, removeRecipients openpgp.EntityList
 	}
 
 	return wrappedKeys, nil
-}
-
-// decryptData decrypts an openpgp encrypted blob and wrapped keys and returns the decrypted data
-func decryptData(encBlob []byte, wrappedKeys [][]byte, kring openpgp.EntityList) (data []byte, err error) {
-	// Assemble message by concatenating packets
-	message := make([]byte, 0)
-	for _, ek := range wrappedKeys {
-		message = append(message, ek...)
-
-		// experiment
-		ekbuf := bytes.NewBuffer(ek)
-		p, err := packet.Read(ekbuf)
-		if err != nil {
-			log.Fatalf("Err reading enc key packet: %v", err)
-		}
-
-		pek := p.(*packet.EncryptedKey)
-		log.Printf("Enckey KeyID: %x", pek.KeyId)
-		log.Printf("  getting KeyID: %v", kring.KeysById(pek.KeyId))
-
-	}
-
-	message = append(message, encBlob...)
-
-	log.Printf("Encrypted message bytes: %x", message)
-
-	promptFunc := func(key []openpgp.Key, symm bool) ([]byte, error) {
-		for _, k := range key {
-			if symm {
-				return nil, errors.Wrapf(errdefs.ErrNotImplemented, "Not handled")
-			} else {
-				k.PrivateKey.Decrypt([]byte("hidden!"))
-			}
-		}
-		return nil, nil
-	}
-	messageIn := bytes.NewBuffer(message)
-	md, err := openpgp.ReadMessage(messageIn, kring, promptFunc, DefaultEncryptConfig)
-	if err != nil {
-		return nil, errors.Wrapf(err, "Unable to read message: %v", err)
-	}
-
-	plaintext, err := ioutil.ReadAll(md.UnverifiedBody)
-	if err != nil {
-		return nil, errors.Wrapf(err, "error reading encrypted contents: %s", err)
-	}
-
-	return plaintext, nil
 }
 
 // createWrappedKeys creates wrapped key bytes
@@ -261,4 +260,171 @@ func primaryIdentity(e *openpgp.Entity) *openpgp.Identity {
 		}
 	}
 	return firstIdentity
+}
+
+// WrappedKeysToKeyIds converts an array of wrapped keys into an array of
+// their key Ids
+func WrappedKeysToKeyIds(keys [][]byte) ([]uint64, error) {
+	var keyids []uint64
+
+	kbytes := make([]byte, 0)
+	for _, k := range keys {
+		kbytes = append(kbytes, k...)
+	}
+	kbuf := bytes.NewBuffer(kbytes)
+
+	packets := packet.NewReader(kbuf)
+ParsePackets:
+	for {
+		p, err := packets.Next()
+		if err == io.EOF {
+			break ParsePackets
+		}
+		if err != nil {
+			return []uint64{}, errors.Wrapf(err, "packets.Next() failed")
+		}
+		switch p := p.(type) {
+		case *packet.EncryptedKey:
+			keyids = append(keyids, p.KeyId)
+		}
+	}
+	return keyids, nil
+}
+
+// DecryptSymmetricKey decrypts a symmetric key from an array of wrapped keys. The public
+// key with the given keyid is attempted to be decrypted using the private key given
+// by keyData and keyDataPassword
+func DecryptSymmetricKey(keys [][]byte, keyid uint64, keyData []byte, keyDataPassword []byte, config *packet.Config) ([]byte, packet.CipherFunction, error) {
+	kbytes := make([]byte, 0)
+	for _, k := range keys {
+		kbytes = append(kbytes, k...)
+	}
+	kbuf := bytes.NewBuffer(kbytes)
+
+	var ek *packet.EncryptedKey
+
+	packets := packet.NewReader(kbuf)
+ParsePackets:
+	for {
+		p, err := packets.Next()
+		if err == io.EOF {
+			break ParsePackets
+		}
+		if err != nil {
+			return []byte{}, 0, errors.Wrapf(err, "packets.Next() failed")
+		}
+		switch p := p.(type) {
+		case *packet.EncryptedKey:
+			if p.KeyId == keyid {
+				ek = p
+				break ParsePackets
+			}
+		}
+	}
+
+	if ek == nil {
+		return []byte{}, 0, errors.Wrapf(errdefs.ErrNotFound, "Key with id 0x%x could not be found.", keyid)
+	}
+
+	// read the private keys
+	r := bytes.NewReader(keyData)
+	entityList, err := openpgp.ReadKeyRing(r)
+	if err != nil {
+		return []byte{}, 0, errors.Wrapf(err, "Could not read keyring")
+	}
+	// decrypt them
+	entity := entityList[0]
+	entity.PrivateKey.Decrypt(keyDataPassword)
+	for _, subkey := range entity.Subkeys {
+		subkey.PrivateKey.Decrypt(keyDataPassword)
+	}
+
+	// try with another key
+	decrypted := false
+	for _, subkey := range entity.Subkeys {
+		if (subkey.Sig.FlagsValid &&
+			subkey.Sig.FlagEncryptCommunications &&
+			subkey.PublicKey.PubKeyAlgo.CanEncrypt()) {
+			err = ek.Decrypt(subkey.PrivateKey, config)
+			if err == nil {
+				decrypted = true
+				break
+			}
+		}
+	}
+	if !decrypted {
+		return []byte{}, 0, errors.Wrapf(err, "could not decrypt symmetric key")
+	}
+
+	return ek.Key, ek.CipherFunc, nil
+}
+
+// ReadMessage reads an OpenPGP byte stream and decrypts it with the given symmetric key and cipher
+func ReadMessage(r io.Reader, symKey []byte, symKeyCipher packet.CipherFunction) (*openpgp.MessageDetails, error) {
+	var se *packet.SymmetricallyEncrypted
+
+	packets := packet.NewReader(r)
+
+ParsePackets:
+	for {
+		p, err := packets.Next()
+		if err == io.EOF {
+			break ParsePackets
+		}
+		if err != nil {
+			return nil, errors.Wrapf(err, "packets.Next() failed")
+		}
+		switch p := p.(type) {
+		case *packet.SymmetricallyEncrypted:
+			se = p
+			break ParsePackets
+		}
+	}
+
+	if se == nil {
+		return nil, errors.Wrapf(errdefs.ErrNotFound, "No symmetrically encrypted data found.")
+	}
+
+	decrypted, err := se.Decrypt(symKeyCipher, symKey)
+	if err != nil {
+		return nil, errors.Wrapf(err, "Decrypting layer with symmetric key failed")
+	}
+
+	if err := packets.Push(decrypted); err != nil {
+		return nil, errors.Wrapf(err, "Pushing failed")
+	}
+
+	md := new(openpgp.MessageDetails)
+	var p packet.Packet
+FindLiteralData:
+	for {
+		p, err = packets.Next()
+		if err == io.EOF {
+			break FindLiteralData
+		}
+		if err != nil {
+			return nil, errors.Wrapf(err, "packets.Next() failed")
+		}
+		switch p := p.(type) {
+		case *packet.LiteralData:
+			md.LiteralData = p
+			break FindLiteralData
+		}
+	}
+
+	if md.LiteralData == nil {
+		return nil, errors.Wrapf(errdefs.ErrNotFound, "LiteralData not found")
+	}
+
+	md.UnverifiedBody = checkReader{md}
+
+	return md, nil
+}
+
+type checkReader struct {
+	md *openpgp.MessageDetails
+}
+
+func (cr checkReader) Read(buf []byte) (n int, err error) {
+	return cr.md.LiteralData.Body.Read(buf)
 }

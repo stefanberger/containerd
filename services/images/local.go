@@ -184,14 +184,7 @@ func (l *local) EncryptImage(ctx context.Context, req *imagesapi.EncryptImageReq
 
 	var resp imagesapi.EncryptImageResponse
 
-	keyIdMap := make(map[uint64]images.DecryptKeyData)
-
-	for k, v := range req.Ec.Dc.KeyIdMap {
-		keyIdMap[k] = images.DecryptKeyData{
-			KeyData:         v.KeyData,
-			KeyDataPassword: v.KeyDataPassword,
-		}
-	}
+	layerSymKeyMap := convLayerSymKeyMap(req.Ec.Dc.LayerSymKeyMap)
 
 	encrypted, err := l.store.EncryptImage(ctx, req.Name, req.NewName, &images.CryptoConfig{
 		Ec: &images.EncryptConfig{
@@ -199,7 +192,7 @@ func (l *local) EncryptImage(ctx context.Context, req *imagesapi.EncryptImageReq
 			GPGPubRingFile: req.Ec.Gpgpubkeyring,
 			Operation:      req.Ec.Operation,
 			Dc: images.DecryptConfig{
-				KeyIdMap: keyIdMap,
+				LayerSymKeyMap: layerSymKeyMap,
 			},
 		},
 	}, req.Layers, req.Platforms)
@@ -224,18 +217,11 @@ func (l *local) DecryptImage(ctx context.Context, req *imagesapi.DecryptImageReq
 
 	var resp imagesapi.DecryptImageResponse
 
-	keyIdMap := make(map[uint64]images.DecryptKeyData)
-
-	for k, v := range req.Dc.KeyIdMap {
-		keyIdMap[k] = images.DecryptKeyData{
-			KeyData:         v.KeyData,
-			KeyDataPassword: v.KeyDataPassword,
-		}
-	}
+	layerSymKeyMap := convLayerSymKeyMap(req.Dc.LayerSymKeyMap)
 
 	encrypted, err := l.store.DecryptImage(ctx, req.Name, req.NewName, &images.CryptoConfig{
 		Dc: &images.DecryptConfig{
-			KeyIdMap: keyIdMap,
+			LayerSymKeyMap: layerSymKeyMap,
 		},
 	}, req.Layers, req.Platforms)
 	if err != nil {
@@ -266,14 +252,26 @@ func (l *local) GetImageLayerInfo(ctx context.Context, req *imagesapi.GetImageLa
 	resp.LayerInfo = make([]*imagesapi.LayerInfo, len(lis))
 	for i := 0; i < len(lis); i++ {
 		resp.LayerInfo[i] = &imagesapi.LayerInfo{
-			ID:         lis[i].Id,
-			KeyIds:     lis[i].KeyIds,
-			Digest:     lis[i].Digest,
-			Encryption: lis[i].Encryption,
-			FileSize:   lis[i].FileSize,
-			Platform:   lis[i].Platform,
+			ID:          lis[i].Id,
+			WrappedKeys: lis[i].WrappedKeys,
+			Digest:      lis[i].Digest,
+			Encryption:  lis[i].Encryption,
+			FileSize:    lis[i].FileSize,
+			Platform:    lis[i].Platform,
 		}
 	}
 
 	return &resp, nil
+}
+
+func convLayerSymKeyMap(layerSymKeyMap map[string]*imagesapi.DecryptKeyData) map[string]images.DecryptKeyData {
+	layerSymKeyMapOut := make(map[string]images.DecryptKeyData)
+
+	for k, v := range layerSymKeyMap {
+		layerSymKeyMapOut[k] = images.DecryptKeyData{
+			SymKeyData:   v.SymKeyData,
+			SymKeyCipher: uint8(v.SymKeyCipher),
+		}
+	}
+	return layerSymKeyMapOut
 }
