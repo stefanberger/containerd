@@ -435,7 +435,7 @@ func IsCompressedDiff(ctx context.Context, mediaType string) (bool, error) {
 // encryptLayer encrypts the layer using the CryptoConfig and creates a new OCI Descriptor.
 // A call to this function may also only manipulate the wrapped keys list.
 // The caller is expected to store the returned encrypted data and OCI Descriptor
-func encryptLayer(cc *CryptoConfig, data []byte, desc ocispec.Descriptor) (ocispec.Descriptor, []byte, error) {
+func encryptLayer(cc *CryptoConfig, data []byte, desc ocispec.Descriptor, layerNum int32, platform *ocispec.Platform) (ocispec.Descriptor, []byte, error) {
 	var (
 		keys [][]byte
 		size int64
@@ -448,7 +448,7 @@ func encryptLayer(cc *CryptoConfig, data []byte, desc ocispec.Descriptor) (ocisp
 		return ocispec.Descriptor{}, []byte{}, err
 	}
 
-	p, keys, err := HandleEncrypt(cc.Ec, data, keys)
+	p, keys, err := HandleEncrypt(cc.Ec, data, keys, layerNum, platforms.Format(*platform))
 	if err != nil {
 		return ocispec.Descriptor{}, []byte{}, err
 	}
@@ -523,7 +523,7 @@ func cryptLayer(ctx context.Context, cs content.Store, desc ocispec.Descriptor, 
 	}
 
 	if encrypt {
-		newDesc, p, err = encryptLayer(cc, data, desc)
+		newDesc, p, err = encryptLayer(cc, data, desc, layerNum, platform)
 	} else {
 		newDesc, p, err = decryptLayer(cc, data, desc, layerNum, platform)
 	}
