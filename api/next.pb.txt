@@ -2218,6 +2218,273 @@ file {
       json_name: "sync"
     }
   }
+  message_type {
+    name: "EncryptConfig"
+    field {
+      name: "recipients"
+      number: 1
+      label: LABEL_REPEATED
+      type: TYPE_STRING
+      json_name: "recipients"
+    }
+    field {
+      name: "gpgpubkeyring"
+      number: 2
+      label: LABEL_OPTIONAL
+      type: TYPE_BYTES
+      json_name: "gpgpubkeyring"
+    }
+    field {
+      name: "operation"
+      number: 3
+      label: LABEL_OPTIONAL
+      type: TYPE_INT32
+      json_name: "operation"
+    }
+    field {
+      name: "dc"
+      number: 4
+      label: LABEL_OPTIONAL
+      type: TYPE_MESSAGE
+      type_name: ".containerd.services.images.v1.DecryptConfig"
+      json_name: "dc"
+    }
+  }
+  message_type {
+    name: "DecryptKeyData"
+    field {
+      name: "symKeyData"
+      number: 1
+      label: LABEL_OPTIONAL
+      type: TYPE_BYTES
+      json_name: "symKeyData"
+    }
+    field {
+      name: "symKeyCipher"
+      number: 2
+      label: LABEL_OPTIONAL
+      type: TYPE_UINT32
+      json_name: "symKeyCipher"
+    }
+  }
+  message_type {
+    name: "DecryptConfig"
+    field {
+      name: "layerSymKeyMap"
+      number: 1
+      label: LABEL_REPEATED
+      type: TYPE_MESSAGE
+      type_name: ".containerd.services.images.v1.DecryptConfig.LayerSymKeyMapEntry"
+      json_name: "layerSymKeyMap"
+    }
+    nested_type {
+      name: "LayerSymKeyMapEntry"
+      field {
+        name: "key"
+        number: 1
+        label: LABEL_OPTIONAL
+        type: TYPE_STRING
+        json_name: "key"
+      }
+      field {
+        name: "value"
+        number: 2
+        label: LABEL_OPTIONAL
+        type: TYPE_MESSAGE
+        type_name: ".containerd.services.images.v1.DecryptKeyData"
+        json_name: "value"
+      }
+      options {
+        map_entry: true
+      }
+    }
+  }
+  message_type {
+    name: "EncryptImageRequest"
+    field {
+      name: "name"
+      number: 1
+      label: LABEL_OPTIONAL
+      type: TYPE_STRING
+      json_name: "name"
+    }
+    field {
+      name: "newName"
+      number: 2
+      label: LABEL_OPTIONAL
+      type: TYPE_STRING
+      json_name: "newName"
+    }
+    field {
+      name: "ec"
+      number: 3
+      label: LABEL_OPTIONAL
+      type: TYPE_MESSAGE
+      type_name: ".containerd.services.images.v1.EncryptConfig"
+      json_name: "ec"
+    }
+    field {
+      name: "layers"
+      number: 4
+      label: LABEL_REPEATED
+      type: TYPE_INT32
+      json_name: "layers"
+    }
+    field {
+      name: "platforms"
+      number: 5
+      label: LABEL_REPEATED
+      type: TYPE_STRING
+      json_name: "platforms"
+    }
+  }
+  message_type {
+    name: "EncryptImageResponse"
+    field {
+      name: "image"
+      number: 1
+      label: LABEL_OPTIONAL
+      type: TYPE_MESSAGE
+      type_name: ".containerd.services.images.v1.Image"
+      options {
+        65001: 0
+      }
+      json_name: "image"
+    }
+  }
+  message_type {
+    name: "DecryptImageRequest"
+    field {
+      name: "name"
+      number: 1
+      label: LABEL_OPTIONAL
+      type: TYPE_STRING
+      json_name: "name"
+    }
+    field {
+      name: "newName"
+      number: 2
+      label: LABEL_OPTIONAL
+      type: TYPE_STRING
+      json_name: "newName"
+    }
+    field {
+      name: "dc"
+      number: 3
+      label: LABEL_OPTIONAL
+      type: TYPE_MESSAGE
+      type_name: ".containerd.services.images.v1.DecryptConfig"
+      json_name: "dc"
+    }
+    field {
+      name: "layers"
+      number: 4
+      label: LABEL_REPEATED
+      type: TYPE_INT32
+      json_name: "layers"
+    }
+    field {
+      name: "platforms"
+      number: 5
+      label: LABEL_REPEATED
+      type: TYPE_STRING
+      json_name: "platforms"
+    }
+  }
+  message_type {
+    name: "DecryptImageResponse"
+    field {
+      name: "image"
+      number: 1
+      label: LABEL_OPTIONAL
+      type: TYPE_MESSAGE
+      type_name: ".containerd.services.images.v1.Image"
+      options {
+        65001: 0
+      }
+      json_name: "image"
+    }
+  }
+  message_type {
+    name: "GetImageLayerInfoRequest"
+    field {
+      name: "name"
+      number: 1
+      label: LABEL_OPTIONAL
+      type: TYPE_STRING
+      json_name: "name"
+    }
+    field {
+      name: "layers"
+      number: 2
+      label: LABEL_REPEATED
+      type: TYPE_INT32
+      json_name: "layers"
+    }
+    field {
+      name: "platforms"
+      number: 3
+      label: LABEL_REPEATED
+      type: TYPE_STRING
+      json_name: "platforms"
+    }
+  }
+  message_type {
+    name: "LayerInfo"
+    field {
+      name: "id"
+      number: 1
+      label: LABEL_OPTIONAL
+      type: TYPE_UINT32
+      json_name: "id"
+    }
+    field {
+      name: "WrappedKeys"
+      number: 2
+      label: LABEL_REPEATED
+      type: TYPE_BYTES
+      json_name: "WrappedKeys"
+    }
+    field {
+      name: "digest"
+      number: 3
+      label: LABEL_OPTIONAL
+      type: TYPE_STRING
+      json_name: "digest"
+    }
+    field {
+      name: "encryption"
+      number: 4
+      label: LABEL_OPTIONAL
+      type: TYPE_STRING
+      json_name: "encryption"
+    }
+    field {
+      name: "fileSize"
+      number: 5
+      label: LABEL_OPTIONAL
+      type: TYPE_INT64
+      json_name: "fileSize"
+    }
+    field {
+      name: "platform"
+      number: 6
+      label: LABEL_OPTIONAL
+      type: TYPE_STRING
+      json_name: "platform"
+    }
+  }
+  message_type {
+    name: "GetImageLayerInfoResponse"
+    field {
+      name: "layerInfo"
+      number: 1
+      label: LABEL_REPEATED
+      type: TYPE_MESSAGE
+      type_name: ".containerd.services.images.v1.LayerInfo"
+      json_name: "layerInfo"
+    }
+  }
   service {
     name: "Images"
     method {
@@ -2244,6 +2511,21 @@ file {
       name: "Delete"
       input_type: ".containerd.services.images.v1.DeleteImageRequest"
       output_type: ".google.protobuf.Empty"
+    }
+    method {
+      name: "EncryptImage"
+      input_type: ".containerd.services.images.v1.EncryptImageRequest"
+      output_type: ".containerd.services.images.v1.EncryptImageResponse"
+    }
+    method {
+      name: "DecryptImage"
+      input_type: ".containerd.services.images.v1.DecryptImageRequest"
+      output_type: ".containerd.services.images.v1.DecryptImageResponse"
+    }
+    method {
+      name: "GetImageLayerInfo"
+      input_type: ".containerd.services.images.v1.GetImageLayerInfoRequest"
+      output_type: ".containerd.services.images.v1.GetImageLayerInfoResponse"
     }
   }
   options {

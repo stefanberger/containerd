@@ -30,6 +30,7 @@ import (
 	"github.com/containerd/containerd/labels"
 	"github.com/containerd/containerd/metadata/boltutil"
 	"github.com/containerd/containerd/namespaces"
+	"github.com/containerd/containerd/platforms"
 	digest "github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
@@ -45,6 +46,7 @@ func NewImageStore(db *DB) images.Store {
 }
 
 func (s *imageStore) Get(ctx context.Context, name string) (images.Image, error) {
+	fmt.Printf("metadata/images.go: Get() name=%s\n", name)
 	var image images.Image
 
 	namespace, err := namespaces.NamespaceRequired(ctx)
@@ -253,6 +255,171 @@ func (s *imageStore) Delete(ctx context.Context, name string, opts ...images.Del
 
 		return err
 	})
+}
+
+// cryptImage encrypts or decrypts an image with the given name and stores it either under the newName
+// or updates the existing one
+func (s *imageStore) cryptImage(ctx context.Context, name, newName string, cc *images.CryptoConfig, layers []int32, platformList []string, encrypt bool) (images.Image, error) {
+	var image images.Image
+
+	namespace, err := namespaces.NamespaceRequired(ctx)
+	if err != nil {
+		return images.Image{}, err
+	}
+
+	if err := view(ctx, s.db, func(tx *bolt.Tx) error {
+		bkt := getImagesBucket(tx, namespace)
+		if bkt == nil {
+			return errors.Wrapf(errdefs.ErrNotFound, "image %q", name)
+		}
+
+		ibkt := bkt.Bucket([]byte(name))
+		if ibkt == nil {
+			return errors.Wrapf(errdefs.ErrNotFound, "image %q", name)
+		}
+
+		image.Name = name
+		if err := readImage(&image, ibkt); err != nil {
+			return errors.Wrapf(err, "image %q", name)
+		}
+
+		return nil
+	}); err != nil {
+		return image, err
+	}
+
+	pl, err := platforms.ParseArray(platformList)
+	if err != nil {
+		return image, err
+	}
+
+	lf := &images.LayerFilter{
+		Layers:    layers,
+		Platforms: pl,
+	}
+
+	newSpec, modified, err := images.CryptImage(ctx, s.db.ContentStore(), image.Target, cc, lf, encrypt)
+	if err != nil {
+		return image, err
+	}
+	if !modified {
+		return image, nil
+	}
+
+	// if newName is either empty or equal to the existing name, it's an update
+	if newName == "" || strings.Compare(image.Name, newName) == 0 {
+		if err := update(ctx, s.db, func(tx *bolt.Tx) error {
+			bkt, err := createImagesBucket(tx, namespace)
+			if err != nil {
+				return err
+			}
+
+			ibkt := bkt.Bucket([]byte(image.Name))
+			if ibkt == nil {
+				return errors.Wrapf(errdefs.ErrNotFound, "image %q", image.Name)
+			}
+
+			if err := validateImage(&image); err != nil {
+				return err
+			}
+
+			image.UpdatedAt = time.Now().UTC()
+			image.Target = newSpec
+			if err := writeImage(ibkt, &image); err != nil {
+				return err
+			}
+			// A reference to a piece of content has been removed,
+			// mark content store as dirty for triggering garbage
+			// collection
+			s.db.dirtyL.Lock()
+			s.db.dirtyCS = true
+			s.db.dirtyL.Unlock()
+
+			return nil
+		}); err != nil {
+			return image, err
+		}
+		return image, nil
+	}
+
+	if err := update(ctx, s.db, func(tx *bolt.Tx) error {
+		image.Target = newSpec
+		image.Name = newName
+		image.UpdatedAt = time.Now().UTC()
+
+		if err := validateImage(&image); err != nil {
+			return err
+		}
+
+		bkt, err := createImagesBucket(tx, namespace)
+		if err != nil {
+			return err
+		}
+
+		ibkt, err := bkt.CreateBucket([]byte(image.Name))
+		if err != nil {
+			if err != bolt.ErrBucketExists {
+				return err
+			}
+
+			return errors.Wrapf(errdefs.ErrAlreadyExists, "image %q", image.Name)
+		}
+
+		return writeImage(ibkt, &image)
+	}); err != nil {
+		return image, err
+	}
+
+	return image, nil
+}
+
+func (s *imageStore) EncryptImage(ctx context.Context, name, newName string, cc *images.CryptoConfig, layers []int32, platformList []string) (images.Image, error) {
+	return s.cryptImage(ctx, name, newName, cc, layers, platformList, true)
+}
+
+func (s *imageStore) DecryptImage(ctx context.Context, name, newName string, cc *images.CryptoConfig, layers []int32, platformList []string) (images.Image, error) {
+	return s.cryptImage(ctx, name, newName, cc, layers, platformList, false)
+}
+
+func (s *imageStore) GetImageLayerInfo(ctx context.Context, name string, layers []int32, platformList []string) ([]images.LayerInfo, error) {
+	var image images.Image
+
+	namespace, err := namespaces.NamespaceRequired(ctx)
+	if err != nil {
+		return []images.LayerInfo{}, err
+	}
+
+	if err := view(ctx, s.db, func(tx *bolt.Tx) error {
+		bkt := getImagesBucket(tx, namespace)
+		if bkt == nil {
+			return errors.Wrapf(errdefs.ErrNotFound, "image %q", name)
+		}
+
+		ibkt := bkt.Bucket([]byte(name))
+		if ibkt == nil {
+			return errors.Wrapf(errdefs.ErrNotFound, "image %q", name)
+		}
+
+		image.Name = name
+		if err := readImage(&image, ibkt); err != nil {
+			return errors.Wrapf(err, "image %q", name)
+		}
+
+		return nil
+	}); err != nil {
+		return []images.LayerInfo{}, err
+	}
+
+	pl, err := platforms.ParseArray(platformList)
+	if err != nil {
+		return []images.LayerInfo{}, err
+	}
+	lf := &images.LayerFilter{
+		Layers:    layers,
+		Platforms: pl,
+	}
+
+	return images.GetImageLayerInfo(ctx, s.db.ContentStore(), image.Target, lf, -1)
 }
 
 func validateImage(image *images.Image) error {

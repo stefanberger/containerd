@@ -180,3 +180,100 @@ func (l *local) Delete(ctx context.Context, req *imagesapi.DeleteImageRequest, _
 
 	return &ptypes.Empty{}, nil
 }
+
+func (l *local) EncryptImage(ctx context.Context, req *imagesapi.EncryptImageRequest, _ ...grpc.CallOption) (*imagesapi.EncryptImageResponse, error) {
+	log.G(ctx).WithField("name", req.Name).Debugf("encrypt image")
+
+	var resp imagesapi.EncryptImageResponse
+
+	layerSymKeyMap := convLayerSymKeyMap(req.Ec.Dc.LayerSymKeyMap)
+
+	encrypted, err := l.store.EncryptImage(ctx, req.Name, req.NewName, &images.CryptoConfig{
+		Ec: &images.EncryptConfig{
+			Recipients:     req.Ec.Recipients,
+			GPGPubRingFile: req.Ec.Gpgpubkeyring,
+			Operation:      req.Ec.Operation,
+			Dc: images.DecryptConfig{
+				LayerSymKeyMap: layerSymKeyMap,
+			},
+		},
+	}, req.Layers, req.Platforms)
+	if err != nil {
+		return nil, errdefs.ToGRPC(err)
+	}
+
+	resp.Image = imageToProto(&encrypted)
+
+	if err := l.publisher.Publish(ctx, "/images/update", &eventstypes.ImageUpdate{
+		Name:   resp.Image.Name,
+		Labels: resp.Image.Labels,
+	}); err != nil {
+		return nil, err
+	}
+
+	return &resp, nil
+}
+
+func (l *local) DecryptImage(ctx context.Context, req *imagesapi.DecryptImageRequest, _ ...grpc.CallOption) (*imagesapi.DecryptImageResponse, error) {
+	log.G(ctx).WithField("name", req.Name).Debugf("decrypt image")
+
+	var resp imagesapi.DecryptImageResponse
+
+	layerSymKeyMap := convLayerSymKeyMap(req.Dc.LayerSymKeyMap)
+
+	encrypted, err := l.store.DecryptImage(ctx, req.Name, req.NewName, &images.CryptoConfig{
+		Dc: &images.DecryptConfig{
+			LayerSymKeyMap: layerSymKeyMap,
+		},
+	}, req.Layers, req.Platforms)
+	if err != nil {
+		return nil, errdefs.ToGRPC(err)
+	}
+	resp.Image = imageToProto(&encrypted)
+
+	if err := l.publisher.Publish(ctx, "/images/update", &eventstypes.ImageUpdate{
+		Name:   resp.Image.Name,
+		Labels: resp.Image.Labels,
+	}); err != nil {
+		return nil, err
+	}
+
+	return &resp, nil
+}
+
+func (l *local) GetImageLayerInfo(ctx context.Context, req *imagesapi.GetImageLayerInfoRequest, _ ...grpc.CallOption) (*imagesapi.GetImageLayerInfoResponse, error) {
+	log.G(ctx).WithField("name", req.Name).Debugf("GetImageLayerInfo")
+
+	var resp imagesapi.GetImageLayerInfoResponse
+
+	lis, err := l.store.GetImageLayerInfo(ctx, req.Name, req.Layers, req.Platforms)
+	if err != nil {
+		return nil, errdefs.ToGRPC(err)
+	}
+
+	resp.LayerInfo = make([]*imagesapi.LayerInfo, len(lis))
+	for i := 0; i < len(lis); i++ {
+		resp.LayerInfo[i] = &imagesapi.LayerInfo{
+			ID:          lis[i].ID,
+			WrappedKeys: lis[i].WrappedKeys,
+			Digest:      lis[i].Digest,
+			Encryption:  lis[i].Encryption,
+			FileSize:    lis[i].FileSize,
+			Platform:    lis[i].Platform,
+		}
+	}
+
+	return &resp, nil
+}
+
+func convLayerSymKeyMap(layerSymKeyMap map[string]*imagesapi.DecryptKeyData) map[string]images.DecryptKeyData {
+	layerSymKeyMapOut := make(map[string]images.DecryptKeyData)
+
+	for k, v := range layerSymKeyMap {
+		layerSymKeyMapOut[k] = images.DecryptKeyData{
+			SymKeyData:   v.SymKeyData,
+			SymKeyCipher: uint8(v.SymKeyCipher),
+		}
+	}
+	return layerSymKeyMapOut
+}

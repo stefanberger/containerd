@@ -57,6 +57,7 @@ import (
 
 	"crypto"
 	"crypto/rand"
+
 	"github.com/containerd/containerd/errdefs"
 	"github.com/pkg/errors"
 	"golang.org/x/crypto/openpgp"
