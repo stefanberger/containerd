@@ -99,8 +99,45 @@ func encryptData(data []byte, recipients openpgp.EntityList, symKey []byte) (enc
 	return encBlob, wrappedKeys, nil
 }
 
-func addRecipientsToKeys(keys [][]byte, newRecipients openpgp.EntityList, keyIdMap map[string]DecryptKeyData) ([][]byte, error) {
-	return [][]byte{}, errors.Wrapf(errdefs.ErrNotImplemented, "Adding recipients is not supported\n")
+// createWrappedKeys creates wrapped key bytes
+func createWrappedKeys(symKey []byte, recipients openpgp.EntityList, config *packet.Config) (wrappedKeys [][]byte, err error) {
+	return addRecipientsToKeys([][]byte{}, recipients, symKey, config.DefaultCipher, config)
+}
+
+// addRecipientsToKeys adds wrapped keys to an existing list of wrapped keys by
+// encrypting the given symmetric key (symKey) with a public key of each one
+// of the recipients
+func addRecipientsToKeys(keys [][]byte, recipients openpgp.EntityList, symKey []byte, symKeyCipher packet.CipherFunction, config *packet.Config) ([][]byte, error) {
+	keyIds, err := WrappedKeysToKeyIds(keys)
+	if err != nil {
+		return nil, err
+	}
+
+	encKeys := keys
+
+	for _, et := range recipients {
+		pkey, canEncrypt := encryptionKey(et, time.Now())
+		if !canEncrypt {
+			return nil, errors.Wrapf(errdefs.ErrInvalidArgument, "key doesn't support encryption")
+		}
+		// already part of the wrapped keys ?
+		found := false
+		for _, v :=  range keyIds {
+			if v == pkey.PublicKey.KeyId {
+				found = true
+				break
+			}
+		}
+		if !found {
+			encKeyBuf := new(bytes.Buffer)
+			if err := packet.SerializeEncryptedKey(encKeyBuf, pkey.PublicKey, symKeyCipher, symKey, config); err != nil {
+				return nil, errors.Wrapf(err, "Error serializing encrypted key: %v", err)
+			}
+			encKeys = append(encKeys, encKeyBuf.Bytes())
+			keyIds = append(keyIds, pkey.PublicKey.KeyId)
+		}
+	}
+	return encKeys, nil
 }
 
 func removeRecipientsFromKeys(keys [][]byte, removeRecipients openpgp.EntityList) ([][]byte, error) {
@@ -121,31 +158,6 @@ func removeRecipientsFromKeys(keys [][]byte, removeRecipients openpgp.EntityList
 	}
 
 	return wrappedKeys, nil
-}
-
-// createWrappedKeys creates wrapped key bytes
-func createWrappedKeys(symKey []byte, recipients openpgp.EntityList, config *packet.Config) (wrappedKeys [][]byte, err error) {
-	// Array of serialized EncryptedKeys
-	encKeys := make([][]byte, 0, len(recipients))
-	encKeyBuf := new(bytes.Buffer)
-
-	for _, et := range recipients {
-		pkey, canEncrypt := encryptionKey(et, time.Now())
-		if !canEncrypt {
-			log.Printf("Error key doesn't support encryption")
-			return nil, fmt.Errorf("key doesn't support encryption")
-		}
-		if err := packet.SerializeEncryptedKey(encKeyBuf, pkey.PublicKey, config.DefaultCipher, symKey, config); err != nil {
-			return nil, fmt.Errorf("Error serializing encrypted key: %v", err)
-		}
-		encryptedKeyBytes := encKeyBuf.Bytes()
-		encKeys = append(encKeys, encryptedKeyBytes)
-		encKeyBuf = new(bytes.Buffer)
-	}
-
-	log.Printf("Encrypted keys' bytes: %x", encKeys)
-
-	return encKeys, nil
 }
 
 // createEncryptedBlob creates encrypted data blob bytes
