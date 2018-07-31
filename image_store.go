@@ -126,10 +126,7 @@ func imageFromProto(imagepb *imagesapi.Image) images.Image {
 }
 
 func (s *remoteImages) EncryptImage(ctx context.Context, name, newName string, cc *images.CryptoConfig, layers []int32, platforms []string) (images.Image, error) {
-	layerSymKeyMap := make(map[string]*imagesapi.DecryptKeyData)
-	if cc.Dc != nil {
-		layerSymKeyMap = convLayerSymKeyMap(cc.Dc.LayerSymKeyMap)
-	}
+	layerSymKeyMap := convLayerSymKeyMap(cc.Ec.Dc.LayerSymKeyMap)
 
 	resp, err := s.client.EncryptImage(ctx, &imagesapi.EncryptImageRequest{
 		Name:    name,
