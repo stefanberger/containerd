@@ -90,23 +90,7 @@ func (gc *gpgv2Client) GetGPGPrivateKey(keyid uint64, passphrase string) ([]byte
 
 	cmd := exec.Command("gpg2", args...)
 
-	stdout, err := cmd.StdoutPipe()
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return nil, err
-	}
-	if err := cmd.Start(); err != nil {
-		return nil, err
-	}
-
-	keydata, err2 := ioutil.ReadAll(stdout)
-	message, _ := ioutil.ReadAll(stderr)
-
-	if err := cmd.Wait(); err != nil {
-		return nil, fmt.Errorf("Error from gpg2: %s\n", message)
-	}
-
-	return keydata, err2
+	return runGPGGetOutput(cmd)
 }
 
 // ReadGPGPubRingFile reads the GPG public key ring file
@@ -119,23 +103,7 @@ func (gc *gpgv2Client) ReadGPGPubRingFile() ([]byte, error) {
 
 	cmd := exec.Command("gpg2", args...)
 
-	stdout, err := cmd.StdoutPipe()
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return nil, err
-	}
-	if err := cmd.Start(); err != nil {
-		return nil, err
-	}
-
-	keydata, err2 := ioutil.ReadAll(stdout)
-	message, _ := ioutil.ReadAll(stderr)
-
-	if err := cmd.Wait(); err != nil {
-		return nil, fmt.Errorf("Error from gpg2: %s\n", message)
-	}
-
-	return keydata, err2
+	return runGPGGetOutput(cmd)
 }
 
 // GetSecretKeyDetails retrives the secret key details of key with keyid.
@@ -150,23 +118,8 @@ func (gc *gpgv2Client) GetSecretKeyDetails(keyid uint64) ([]byte, bool, error) {
 
 	cmd := exec.Command("gpg2", args...)
 
-	stdout, err := cmd.StdoutPipe()
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return nil, false, err
-	}
-	if err := cmd.Start(); err != nil {
-		return nil, false, err
-	}
-
-	keydata, err2 := ioutil.ReadAll(stdout)
-	message, _ := ioutil.ReadAll(stderr)
-
-	if err := cmd.Wait(); err != nil {
-		return nil, false, fmt.Errorf("Error from gpg2: %s\n", message)
-	}
-
-	return keydata, err2 == nil, err2
+	keydata, err := runGPGGetOutput(cmd)
+	return keydata, err == nil, err
 }
 
 // GetGPGPrivateKey gets the bytes of a specified keyid, supplying a passphrase
@@ -179,23 +132,7 @@ func (gc *gpgv1Client) GetGPGPrivateKey(keyid uint64, _ string) ([]byte, error) 
 
 	cmd := exec.Command("gpg", args...)
 
-	stdout, err := cmd.StdoutPipe()
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return nil, err
-	}
-	if err := cmd.Start(); err != nil {
-		return nil, err
-	}
-
-	keydata, err2 := ioutil.ReadAll(stdout)
-	message, _ := ioutil.ReadAll(stderr)
-
-	if err := cmd.Wait(); err != nil {
-		return nil, fmt.Errorf("Error from gpg2: %s\n", message)
-	}
-
-	return keydata, err2
+	return runGPGGetOutput(cmd)
 }
 
 // ReadGPGPubRingFile reads the GPG public key ring file
@@ -208,23 +145,7 @@ func (gc *gpgv1Client) ReadGPGPubRingFile() ([]byte, error) {
 
 	cmd := exec.Command("gpg", args...)
 
-	stdout, err := cmd.StdoutPipe()
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return nil, err
-	}
-	if err := cmd.Start(); err != nil {
-		return nil, err
-	}
-
-	keydata, err2 := ioutil.ReadAll(stdout)
-	message, _ := ioutil.ReadAll(stderr)
-
-	if err := cmd.Wait(); err != nil {
-		return nil, fmt.Errorf("Error from gpg2: %s\n", message)
-	}
-
-	return keydata, err2
+	return runGPGGetOutput(cmd)
 }
 
 // GetSecretKeyDetails retrives the secret key details of key with keyid.
@@ -239,21 +160,32 @@ func (gc *gpgv1Client) GetSecretKeyDetails(keyid uint64) ([]byte, bool, error) {
 
 	cmd := exec.Command("gpg", args...)
 
+	keydata, err := runGPGGetOutput(cmd)
+
+	return keydata, err == nil, err
+}
+
+// runGPGGetOutput runs the GPG commandline and returns stdout as byte array
+// and any stderr in the error
+func runGPGGetOutput(cmd *exec.Cmd) ([]byte, error){
 	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, err
+	}
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 	if err := cmd.Start(); err != nil {
-		return nil, false, err
+		return nil, err
 	}
 
-	keydata, err2 := ioutil.ReadAll(stdout)
-	message, _ := ioutil.ReadAll(stderr)
+	stdoutstr, err2 := ioutil.ReadAll(stdout)
+	stderrstr, _ := ioutil.ReadAll(stderr)
 
 	if err := cmd.Wait(); err != nil {
-		return nil, false, fmt.Errorf("Error from gpg2: %s", message)
+		return nil, fmt.Errorf("Error from %s: %s", cmd.Path, string(stderrstr))
 	}
 
-	return keydata, err2 == nil, err2
+	return stdoutstr, err2
 }
