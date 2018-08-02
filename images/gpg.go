@@ -81,7 +81,8 @@ func NewGPGClient(version *GPGVersion, homedir string) (GPGClient, error) {
 
 // GetGPGPrivateKey gets the bytes of a specified keyid, supplying a passphrase
 func (gc *gpgv2Client) GetGPGPrivateKey(keyid uint64, passphrase string) ([]byte, error) {
-	args := []string{}
+	var args []string
+
 	if gc.gpgHomeDir != "" {
 		args = append(args, []string{"--homedir", gc.gpgHomeDir}...)
 	}
@@ -95,7 +96,8 @@ func (gc *gpgv2Client) GetGPGPrivateKey(keyid uint64, passphrase string) ([]byte
 
 // ReadGPGPubRingFile reads the GPG public key ring file
 func (gc *gpgv2Client) ReadGPGPubRingFile() ([]byte, error) {
-	args := []string{}
+	var args []string
+
 	if gc.gpgHomeDir != "" {
 		args = append(args, []string{"--homedir", gc.gpgHomeDir}...)
 	}
@@ -124,7 +126,8 @@ func (gc *gpgv2Client) GetSecretKeyDetails(keyid uint64) ([]byte, bool, error) {
 
 // GetGPGPrivateKey gets the bytes of a specified keyid, supplying a passphrase
 func (gc *gpgv1Client) GetGPGPrivateKey(keyid uint64, _ string) ([]byte, error) {
-	args := []string{}
+	var args []string
+
 	if gc.gpgHomeDir != "" {
 		args = append(args, []string{"--homedir", gc.gpgHomeDir}...)
 	}
@@ -137,7 +140,8 @@ func (gc *gpgv1Client) GetGPGPrivateKey(keyid uint64, _ string) ([]byte, error) 
 
 // ReadGPGPubRingFile reads the GPG public key ring file
 func (gc *gpgv1Client) ReadGPGPubRingFile() ([]byte, error) {
-	args := []string{}
+	var args []string
+
 	if gc.gpgHomeDir != "" {
 		args = append(args, []string{"--homedir", gc.gpgHomeDir}...)
 	}
