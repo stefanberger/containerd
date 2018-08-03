@@ -701,12 +701,23 @@ func cryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descripto
 	}
 
 	if modified && len(newLayers) > 0 {
-		newManifest := ocispec.Manifest{
-			Versioned: specs.Versioned{
-				SchemaVersion: 2,
+		// TODO: Hack to work with docker registry since it still expects the mediatype for manifest
+		// REF: https://github.com/moby/buildkit/blob/master/exporter/containerimage/writer.go#L83-L100
+		newManifest := struct {
+			// MediaType is reserved in the OCI spec but
+			// excluded from go types.
+			MediaType string `json:"mediaType,omitempty"`
+
+			ocispec.Manifest
+		}{
+			MediaType: MediaTypeDockerSchema2Manifest,
+			Manifest: ocispec.Manifest{
+				Versioned: specs.Versioned{
+					SchemaVersion: 2,
+				},
+				Config: config,
+				Layers: newLayers,
 			},
-			Config: config,
-			Layers: newLayers,
 		}
 
 		mb, err := json.MarshalIndent(newManifest, "", "   ")
@@ -768,10 +779,23 @@ func CryptManifestList(ctx context.Context, cs content.Store, desc ocispec.Descr
 
 	if modified {
 		// we need to update the index
-		newIndex := ocispec.Index{
-			Versioned: index.Versioned,
-			Manifests: newManifests,
+
+		// TODO: Hack to work with docker registry since it still expects the mediatype for index
+		// REF: https://github.com/moby/buildkit/blob/master/exporter/containerimage/writer.go#L83-L100
+		newIndex := struct {
+			// MediaType is reserved in the OCI spec but
+			// excluded from go types.
+			MediaType string `json:"mediaType,omitempty"`
+
+			ocispec.Index
+		}{
+			MediaType: MediaTypeDockerSchema2ManifestList,
+			Index: ocispec.Index{
+				Versioned: index.Versioned,
+				Manifests: newManifests,
+			},
 		}
+
 		mb, err := json.MarshalIndent(newIndex, "", "   ")
 		if err != nil {
 			return ocispec.Descriptor{}, false, errors.Wrap(err, "failed to marshal index")
