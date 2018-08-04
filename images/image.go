@@ -656,6 +656,9 @@ func cryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descripto
 
 	children, err := Children(ctx, cs, desc)
 	if err != nil {
+		if errdefs.IsNotFound(err) {
+			return desc, false, nil
+		}
 		return ocispec.Descriptor{}, false, err
 	}
 
