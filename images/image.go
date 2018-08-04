@@ -850,6 +850,9 @@ func GetImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descr
 			platform = platforms.Format(*desc.Platform)
 		}
 		if err != nil {
+			if errdefs.IsNotFound(err) {
+				return[]LayerInfo{}, nil
+			}
 			return []LayerInfo{}, err
 		}
 
