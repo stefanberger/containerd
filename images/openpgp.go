@@ -52,7 +52,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"log"
 	"time"
 
 	"crypto"
@@ -183,7 +182,6 @@ func createEncryptedBlob(data []byte, symKey []byte, config *packet.Config) (enc
 	}
 
 	encBlob = encData.Bytes()
-	log.Printf("Encrypted data bytes: %x", encBlob)
 
 	return encBlob, nil
 }
