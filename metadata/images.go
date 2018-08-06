@@ -298,7 +298,7 @@ func (s *imageStore) cryptImage(ctx context.Context, name, newName string, cc *i
 		Platforms: pl,
 	}
 
-	newSpec, modified, err := images.CryptManifestList(ctx, s.db.ContentStore(), image.Target, cc, lf, encrypt)
+	newSpec, modified, err := images.CryptImage(ctx, s.db.ContentStore(), image.Target, cc, lf, encrypt)
 	if err != nil {
 		return image, err
 	}
