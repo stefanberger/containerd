@@ -678,7 +678,7 @@ func cryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descripto
 	for _, child := range children {
 		// we only encrypt child layers and have to update their parents if encyrption happened
 		switch child.MediaType {
-		case MediaTypeDockerSchema2Config:
+		case MediaTypeDockerSchema2Config, ocispec.MediaTypeImageConfig:
 			config = child
 		case MediaTypeDockerSchema2LayerGzip, MediaTypeDockerSchema2Layer:
 			if encrypt && isUserSelectedLayer(layerNum, layersTotal, lf.Layers) && isUserSelectedPlatform(thisPlatform, lf.Platforms) {
@@ -758,11 +758,26 @@ func cryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descripto
 	return desc, modified, nil
 }
 
-// cryptManifestList encrypts or decrypts the children of a top level manifest list
-func CryptManifestList(ctx context.Context, cs content.Store, desc ocispec.Descriptor, cc *CryptoConfig, lf *LayerFilter, encrypt bool) (ocispec.Descriptor, bool, error) {
-	if desc.MediaType != MediaTypeDockerSchema2ManifestList {
-		return ocispec.Descriptor{}, false, errors.Wrapf(nil, "Wrong media type %s passed. Need %s.\n", desc.MediaType, MediaTypeDockerSchema2ManifestList)
+// cryptManifest encrypt or decrypt the children of a top level manifest
+func cryptManifest(ctx context.Context, cs content.Store, desc ocispec.Descriptor, cc *CryptoConfig, lf *LayerFilter, encrypt bool) (ocispec.Descriptor, bool, error) {
+	p, err := content.ReadBlob(ctx, cs, desc)
+	if err != nil {
+		return ocispec.Descriptor{}, false, err
 	}
+	var manifest ocispec.Manifest
+	if err := json.Unmarshal(p, &manifest); err != nil {
+		return ocispec.Descriptor{}, false, err
+	}
+	platform := platforms.DefaultSpec()
+	newDesc, modified, err := cryptChildren(ctx, cs, desc, cc, lf, encrypt, &platform)
+	if err != nil {
+		return ocispec.Descriptor{}, false, err
+	}
+	return newDesc, modified, nil
+}
+
+// cryptManifestList encrypts or decrypts the children of a top level manifest list
+func cryptManifestList(ctx context.Context, cs content.Store, desc ocispec.Descriptor, cc *CryptoConfig, lf *LayerFilter, encrypt bool) (ocispec.Descriptor, bool, error) {
 	// read the index; if any layer is encrypted and any manifests change we will need to rewrite it
 	b, err := content.ReadBlob(ctx, cs, desc)
 	if err != nil {
@@ -832,14 +847,30 @@ func CryptManifestList(ctx context.Context, cs content.Store, desc ocispec.Descr
 	return desc, false, nil
 }
 
+func CryptImage(ctx context.Context, cs content.Store, desc ocispec.Descriptor, cc *CryptoConfig, lf *LayerFilter, encrypt bool) (ocispec.Descriptor, bool, error) {
+	switch desc.MediaType {
+	case MediaTypeDockerSchema2ManifestList:
+		return cryptManifestList(ctx, cs, desc, cc, lf, encrypt)
+	case ocispec.MediaTypeImageManifest, MediaTypeDockerSchema2Manifest:
+		return cryptManifest(ctx, cs, desc, cc, lf, encrypt)
+	default:
+		return ocispec.Descriptor{}, false, errors.Wrapf(errdefs.ErrInvalidArgument, "CryptImage: Unhandled media type: %s", desc.MediaType)
+	}
+}
+
 // Get the image key Ids necessary for decrypting an image
 // We determine the KeyIds starting with  the given OCI Decriptor, recursing to lower-level descriptors
 // until we get them from the layer descriptors
 func GetImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descriptor, lf *LayerFilter, layerNum int32) ([]LayerInfo, error) {
+	return getImageLayerInfo(ctx, cs, desc, lf, layerNum, platforms.Default())
+}
+
+// the recursive version of GetImageLayerInfo that takes the default platform
+// as additional parameter
+func getImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descriptor, lf *LayerFilter, layerNum int32, platform string) ([]LayerInfo, error) {
 	var (
 		lis      []LayerInfo
 		tmp      []LayerInfo
-		platform string
 	)
 
 	switch desc.MediaType {
@@ -866,7 +897,7 @@ func GetImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descr
 			if isDescriptorALayer(child) {
 				layerNum = layerNum + 1
 				if isUserSelectedLayer(layerNum, layersTotal, lf.Layers) {
-					tmp, err = GetImageLayerInfo(ctx, cs, child, lf, layerNum)
+					tmp, err = getImageLayerInfo(ctx, cs, child, lf, layerNum, platform)
 				} else {
 					continue
 				}
@@ -877,11 +908,6 @@ func GetImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descr
 				return []LayerInfo{}, err
 			}
 
-			if platform != "" {
-				for i := 0; i < len(tmp); i++ {
-					tmp[i].Platform = platform
-				}
-			}
 			lis = append(lis, tmp...)
 		}
 	case MediaTypeDockerSchema2Layer, MediaTypeDockerSchema2LayerGzip:
@@ -891,9 +917,10 @@ func GetImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descr
 			Encryption:  "",
 			FileSize:    desc.Size,
 			Id:          uint32(layerNum),
+			Platform:    platform,
 		}
 		lis = append(lis, li)
-	case MediaTypeDockerSchema2Config:
+	case MediaTypeDockerSchema2Config, ocispec.MediaTypeImageConfig:
 	case MediaTypeDockerSchema2LayerPGP, MediaTypeDockerSchema2LayerGzipPGP:
 		wrappedKeys, err := getWrappedKeys(desc)
 		if err != nil {
@@ -905,6 +932,7 @@ func GetImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descr
 			Encryption:  "pgp",
 			FileSize:    desc.Size,
 			Id:          uint32(layerNum),
+			Platform:    platform,
 		}
 		lis = append(lis, li)
 	default:
