@@ -44,8 +44,10 @@ type EncryptConfig struct {
 }
 
 const (
-	OPERATION_ADD_RECIPIENTS    = int32(iota)
-	OPERATION_REMOVE_RECIPIENTS = int32(iota)
+	// OperationAddRecipients instructs to add a recipient
+	OperationAddRecipients    = int32(iota)
+	// OperationRemoveRecipients instructs to remove a recipient
+	OperationRemoveRecipients = int32(iota)
 )
 
 // DecryptKeyData stores private key data for decryption and the necessary password
@@ -141,7 +143,7 @@ func HandleEncrypt(ec *EncryptConfig, data []byte, keys [][]byte, layerNum int32
 	}
 
 	switch ec.Operation {
-	case OPERATION_ADD_RECIPIENTS:
+	case OperationAddRecipients:
 		if len(keys) > 0 {
 			index := fmt.Sprintf("%s:%d", platform, layerNum)
 			symKey := ec.Dc.LayerSymKeyMap[index].SymKeyData
@@ -153,7 +155,7 @@ func HandleEncrypt(ec *EncryptConfig, data []byte, keys [][]byte, layerNum int32
 		} else {
 			encBlob, wrappedKeys, err = encryptData(data, filteredList, nil)
 		}
-	case OPERATION_REMOVE_RECIPIENTS:
+	case OperationRemoveRecipients:
 		wrappedKeys, err = removeRecipientsFromKeys(keys, filteredList)
 		// encBlob stays empty to indicate it wasn't touched
 	}

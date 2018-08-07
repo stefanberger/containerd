@@ -180,7 +180,7 @@ func (s *remoteImages) GetImageLayerInfo(ctx context.Context, name string, layer
 
 	li := make([]images.LayerInfo, len(resp.LayerInfo))
 	for i := 0; i < len(resp.LayerInfo); i++ {
-		li[i].Id = resp.LayerInfo[i].ID
+		li[i].ID = resp.LayerInfo[i].ID
 		li[i].WrappedKeys = resp.LayerInfo[i].WrappedKeys
 		li[i].Digest = resp.LayerInfo[i].Digest
 		li[i].Encryption = resp.LayerInfo[i].Encryption
