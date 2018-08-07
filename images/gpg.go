@@ -12,13 +12,13 @@ type GPGVersion int
 const (
 	// GPGv2 signifies gpgv2+
 	GPGv2 GPGVersion = iota
-	// GPGv2 signifies gpgv1+
+	// GPGv1 signifies gpgv1+
 	GPGv1
 	// GPGVersionUndetermined signifies gpg client version undetermined
 	GPGVersionUndetermined
 )
 
-// GPG
+// GPGClient defines an interface for wrapping the gpg command line tools
 type GPGClient interface {
 	// ReadGPGPubRingFile gets the byte sequence of the gpg public keyring
 	ReadGPGPubRingFile() ([]byte, error)
@@ -55,6 +55,8 @@ func GuessGPGVersion() GPGVersion {
 	}
 }
 
+// NewGPGClient creates a new GPGClient object representing the given version
+// and using the given home directory
 func NewGPGClient(version *GPGVersion, homedir string) (GPGClient, error) {
 	var gpgVersion GPGVersion
 	if version != nil {
@@ -171,7 +173,7 @@ func (gc *gpgv1Client) GetSecretKeyDetails(keyid uint64) ([]byte, bool, error) {
 
 // runGPGGetOutput runs the GPG commandline and returns stdout as byte array
 // and any stderr in the error
-func runGPGGetOutput(cmd *exec.Cmd) ([]byte, error){
+func runGPGGetOutput(cmd *exec.Cmd) ([]byte, error) {
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, err
