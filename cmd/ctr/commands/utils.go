@@ -20,6 +20,7 @@ import (
 	"fmt"
 )
 
+// IntToInt32Array converts an array of int's to int32's
 func IntToInt32Array(in []int) []int32 {
 	var ret []int32
 
@@ -29,6 +30,8 @@ func IntToInt32Array(in []int) []int32 {
 	return ret
 }
 
+// Uint64ToStringArray converts an array of uint64's to an array of strings
+// by applying a format string to each uint64
 func Uint64ToStringArray(format string, in []uint64) []string {
 	var ret []string
 
