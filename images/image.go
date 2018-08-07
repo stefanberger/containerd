@@ -689,23 +689,12 @@ func cryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descripto
 	}
 
 	if modified && len(newLayers) > 0 {
-		// TODO: Hack to work with docker registry since it still expects the mediatype for manifest
-		// REF: https://github.com/moby/buildkit/blob/master/exporter/containerimage/writer.go#L83-L100
-		newManifest := struct {
-			// MediaType is reserved in the OCI spec but
-			// excluded from go types.
-			MediaType string `json:"mediaType,omitempty"`
-
-			ocispec.Manifest
-		}{
-			MediaType: MediaTypeDockerSchema2Manifest,
-			Manifest: ocispec.Manifest{
-				Versioned: specs.Versioned{
-					SchemaVersion: 2,
-				},
-				Config: config,
-				Layers: newLayers,
+		newManifest := ocispec.Manifest{
+			Versioned: specs.Versioned{
+				SchemaVersion: 2,
 			},
+			Config: config,
+			Layers: newLayers,
 		}
 
 		mb, err := json.MarshalIndent(newManifest, "", "   ")
@@ -714,7 +703,7 @@ func cryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descripto
 		}
 
 		newDesc := ocispec.Descriptor{
-			MediaType: MediaTypeDockerSchema2Manifest,
+			MediaType: ocispec.MediaTypeImageManifest,
 			Size:      int64(len(mb)),
 			Digest:    digest.Canonical.FromBytes(mb),
 			Platform:  desc.Platform,
@@ -847,8 +836,8 @@ func GetImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descr
 // as additional parameter
 func getImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descriptor, lf *LayerFilter, layerNum int32, platform string) ([]LayerInfo, error) {
 	var (
-		lis      []LayerInfo
-		tmp      []LayerInfo
+		lis []LayerInfo
+		tmp []LayerInfo
 	)
 
 	switch desc.MediaType {
@@ -863,7 +852,7 @@ func getImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descr
 		}
 		if err != nil {
 			if errdefs.IsNotFound(err) {
-				return[]LayerInfo{}, nil
+				return []LayerInfo{}, nil
 			}
 			return []LayerInfo{}, err
 		}
