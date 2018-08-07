@@ -121,7 +121,7 @@ func addRecipientsToKeys(keys [][]byte, recipients openpgp.EntityList, symKey []
 		}
 		// already part of the wrapped keys ?
 		found := false
-		for _, v :=  range keyIds {
+		for _, v := range keyIds {
 			if v == pkey.PublicKey.KeyId {
 				found = true
 				break
@@ -223,37 +223,6 @@ func encryptionKey(e *openpgp.Entity, now time.Time) (openpgp.Key, bool) {
 	}
 
 	// This Entity appears to be signing only.
-	return openpgp.Key{}, false
-}
-
-// signingKey return the best candidate Key for signing a message with this
-// Entity.
-func signingKey(e *openpgp.Entity, now time.Time) (openpgp.Key, bool) {
-	candidateSubkey := -1
-
-	for i, subkey := range e.Subkeys {
-		if subkey.Sig.FlagsValid &&
-			subkey.Sig.FlagSign &&
-			subkey.PublicKey.PubKeyAlgo.CanSign() &&
-			!subkey.Sig.KeyExpired(now) {
-			candidateSubkey = i
-			break
-		}
-	}
-
-	if candidateSubkey != -1 {
-		subkey := e.Subkeys[candidateSubkey]
-		return openpgp.Key{e, subkey.PublicKey, subkey.PrivateKey, subkey.Sig}, true
-	}
-
-	// If we have no candidate subkey then we assume that it's ok to sign
-	// with the primary key.
-	i := primaryIdentity(e)
-	if !i.SelfSignature.FlagsValid || i.SelfSignature.FlagSign &&
-		!i.SelfSignature.KeyExpired(now) {
-		return openpgp.Key{e, e.PrimaryKey, e.PrivateKey, i.SelfSignature}, true
-	}
-
 	return openpgp.Key{}, false
 }
 
