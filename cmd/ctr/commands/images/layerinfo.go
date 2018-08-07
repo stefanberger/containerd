@@ -82,7 +82,7 @@ var layerinfoCommand = cli.Command{
 			for _, keyid := range keyIds {
 				array = append(array, "0x"+strconv.FormatUint(keyid, 16))
 			}
-			fmt.Fprintf(w, "%d\t%s\t%s\t%d\t%s\t%s\t\n", layer.Id, layer.Digest, layer.Platform, layer.FileSize, layer.Encryption, strings.Join(array, ", "))
+			fmt.Fprintf(w, "%d\t%s\t%s\t%d\t%s\t%s\t\n", layer.ID, layer.Digest, layer.Platform, layer.FileSize, layer.Encryption, strings.Join(array, ", "))
 		}
 		w.Flush()
 		return nil
