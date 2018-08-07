@@ -788,20 +788,9 @@ func cryptManifestList(ctx context.Context, cs content.Store, desc ocispec.Descr
 	if modified {
 		// we need to update the index
 
-		// TODO: Hack to work with docker registry since it still expects the mediatype for index
-		// REF: https://github.com/moby/buildkit/blob/master/exporter/containerimage/writer.go#L83-L100
-		newIndex := struct {
-			// MediaType is reserved in the OCI spec but
-			// excluded from go types.
-			MediaType string `json:"mediaType,omitempty"`
-
-			ocispec.Index
-		}{
-			MediaType: MediaTypeDockerSchema2ManifestList,
-			Index: ocispec.Index{
-				Versioned: index.Versioned,
-				Manifests: newManifests,
-			},
+		newIndex := ocispec.Index{
+			Versioned: index.Versioned,
+			Manifests: newManifests,
 		}
 
 		mb, err := json.MarshalIndent(newIndex, "", "   ")
@@ -810,7 +799,7 @@ func cryptManifestList(ctx context.Context, cs content.Store, desc ocispec.Descr
 		}
 
 		newDesc := ocispec.Descriptor{
-			MediaType: desc.MediaType,
+			MediaType: ocispec.MediaTypeImageIndex,
 			Size:      int64(len(mb)),
 			Digest:    digest.Canonical.FromBytes(mb),
 		}
@@ -859,7 +848,7 @@ func getImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descr
 	)
 
 	switch desc.MediaType {
-	case MediaTypeDockerSchema2ManifestList,
+	case MediaTypeDockerSchema2ManifestList, ocispec.MediaTypeImageIndex,
 		MediaTypeDockerSchema2Manifest, ocispec.MediaTypeImageManifest:
 		children, err := Children(ctx, cs, desc)
 		if desc.Platform != nil {
