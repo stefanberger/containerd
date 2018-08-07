@@ -395,8 +395,6 @@ ParsePackets:
 		return nil, errors.Wrapf(errdefs.ErrNotFound, "No symmetrically encrypted data found.")
 	}
 
-	fmt.Printf("Symkey :%v", symKey)
-
 	decrypted, err := se.Decrypt(symKeyCipher, symKey)
 	if err != nil {
 		return nil, errors.Wrapf(err, "Decrypting layer with symmetric key failed")
