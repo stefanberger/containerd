@@ -45,7 +45,7 @@ type EncryptConfig struct {
 
 const (
 	// OperationAddRecipients instructs to add a recipient
-	OperationAddRecipients    = int32(iota)
+	OperationAddRecipients = int32(iota)
 	// OperationRemoveRecipients instructs to remove a recipient
 	OperationRemoveRecipients = int32(iota)
 )
