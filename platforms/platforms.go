@@ -240,6 +240,7 @@ func Parse(specifier string) (specs.Platform, error) {
 	return specs.Platform{}, errors.Wrapf(errdefs.ErrInvalidArgument, "%q: cannot parse platform specifier", specifier)
 }
 
+// ParseArray parses an array of specifieds and converts them into an array of specs.Platform
 func ParseArray(specifiers []string) ([]specs.Platform, error) {
 	var speclist []specs.Platform
 
