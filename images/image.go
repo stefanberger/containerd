@@ -60,9 +60,10 @@ type Image struct {
 	CreatedAt, UpdatedAt time.Time
 }
 
+// LayerInfo holds information about an image layer
 type LayerInfo struct {
 	// The Id of the layer starting at 0
-	Id uint32
+	ID uint32
 	// Array of wrapped keys from which KeyIds can be derived
 	WrappedKeys [][]byte
 	// The Digest of the layer
@@ -75,6 +76,7 @@ type LayerInfo struct {
 	Platform string
 }
 
+// LayerFilter holds criteria for which layer to select
 type LayerFilter struct {
 	// IDs of layers to touch; may be negative number to start from topmost layer
 	// empty array means 'all layers'
@@ -553,9 +555,8 @@ func getWrappedKeys(desc ocispec.Descriptor) ([][]byte, error) {
 			return nil, err
 		}
 		return keys, nil
-	} else {
-		return make([][]byte, 0), nil
 	}
+	return make([][]byte, 0), nil
 }
 
 // assembleEncryptedMessage takes in the openpgp encrypted body packets and
@@ -586,10 +587,10 @@ func encodeWrappedKeys(keys [][]byte) string {
 // decodeWrappedKeys decodes wrapped openpgp keys from string readable ','
 // separated base64 strings to their byte values
 func decodeWrappedKeys(keys string) ([][]byte, error) {
-	kSplit := strings.Split(keys, ",")
-	keyBytes := make([][]byte, 0, len(kSplit))
+	keySplit := strings.Split(keys, ",")
+	keyBytes := make([][]byte, 0, len(keySplit))
 
-	for _, v := range kSplit {
+	for _, v := range keySplit {
 		data, err := base64.StdEncoding.DecodeString(v)
 		if err != nil {
 			return nil, err
@@ -836,6 +837,8 @@ func cryptManifestList(ctx context.Context, cs content.Store, desc ocispec.Descr
 	return desc, false, nil
 }
 
+// CryptImage is the dispatcher to encrypt/decrypt an image; it accepts either an OCI descriptor
+// representing a manifest list or a single manifest
 func CryptImage(ctx context.Context, cs content.Store, desc ocispec.Descriptor, cc *CryptoConfig, lf *LayerFilter, encrypt bool) (ocispec.Descriptor, bool, error) {
 	switch desc.MediaType {
 	case MediaTypeDockerSchema2ManifestList:
@@ -847,14 +850,14 @@ func CryptImage(ctx context.Context, cs content.Store, desc ocispec.Descriptor, 
 	}
 }
 
-// Get the image key Ids necessary for decrypting an image
+// GetImageLayerInfo gets the image key Ids necessary for decrypting an image
 // We determine the KeyIds starting with  the given OCI Decriptor, recursing to lower-level descriptors
 // until we get them from the layer descriptors
 func GetImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descriptor, lf *LayerFilter, layerNum int32) ([]LayerInfo, error) {
 	return getImageLayerInfo(ctx, cs, desc, lf, layerNum, platforms.Default())
 }
 
-// the recursive version of GetImageLayerInfo that takes the default platform
+// getImageLayerInfo is the recursive version of GetImageLayerInfo that takes the platform
 // as additional parameter
 func getImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descriptor, lf *LayerFilter, layerNum int32, platform string) ([]LayerInfo, error) {
 	var (
@@ -905,7 +908,7 @@ func getImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descr
 			Digest:      desc.Digest.String(),
 			Encryption:  "",
 			FileSize:    desc.Size,
-			Id:          uint32(layerNum),
+			ID:          uint32(layerNum),
 			Platform:    platform,
 		}
 		lis = append(lis, li)
@@ -920,7 +923,7 @@ func getImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descr
 			Digest:      desc.Digest.String(),
 			Encryption:  "pgp",
 			FileSize:    desc.Size,
-			Id:          uint32(layerNum),
+			ID:          uint32(layerNum),
 			Platform:    platform,
 		}
 		lis = append(lis, li)
