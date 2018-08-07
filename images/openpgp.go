@@ -12,8 +12,9 @@
    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
    See the License for the specific language governing permissions and
    limitations under the License.
+*/
 
-
+/*
    Some parts of this file were copied from golang's openpgp implementation
    which is under the following license:
 
