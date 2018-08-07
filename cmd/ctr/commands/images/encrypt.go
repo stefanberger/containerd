@@ -105,15 +105,15 @@ var encryptCommand = cli.Command{
 			return err
 		}
 
-		operation := images.OPERATION_ADD_RECIPIENTS
+		operation := images.OperationAddRecipients
 		if context.Bool("remove") {
-			operation = images.OPERATION_REMOVE_RECIPIENTS
+			operation = images.OperationRemoveRecipients
 		}
 
 		layers32 := commands.IntToInt32Array(context.IntSlice("layer"))
 
 		layerSymKeyMap := make(map[string]images.DecryptKeyData)
-		if operation == images.OPERATION_ADD_RECIPIENTS {
+		if operation == images.OperationAddRecipients {
 			layerInfos, err := client.ImageService().GetImageLayerInfo(ctx, local, layers32, context.StringSlice("platform"))
 			if err != nil {
 				return err
