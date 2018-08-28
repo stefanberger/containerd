@@ -66,7 +66,7 @@ func (c *Client) Pull(ctx context.Context, ref string, opts ...RemoteOpt) (Image
 		return nil, err
 	}
 
-	i := NewImageWithPlatform(c, img, pullCtx.PlatformMatcher)
+	i := NewImageWithPlatform(c, img, pullCtx.PlatformMatcher, nil)
 
 	if pullCtx.Unpack {
 		if err := i.Unpack(ctx, pullCtx.Snapshotter); err != nil {
