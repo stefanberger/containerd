@@ -53,6 +53,13 @@ command. As part of this process, we do the following:
 			Name:  "all-platforms",
 			Usage: "pull content from all platforms",
 		},
+		cli.StringFlag{
+			Name:  "gpg-homedir",
+			Usage: "The GPG homedir to use; by default gpg uses ~/.gnupg",
+		}, cli.StringFlag{
+			Name:  "gpg-version",
+			Usage: "The GPG version (\"v1\" or \"v2\"), default will make an educated guess",
+		},
 	),
 	Action: func(context *cli.Context) error {
 		var (
@@ -106,9 +113,25 @@ command. As part of this process, we do the following:
 			p = append(p, platforms.DefaultSpec())
 		}
 
+		// Create gpg client
+		gpgVersion := context.String("gpg-version")
+		v := new(images.GPGVersion)
+		switch gpgVersion {
+		case "v1":
+			*v = images.GPGv1
+		case "v2":
+			*v = images.GPGv2
+		default:
+			v = nil
+		}
+		gpgClient, err := images.NewGPGClient(v, context.String("gpg-homedir"))
+		if err != nil {
+			return errors.New("Unable to create GPG Client")
+		}
+
 		for _, platform := range p {
 			fmt.Printf("unpacking %s %s...\n", platforms.Format(platform), img.Target.Digest)
-			i := containerd.NewImageWithPlatform(client, img, platforms.Only(platform))
+			i := containerd.NewImageWithPlatform(client, img, platforms.Only(platform), gpgClient)
 			err = i.Unpack(ctx, context.String("snapshotter"))
 			if err != nil {
 				return err
