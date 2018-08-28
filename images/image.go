@@ -836,7 +836,7 @@ func CryptImage(ctx context.Context, cs content.Store, desc ocispec.Descriptor, 
 // We determine the KeyIds starting with  the given OCI Decriptor, recursing to lower-level descriptors
 // until we get them from the layer descriptors
 func GetImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descriptor, lf *LayerFilter, layerNum int32) ([]LayerInfo, error) {
-	return getImageLayerInfo(ctx, cs, desc, lf, layerNum, platforms.Default())
+	return getImageLayerInfo(ctx, cs, desc, lf, layerNum, platforms.DefaultString())
 }
 
 // getImageLayerInfo is the recursive version of GetImageLayerInfo that takes the platform
