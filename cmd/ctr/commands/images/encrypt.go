@@ -118,7 +118,7 @@ var encryptCommand = cli.Command{
 			if err != nil {
 				return err
 			}
-			layerSymKeyMap, err = getSymmetricKeys(layerInfos, gpgClient)
+			layerSymKeyMap, err = images.GetSymmetricKeys(layerInfos, gpgClient)
 			if err != nil {
 				return err
 			}

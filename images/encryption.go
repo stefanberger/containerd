@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/mail"
+	"os"
 	"strings"
 
 	"github.com/containerd/containerd/errdefs"
@@ -28,6 +29,7 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/crypto/openpgp"
 	"golang.org/x/crypto/openpgp/packet"
+	"golang.org/x/crypto/ssh/terminal"
 )
 
 // EncryptConfig is the container image PGP encryption configuration holding
@@ -190,4 +192,83 @@ func Decrypt(dc *DecryptConfig, encBody []byte, desc ocispec.Descriptor, layerNu
 		return []byte{}, err
 	}
 	return ioutil.ReadAll(md.UnverifiedBody)
+}
+
+// GetSymmetricKeys walks the list of layerInfos and tries to decrypt the
+// wrapped symmetric keys. For this it determines which private keys are on
+// this system and prompts for the passwords for those that are available.
+// If we do not find a private key on the system for getting to the symmetric
+// key of a layer then an error is generated. Otherwise the wrapped symmetric
+// key is decrypted using the private key and added to a map that describes
+// the layer by platform name and layer number as key and the symmetric key
+// data as value
+func GetSymmetricKeys(layerInfos []LayerInfo, gpgClient GPGClient) (map[string]DecryptKeyData, error) {
+	type PrivKeyData struct {
+		KeyData         []byte
+		KeyDataPassword []byte
+	}
+	var pkd PrivKeyData
+	keyIDPasswordMap := make(map[uint64]PrivKeyData)
+	layerSymkeyMap := make(map[string]DecryptKeyData)
+
+	// we need to decrypt one symmetric key per encrypted layer per platform
+	for _, layerInfo := range layerInfos {
+
+		keyIds, err := WrappedKeysToKeyIds(layerInfo.WrappedKeys)
+		if err != nil {
+			return layerSymkeyMap, err
+		}
+
+		found := false
+		for _, keyid := range keyIds {
+			// do we have this key?
+			keyinfo, haveKey, _ := gpgClient.GetSecretKeyDetails(keyid)
+			// this may fail if the key is not here; we ignore the error
+			if !haveKey {
+				// key not on this system
+				continue
+			}
+
+			var ok bool
+			if pkd, ok = keyIDPasswordMap[keyid]; !ok {
+				fmt.Printf("Passphrase required for Key id 0x%x: \n%v", keyid, string(keyinfo))
+				fmt.Printf("Enter passphrase for key with Id 0x%x: ", keyid)
+
+				password, err := terminal.ReadPassword(int(os.Stdin.Fd()))
+				fmt.Printf("\n")
+				if err != nil {
+					return layerSymkeyMap, err
+				}
+				keydata, err := gpgClient.GetGPGPrivateKey(keyid, string(password))
+				if err != nil {
+					return layerSymkeyMap, err
+				}
+				pkd = PrivKeyData{
+					KeyData:         keydata,
+					KeyDataPassword: password,
+				}
+				keyIDPasswordMap[keyid] = pkd
+			}
+
+			symKeyData, symKeyCipher, err := DecryptSymmetricKey(layerInfo.WrappedKeys, keyid, pkd.KeyData, pkd.KeyDataPassword, nil)
+			if err != nil {
+				return layerSymkeyMap, err
+			}
+
+			index := fmt.Sprintf("%s:%d", layerInfo.Platform, layerInfo.ID)
+			layerSymkeyMap[index] = DecryptKeyData{
+				SymKeyData:   symKeyData,
+				SymKeyCipher: uint8(symKeyCipher),
+			}
+			found = true
+			break
+		}
+		if !found && len(layerInfo.WrappedKeys) > 0 {
+			keyIds, _ := WrappedKeysToKeyIds(layerInfo.WrappedKeys)
+			ids := Uint64ToStringArray("0x%x", keyIds)
+
+			return layerSymkeyMap, errors.Wrapf(errdefs.ErrNotFound, "Missing key for decryption of layer %d of %s. Need one of the following keys: %s", layerInfo.ID, layerInfo.Platform, strings.Join(ids, ", "))
+		}
+	}
+	return layerSymkeyMap, nil
 }
