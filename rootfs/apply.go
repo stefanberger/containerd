@@ -144,6 +144,8 @@ func applyLayers(ctx context.Context, layers []Layer, chain []digest.Digest, sn 
 		}
 	}()
 
+	fmt.Printf("rootfs/apply.go::applyLayers(): layer.Blob.MediaType = %s\n", layer.Blob.MediaType)
+	fmt.Printf("rootfs/apply.go::applyLayers(): layer.Blob.Digest = %s\n", layer.Blob.Digest)
 	diff, err = a.Apply(ctx, layer.Blob, mounts)
 	if err != nil {
 		err = errors.Wrapf(err, "failed to extract layer %s", layer.Diff.Digest)
