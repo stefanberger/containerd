@@ -14,14 +14,19 @@
    limitations under the License.
 */
 
-package commands
+package images
 
-// IntToInt32Array converts an array of int's to int32's
-func IntToInt32Array(in []int) []int32 {
-	var ret []int32
+import (
+	"fmt"
+)
+
+// Uint64ToStringArray converts an array of uint64's to an array of strings
+// by applying a format string to each uint64
+func Uint64ToStringArray(format string, in []uint64) []string {
+	var ret []string
 
 	for _, v := range in {
-		ret = append(ret, int32(v))
+		ret = append(ret, fmt.Sprintf(format, v))
 	}
 	return ret
 }
