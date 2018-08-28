@@ -18,8 +18,8 @@ package images
 
 import (
 	"fmt"
+	"os"
 	"strings"
-	"syscall"
 
 	"github.com/containerd/containerd/cmd/ctr/commands"
 	"github.com/containerd/containerd/errdefs"
@@ -163,7 +163,7 @@ func getSymmetricKeys(layerInfos []images.LayerInfo, gpgClient images.GPGClient)
 				fmt.Printf("Passphrase required for Key id 0x%x: \n%v", keyid, string(keyinfo))
 				fmt.Printf("Enter passphrase for key with Id 0x%x: ", keyid)
 
-				password, err := terminal.ReadPassword(syscall.Stdin)
+				password, err := terminal.ReadPassword(int(os.Stdin.Fd()))
 				fmt.Printf("\n")
 				if err != nil {
 					return layerSymkeyMap, err
