@@ -30,6 +30,7 @@ import (
 	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/log"
 	"github.com/containerd/containerd/platforms"
+	"github.com/containerd/containerd/rootfs"
 	digest "github.com/opencontainers/go-digest"
 	specs "github.com/opencontainers/image-spec/specs-go"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
@@ -914,4 +915,76 @@ func getImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descr
 	}
 
 	return lis, nil
+}
+
+// DecryptLayers decrypts the given array of rootfs.Layer and returns a an array of
+// rootfs.Layer with the OCI descriptors adapted to point to the decrypted layers.
+// This function will determine the necessary key(s) to decrypt the image and search
+// for them using the gpg client
+func DecryptLayers(ctx context.Context, cs content.Store, layers []rootfs.Layer, gpgClient GPGClient) ([]rootfs.Layer, error) {
+	var (
+		newLayers      []rootfs.Layer
+		layerInfos     []LayerInfo
+		layerSymKeyMap map[string]DecryptKeyData
+		err            error
+	)
+
+	// in the 1st pass through the layers we gather required keys
+	isEncrypted := false
+	for id, layer := range layers {
+		layerInfo := LayerInfo{
+			ID:       uint32(id),
+			Digest:   layer.Blob.Digest.String(),
+			Platform: platforms.DefaultString(),
+		}
+		switch layer.Blob.MediaType {
+		case MediaTypeDockerSchema2LayerPGP, MediaTypeDockerSchema2LayerGzipPGP:
+			isEncrypted = true
+			layerInfo.Encryption = "pgp"
+
+			layerInfo.WrappedKeys, err = getWrappedKeys(layer.Blob)
+			if err != nil {
+				return []rootfs.Layer{}, err
+			}
+		}
+		layerInfos = append(layerInfos, layerInfo)
+	}
+
+	if !isEncrypted {
+		// nothing to do here
+		return layers, nil
+	}
+
+	if gpgClient == nil {
+		// in K8s case we may get the private key(s) and password(s) via ctx
+		return []rootfs.Layer{}, errors.Wrapf(errdefs.ErrNotImplemented, "Need a gpgClient to decrypt the image\n")
+	}
+
+	// in ctr case we may just want to consult gpg/gpg2 for the key(s)
+	layerSymKeyMap, err = GetSymmetricKeys(layerInfos, gpgClient)
+	if err != nil {
+		return []rootfs.Layer{}, err
+	}
+	cc := &CryptoConfig{
+		Dc: &DecryptConfig{
+			LayerSymKeyMap: layerSymKeyMap,
+		},
+	}
+	thisPlatform := platforms.DefaultSpec()
+
+	// in the 2nd pass we decrypt the layers
+	for i, layer := range layers {
+		if layerInfos[i].Encryption != "" {
+			// need to decrypt this layer
+			newDesc, err := cryptLayer(ctx, cs, layer.Blob, cc, int32(i), &thisPlatform, false)
+			if err != nil {
+				return []rootfs.Layer{}, err
+			}
+			fmt.Printf("encrypt:%s -> decrypted:%s\n", layer.Blob.Digest, newDesc.Digest)
+			layer.Blob = newDesc
+		}
+		newLayers = append(newLayers, layer)
+	}
+
+	return newLayers, nil
 }

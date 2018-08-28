@@ -63,19 +63,21 @@ func NewImage(client *Client, i images.Image) Image {
 }
 
 // NewImageWithPlatform returns a client image object from the metadata image
-func NewImageWithPlatform(client *Client, i images.Image, platform platforms.MatchComparer) Image {
+func NewImageWithPlatform(client *Client, i images.Image, platform platforms.MatchComparer, gpgClient images.GPGClient) Image {
 	return &image{
-		client:   client,
-		i:        i,
-		platform: platform,
+		client:    client,
+		i:         i,
+		platform:  platform,
+		gpgClient: gpgClient,
 	}
 }
 
 type image struct {
 	client *Client
 
-	i        images.Image
-	platform platforms.MatchComparer
+	i         images.Image
+	platform  platforms.MatchComparer
+	gpgClient images.GPGClient
 }
 
 func (i *image) Name() string {
@@ -129,6 +131,10 @@ func (i *image) Unpack(ctx context.Context, snapshotterName string) error {
 	defer done(ctx)
 
 	layers, err := i.getLayers(ctx, i.platform)
+	if err != nil {
+		return err
+	}
+	layers, err = images.DecryptLayers(ctx, i.ContentStore(), layers, i.gpgClient)
 	if err != nil {
 		return err
 	}
