@@ -53,6 +53,8 @@ type Image interface {
 	ContentStore() content.Store
 	// SetGPGClient sets the GPG client to use when decrypting the image
 	SetGPGClient(gpgClient images.GPGClient)
+	// SetGPGVault sets the GPGVault to use when decrypting the image
+	SetGPGVault(gpgVault images.GPGVault)
 }
 
 var _ = (Image)(&image{})
@@ -69,9 +71,9 @@ func NewImage(client *Client, i images.Image) Image {
 // NewImageWithPlatform returns a client image object from the metadata image
 func NewImageWithPlatform(client *Client, i images.Image, platform platforms.MatchComparer) Image {
 	return &image{
-		client:    client,
-		i:         i,
-		platform:  platform,
+		client:   client,
+		i:        i,
+		platform: platform,
 	}
 }
 
@@ -81,6 +83,7 @@ type image struct {
 	i         images.Image
 	platform  platforms.MatchComparer
 	gpgClient images.GPGClient
+	gpgVault  images.GPGVault
 }
 
 func (i *image) Name() string {
@@ -141,7 +144,7 @@ func (i *image) Unpack(ctx context.Context, snapshotterName string) error {
 	if err != nil {
 		return err
 	}
-	layers, err = images.DecryptLayers(ctx, i.ContentStore(), layers, i.gpgClient)
+	layers, err = images.DecryptLayers(ctx, i.ContentStore(), layers, i.gpgClient, i.gpgVault)
 	if err != nil {
 		return err
 	}
@@ -230,3 +233,6 @@ func (i *image) SetGPGClient(gpgClient images.GPGClient) {
 	i.gpgClient = gpgClient
 }
 
+func (i *image) SetGPGVault(gpgVault images.GPGVault) {
+	i.gpgVault = gpgVault
+}

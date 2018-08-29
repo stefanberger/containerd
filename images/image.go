@@ -928,7 +928,7 @@ func getImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descr
 // rootfs.Layer with the OCI descriptors adapted to point to the decrypted layers.
 // This function will determine the necessary key(s) to decrypt the image and search
 // for them using the gpg client
-func DecryptLayers(ctx context.Context, cs content.Store, layers []rootfs.Layer, gpgClient GPGClient) ([]rootfs.Layer, error) {
+func DecryptLayers(ctx context.Context, cs content.Store, layers []rootfs.Layer, gpgClient GPGClient, gpgVault GPGVault) ([]rootfs.Layer, error) {
 	var (
 		newLayers      []rootfs.Layer
 		layerInfos     []LayerInfo
@@ -968,7 +968,7 @@ func DecryptLayers(ctx context.Context, cs content.Store, layers []rootfs.Layer,
 	}
 
 	// in ctr case we may just want to consult gpg/gpg2 for the key(s)
-	layerSymKeyMap, err = GetSymmetricKeys(layerInfos, gpgClient)
+	layerSymKeyMap, err = GetSymmetricKeys(layerInfos, gpgClient, gpgVault)
 	if err != nil {
 		return []rootfs.Layer{}, err
 	}

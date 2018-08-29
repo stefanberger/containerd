@@ -60,6 +60,9 @@ var encryptCommand = cli.Command{
 	}, cli.StringFlag{
 		Name:  "gpg-version",
 		Usage: "The GPG version (\"v1\" or \"v2\"), default will make an educated guess",
+	}, cli.StringSliceFlag{
+		Name:  "keyring",
+		Usage: "A secret keyring's filename",
 	}),
 	Action: func(context *cli.Context) error {
 		local := context.Args().First()
@@ -105,6 +108,12 @@ var encryptCommand = cli.Command{
 			return err
 		}
 
+		gpgVault := images.NewGPGVault()
+		err = gpgVault.AddSecretKeyRingFiles(context.StringSlice("keyring"))
+		if err != nil {
+			return err
+		}
+
 		operation := images.OperationAddRecipients
 		if context.Bool("remove") {
 			operation = images.OperationRemoveRecipients
@@ -118,7 +127,7 @@ var encryptCommand = cli.Command{
 			if err != nil {
 				return err
 			}
-			layerSymKeyMap, err = images.GetSymmetricKeys(layerInfos, gpgClient)
+			layerSymKeyMap, err = images.GetSymmetricKeys(layerInfos, gpgClient, gpgVault)
 			if err != nil {
 				return err
 			}
