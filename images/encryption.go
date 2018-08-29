@@ -195,14 +195,14 @@ func Decrypt(dc *DecryptConfig, encBody []byte, desc ocispec.Descriptor, layerNu
 }
 
 // GetSymmetricKeys walks the list of layerInfos and tries to decrypt the
-// wrapped symmetric keys. For this it determines which private keys are on
-// this system and prompts for the passwords for those that are available.
-// If we do not find a private key on the system for getting to the symmetric
-// key of a layer then an error is generated. Otherwise the wrapped symmetric
-// key is decrypted using the private key and added to a map that describes
-// the layer by platform name and layer number as key and the symmetric key
-// data as value
-func GetSymmetricKeys(layerInfos []LayerInfo, gpgClient GPGClient) (map[string]DecryptKeyData, error) {
+// wrapped symmetric keys. For this it determines whether private keys are
+// in the GPGVault or on this system and prompts for the passwords for those
+// that are available. If we do not find a private key on the system for
+// getting to the symmetric key of a layer then an error is generated.
+// Otherwise the wrapped symmetric key is decrypted using the private key and
+// added to a map that describes the layer by platform name and layer number
+// as key and the symmetric key data as value.
+func GetSymmetricKeys(layerInfos []LayerInfo, gpgClient GPGClient, gpgVault GPGVault) (map[string]DecryptKeyData, error) {
 	type PrivKeyData struct {
 		KeyData         []byte
 		KeyDataPassword []byte
@@ -221,35 +221,44 @@ func GetSymmetricKeys(layerInfos []LayerInfo, gpgClient GPGClient) (map[string]D
 
 		found := false
 		for _, keyid := range keyIds {
-			// do we have this key?
-			keyinfo, haveKey, _ := gpgClient.GetSecretKeyDetails(keyid)
-			// this may fail if the key is not here; we ignore the error
-			if !haveKey {
-				// key not on this system
-				continue
-			}
-
-			var ok bool
-			if pkd, ok = keyIDPasswordMap[keyid]; !ok {
-				fmt.Printf("Passphrase required for Key id 0x%x: \n%v", keyid, string(keyinfo))
-				fmt.Printf("Enter passphrase for key with Id 0x%x: ", keyid)
-
-				password, err := terminal.ReadPassword(int(os.Stdin.Fd()))
-				fmt.Printf("\n")
-				if err != nil {
-					return layerSymkeyMap, err
-				}
-				keydata, err := gpgClient.GetGPGPrivateKey(keyid, string(password))
-				if err != nil {
-					return layerSymkeyMap, err
-				}
+			// do we have this key? -- first check the vault
+			_, keydata := gpgVault.GetGPGPrivateKey(keyid)
+			if len(keydata) > 0 {
 				pkd = PrivKeyData{
 					KeyData:         keydata,
-					KeyDataPassword: password,
+					KeyDataPassword: nil, // password not supported in this case
 				}
 				keyIDPasswordMap[keyid] = pkd
-			}
+			} else {
+				// check the local system's gpg installation
+				keyinfo, haveKey, _ := gpgClient.GetSecretKeyDetails(keyid)
+				// this may fail if the key is not here; we ignore the error
+				if !haveKey {
+					// key not on this system
+					continue
+				}
 
+				var ok bool
+				if pkd, ok = keyIDPasswordMap[keyid]; !ok {
+					fmt.Printf("Passphrase required for Key id 0x%x: \n%v", keyid, string(keyinfo))
+					fmt.Printf("Enter passphrase for key with Id 0x%x: ", keyid)
+
+					password, err := terminal.ReadPassword(int(os.Stdin.Fd()))
+					fmt.Printf("\n")
+					if err != nil {
+						return layerSymkeyMap, err
+					}
+					keydata, err := gpgClient.GetGPGPrivateKey(keyid, string(password))
+					if err != nil {
+						return layerSymkeyMap, err
+					}
+					pkd = PrivKeyData{
+						KeyData:         keydata,
+						KeyDataPassword: password,
+					}
+					keyIDPasswordMap[keyid] = pkd
+				}
+			}
 			symKeyData, symKeyCipher, err := DecryptSymmetricKey(layerInfo.WrappedKeys, keyid, pkd.KeyData, pkd.KeyDataPassword, nil)
 			if err != nil {
 				return layerSymkeyMap, err
