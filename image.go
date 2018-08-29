@@ -51,6 +51,8 @@ type Image interface {
 	IsUnpacked(context.Context, string) (bool, error)
 	// ContentStore provides a content store which contains image blob data
 	ContentStore() content.Store
+	// SetGPGClient sets the GPG client to use when decrypting the image
+	SetGPGClient(gpgClient images.GPGClient)
 }
 
 var _ = (Image)(&image{})
@@ -65,12 +67,11 @@ func NewImage(client *Client, i images.Image) Image {
 }
 
 // NewImageWithPlatform returns a client image object from the metadata image
-func NewImageWithPlatform(client *Client, i images.Image, platform platforms.MatchComparer, gpgClient images.GPGClient) Image {
+func NewImageWithPlatform(client *Client, i images.Image, platform platforms.MatchComparer) Image {
 	return &image{
 		client:    client,
 		i:         i,
 		platform:  platform,
-		gpgClient: gpgClient,
 	}
 }
 
@@ -228,3 +229,8 @@ func (i *image) getLayers(ctx context.Context, platform platforms.MatchComparer)
 func (i *image) ContentStore() content.Store {
 	return i.client.ContentStore()
 }
+
+func (i *image) SetGPGClient(gpgClient images.GPGClient) {
+	i.gpgClient = gpgClient
+}
+
