@@ -315,16 +315,13 @@ ParsePackets:
 	}
 	// decrypt them
 	decKeys := entityList.KeysByIdUsage(ek.KeyId, packet.KeyFlagEncryptCommunications)
+	decrypted := false
 	for _, k := range decKeys {
 		if k.PrivateKey.Encrypted {
 			if err := k.PrivateKey.Decrypt(keyDataPassword); err != nil {
 				return []byte{}, 0, errors.Wrapf(err, "passphrase invalid for private key")
 			}
 		}
-	}
-	decrypted := false
-
-	for _, k := range decKeys {
 		err = ek.Decrypt(k.PrivateKey, config)
 		if err == nil {
 			decrypted = true
