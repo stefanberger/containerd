@@ -272,9 +272,10 @@ ParsePackets:
 	return keyids, nil
 }
 
-// DecryptSymmetricKey decrypts a symmetric key from an array of wrapped keys. The public
-// key with the given keyid is attempted to be decrypted using the private key given
-// by keyData and keyDataPassword
+// DecryptSymmetricKey decrypts a symmetric key from an array of wrapped keys. The private
+// key with the given keyid is retrieved from the keyData byte array and decrypted using
+// the given keyDataPassword; the private key is then used to decrypt the wrapped symmetric
+// key
 func DecryptSymmetricKey(keys [][]byte, keyid uint64, keyData []byte, keyDataPassword []byte, config *packet.Config) ([]byte, packet.CipherFunction, error) {
 	kbytes := make([]byte, 0)
 	for _, k := range keys {
