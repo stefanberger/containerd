@@ -131,7 +131,8 @@ command. As part of this process, we do the following:
 
 		for _, platform := range p {
 			fmt.Printf("unpacking %s %s...\n", platforms.Format(platform), img.Target.Digest)
-			i := containerd.NewImageWithPlatform(client, img, platforms.Only(platform), gpgClient)
+			i := containerd.NewImageWithPlatform(client, img, platforms.Only(platform))
+			i.SetGPGClient(gpgClient)
 			err = i.Unpack(ctx, context.String("snapshotter"))
 			if err != nil {
 				return err
