@@ -831,7 +831,7 @@ func cryptManifestList(ctx context.Context, cs content.Store, desc ocispec.Descr
 // representing a manifest list or a single manifest
 func CryptImage(ctx context.Context, cs content.Store, desc ocispec.Descriptor, cc *CryptoConfig, lf *LayerFilter, encrypt bool) (ocispec.Descriptor, bool, error) {
 	switch desc.MediaType {
-	case MediaTypeDockerSchema2ManifestList:
+	case ocispec.MediaTypeImageIndex, MediaTypeDockerSchema2ManifestList:
 		return cryptManifestList(ctx, cs, desc, cc, lf, encrypt)
 	case ocispec.MediaTypeImageManifest, MediaTypeDockerSchema2Manifest:
 		return cryptManifest(ctx, cs, desc, cc, lf, encrypt)
