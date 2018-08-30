@@ -61,8 +61,8 @@ var encryptCommand = cli.Command{
 		Name:  "gpg-version",
 		Usage: "The GPG version (\"v1\" or \"v2\"), default will make an educated guess",
 	}, cli.StringSliceFlag{
-		Name:  "keyring",
-		Usage: "A secret keyring's filename",
+		Name:  "key",
+		Usage: "A secret key's filename; may be provided multiple times",
 	}),
 	Action: func(context *cli.Context) error {
 		local := context.Args().First()
@@ -109,7 +109,7 @@ var encryptCommand = cli.Command{
 		}
 
 		gpgVault := images.NewGPGVault()
-		err = gpgVault.AddSecretKeyRingFiles(context.StringSlice("keyring"))
+		err = gpgVault.AddSecretKeyRingFiles(context.StringSlice("key"))
 		if err != nil {
 			return err
 		}
