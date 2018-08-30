@@ -44,12 +44,12 @@ type gpgVault struct {
 
 // NewGPGVault creates an empty GPGVault
 func NewGPGVault() GPGVault {
-	return gpgVault{}
+	return &gpgVault{}
 }
 
 // AddSecretKeyRingData adds a secret keyring's to the gpgVault; the raw byte
 // array read from the file must be passed and will be parsed by this function
-func (g gpgVault) AddSecretKeyRingData(gpgSecretKeyRingData []byte) error {
+func (g *gpgVault) AddSecretKeyRingData(gpgSecretKeyRingData []byte) error {
 	// read the private keys
 	r := bytes.NewReader(gpgSecretKeyRingData)
 	entityList, err := openpgp.ReadKeyRing(r)
@@ -62,7 +62,7 @@ func (g gpgVault) AddSecretKeyRingData(gpgSecretKeyRingData []byte) error {
 }
 
 // AddSecretKeyRingFiles adds the secret key rings given their filenames
-func (g gpgVault) AddSecretKeyRingFiles(filenames []string) error {
+func (g *gpgVault) AddSecretKeyRingFiles(filenames []string) error {
 	for _, filename := range filenames {
 		gpgSecretKeyRingData, err := ioutil.ReadFile(filename)
 		if err != nil {
@@ -77,7 +77,7 @@ func (g gpgVault) AddSecretKeyRingFiles(filenames []string) error {
 }
 
 // GetGPGPrivateKey gets the bytes of a specified keyid, supplying a passphrase
-func (g gpgVault) GetGPGPrivateKey(keyid uint64) ([]openpgp.Key, []byte) {
+func (g *gpgVault) GetGPGPrivateKey(keyid uint64) ([]openpgp.Key, []byte) {
 	for i, el := range g.entityLists {
 		decKeys := el.KeysByIdUsage(keyid, packet.KeyFlagEncryptCommunications)
 		if len(decKeys) > 0 {
