@@ -60,8 +60,8 @@ command. As part of this process, we do the following:
 			Name:  "gpg-version",
 			Usage: "The GPG version (\"v1\" or \"v2\"), default will make an educated guess",
 		}, cli.StringSliceFlag{
-			Name:  "keyring",
-			Usage: "A secret keyring's filename",
+			Name:  "key",
+			Usage: "A secret key's filename; may be provided multiple times",
 		},
 	),
 	Action: func(context *cli.Context) error {
@@ -132,7 +132,7 @@ command. As part of this process, we do the following:
 			return errors.New("Unable to create GPG Client")
 		}
 		gpgVault := images.NewGPGVault()
-		err = gpgVault.AddSecretKeyRingFiles(context.StringSlice("keyring"))
+		err = gpgVault.AddSecretKeyRingFiles(context.StringSlice("key"))
 		if err != nil {
 			return err
 		}
