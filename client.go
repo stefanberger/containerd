@@ -43,6 +43,7 @@ import (
 	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/events"
 	"github.com/containerd/containerd/images"
+	"github.com/containerd/containerd/images/encryption"
 	"github.com/containerd/containerd/leases"
 	leasesproxy "github.com/containerd/containerd/leases/proxy"
 	"github.com/containerd/containerd/namespaces"
@@ -160,6 +161,7 @@ func NewWithConn(conn *grpc.ClientConn, opts ...ClientOpt) (*Client, error) {
 // Client is the client to interact with containerd and its various services
 // using a uniform interface
 type Client struct {
+	decryptionKey []byte
 	services
 	connMu    sync.Mutex
 	conn      *grpc.ClientConn
@@ -380,6 +382,9 @@ func (c *Client) Pull(ctx context.Context, ref string, opts ...RemoteOpt) (Image
 	i := NewImageWithPlatform(c, img, pullCtx.PlatformMatcher)
 
 	if pullCtx.Unpack {
+		gpgVault := encryption.NewGPGVault()
+		gpgVault.AddSecretKeyRingData(c.decryptionKey)
+		i.SetGPGVault(gpgVault)
 		if err := i.Unpack(ctx, pullCtx.Snapshotter); err != nil {
 			return nil, errors.Wrapf(err, "failed to unpack image on snapshotter %s", pullCtx.Snapshotter)
 		}

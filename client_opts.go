@@ -178,3 +178,11 @@ func WithImageHandler(h images.Handler) RemoteOpt {
 		return nil
 	}
 }
+
+// WithDecryptionKeys sets private keys in client struct
+func WithDecryptionKeys(decryptionKey []byte) RemoteOpt {
+	return func(client *Client, c *RemoteContext) error {
+		client.decryptionKey = decryptionKey
+		return nil
+	}
+}
