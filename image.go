@@ -139,6 +139,7 @@ func (i *image) Unpack(ctx context.Context, snapshotterName string) error {
 	if err != nil {
 		return err
 	}
+
 	layers, err = images.DecryptLayers(ctx, i.ContentStore(), layers, i.gpgClient, i.gpgVault)
 	if err != nil {
 		return err
