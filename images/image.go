@@ -483,7 +483,7 @@ func encryptLayer(cc *CryptoConfig, data []byte, desc ocispec.Descriptor, layerN
 	case MediaTypeDockerSchema2LayerPGP:
 		newDesc.MediaType = MediaTypeDockerSchema2LayerPGP
 	default:
-		return ocispec.Descriptor{}, []byte{}, errors.Wrapf(err, "Encryption: unsupporter layer MediaType: %s\n", desc.MediaType)
+		return ocispec.Descriptor{}, []byte{}, errors.Errorf("Encryption: unsupporter layer MediaType: %s\n", desc.MediaType)
 	}
 	return newDesc, p, nil
 }
@@ -508,7 +508,7 @@ func decryptLayer(cc *CryptoConfig, data []byte, desc ocispec.Descriptor, layerN
 	case MediaTypeDockerSchema2LayerPGP:
 		newDesc.MediaType = MediaTypeDockerSchema2Layer
 	default:
-		return ocispec.Descriptor{}, []byte{}, errors.Wrapf(err, "Decryption: unsupporter layer MediaType: %s\n", desc.MediaType)
+		return ocispec.Descriptor{}, []byte{}, errors.Errorf("Decryption: unsupporter layer MediaType: %s\n", desc.MediaType)
 	}
 	return newDesc, p, nil
 }
@@ -701,7 +701,7 @@ func cryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descripto
 			}
 			layerNum = layerNum + 1
 		default:
-			return ocispec.Descriptor{}, false, errors.Wrapf(err, "Bad/unhandled MediaType %s in encryptChildren\n", child.MediaType)
+			return ocispec.Descriptor{}, false, errors.Errorf("Bad/unhandled MediaType %s in encryptChildren\n", child.MediaType)
 		}
 	}
 
@@ -829,7 +829,7 @@ func CryptImage(ctx context.Context, cs content.Store, desc ocispec.Descriptor, 
 	case ocispec.MediaTypeImageManifest, MediaTypeDockerSchema2Manifest:
 		return cryptManifest(ctx, cs, desc, cc, lf, encrypt)
 	default:
-		return ocispec.Descriptor{}, false, errors.Wrapf(errdefs.ErrInvalidArgument, "CryptImage: Unhandled media type: %s", desc.MediaType)
+		return ocispec.Descriptor{}, false, errors.Errorf("CryptImage: Unhandled media type: %s", desc.MediaType)
 	}
 }
 
