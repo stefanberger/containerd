@@ -915,11 +915,6 @@ func DecryptLayers(ctx context.Context, cs content.Store, layers []rootfs.Layer,
 		return layers, nil
 	}
 
-	if gpgClient == nil {
-		// in K8s case we may get the private key(s) and password(s) via ctx
-		return []rootfs.Layer{}, errors.Wrapf(errdefs.ErrNotImplemented, "Need a gpgClient to decrypt the image\n")
-	}
-
 	// in ctr case we may just want to consult gpg/gpg2 for the key(s)
 	layerSymKeyMap, err = encryption.GetSymmetricKeys(layerInfos, gpgClient, gpgVault)
 	if err != nil {
