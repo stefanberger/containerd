@@ -222,14 +222,16 @@ func GetSymmetricKeys(layerInfos []LayerInfo, gpgClient GPGClient, gpgVault GPGV
 		found := false
 		for _, keyid := range keyIds {
 			// do we have this key? -- first check the vault
-			_, keydata := gpgVault.GetGPGPrivateKey(keyid)
-			if len(keydata) > 0 {
-				pkd = PrivKeyData{
-					KeyData:         keydata,
-					KeyDataPassword: nil, // password not supported in this case
+			if gpgVault != nil {
+				_, keydata := gpgVault.GetGPGPrivateKey(keyid)
+				if len(keydata) > 0 {
+					pkd = PrivKeyData{
+						KeyData:         keydata,
+						KeyDataPassword: nil, // password not supported in this case
+					}
+					keyIDPasswordMap[keyid] = pkd
 				}
-				keyIDPasswordMap[keyid] = pkd
-			} else {
+			} else if gpgClient != nil {
 				// check the local system's gpg installation
 				keyinfo, haveKey, _ := gpgClient.GetSecretKeyDetails(keyid)
 				// this may fail if the key is not here; we ignore the error
@@ -258,6 +260,8 @@ func GetSymmetricKeys(layerInfos []LayerInfo, gpgClient GPGClient, gpgVault GPGV
 					}
 					keyIDPasswordMap[keyid] = pkd
 				}
+			} else {
+				return layerSymkeyMap, errors.Wrapf(errdefs.ErrInvalidArgument, "No GPGVault or GPGClient passed.")
 			}
 			symKeyData, symKeyCipher, err := DecryptSymmetricKey(layerInfo.WrappedKeys, keyid, pkd.KeyData, pkd.KeyDataPassword, nil)
 			if err != nil {
