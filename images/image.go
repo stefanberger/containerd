@@ -482,6 +482,13 @@ func encryptLayer(cc *CryptoConfig, data []byte, desc ocispec.Descriptor, layerN
 		newDesc.MediaType = MediaTypeDockerSchema2LayerGzipPGP
 	case MediaTypeDockerSchema2LayerPGP:
 		newDesc.MediaType = MediaTypeDockerSchema2LayerPGP
+
+		// TODO: Mediatypes to be added in ocispec
+	case ocispec.MediaTypeImageLayerGzip:
+		newDesc.MediaType = MediaTypeDockerSchema2LayerGzipPGP
+	case ocispec.MediaTypeImageLayer:
+		newDesc.MediaType = MediaTypeDockerSchema2LayerPGP
+
 	default:
 		return ocispec.Descriptor{}, []byte{}, errors.Errorf("Encryption: unsupporter layer MediaType: %s\n", desc.MediaType)
 	}
@@ -675,7 +682,8 @@ func cryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descripto
 		switch child.MediaType {
 		case MediaTypeDockerSchema2Config, ocispec.MediaTypeImageConfig:
 			config = child
-		case MediaTypeDockerSchema2LayerGzip, MediaTypeDockerSchema2Layer:
+		case MediaTypeDockerSchema2LayerGzip, MediaTypeDockerSchema2Layer,
+			ocispec.MediaTypeImageLayerGzip, ocispec.MediaTypeImageLayer:
 			if encrypt && isUserSelectedLayer(layerNum, layersTotal, lf.Layers) && isUserSelectedPlatform(thisPlatform, lf.Platforms) {
 				nl, err := cryptLayer(ctx, cs, child, cc, layerNum, thisPlatform, true)
 				if err != nil {
