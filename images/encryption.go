@@ -126,6 +126,14 @@ func createEntityList(ec *EncryptConfig) (openpgp.EntityList, error) {
 	return filteredList, nil
 }
 
+func getSymKeyParameters(layerSymKeyMap map[string]DecryptKeyData, index string) ([]byte, packet.CipherFunction) {
+	v, ok := layerSymKeyMap[index]
+	if !ok {
+		return nil, packet.CipherFunction(0)
+	}
+	return v.SymKeyData, packet.CipherFunction(v.SymKeyCipher)
+}
+
 // HandleEncrypt encrypts a byte array using data from the EncryptConfig. It
 // also manages the list of recipients' keys by enabling removal or addition
 // of recipients.
@@ -148,11 +156,10 @@ func HandleEncrypt(ec *EncryptConfig, data []byte, keys [][]byte, layerNum int32
 	case OperationAddRecipients:
 		if len(keys) > 0 {
 			index := fmt.Sprintf("%s:%d", platform, layerNum)
-			symKey := ec.Dc.LayerSymKeyMap[index].SymKeyData
+			symKey, symKeyCipher := getSymKeyParameters(ec.Dc.LayerSymKeyMap, index)
 			if len(symKey) == 0 {
 				return nil, nil, errors.Wrapf(errdefs.ErrInvalidArgument, "Unable to retrieve symkey for layer %s", index)
 			}
-			symKeyCipher := packet.CipherFunction(ec.Dc.LayerSymKeyMap[index].SymKeyCipher)
 			wrappedKeys, err = addRecipientsToKeys(keys, filteredList, symKey, symKeyCipher, nil)
 		} else {
 			encBlob, wrappedKeys, err = encryptData(data, filteredList, nil)
@@ -185,13 +192,13 @@ func Decrypt(dc *DecryptConfig, encBody []byte, desc ocispec.Descriptor, layerNu
 	data := assembleEncryptedMessage(encBody, keys)
 
 	index := fmt.Sprintf("%s:%d", platform, layerNum)
-	symKey := dc.LayerSymKeyMap[index].SymKeyData
+	symKey, symKeyCipher := getSymKeyParameters(dc.LayerSymKeyMap, index)
 	if len(symKey) == 0 {
 		return nil, errors.Wrapf(errdefs.ErrInvalidArgument, "Unable to retrieve symkey for layer %s", index)
 	}
 
 	r := bytes.NewReader(data)
-	md, err := ReadMessage(r, symKey, packet.CipherFunction(dc.LayerSymKeyMap[index].SymKeyCipher))
+	md, err := ReadMessage(r, symKey, symKeyCipher)
 	if err != nil {
 		return []byte{}, err
 	}
