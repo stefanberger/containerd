@@ -170,6 +170,11 @@ func HandleEncrypt(ec *EncryptConfig, data []byte, keys [][]byte, layerNum int32
 }
 
 // Decrypt decrypts a byte array using data from the DecryptConfig
+// The encrypted bulk data is provided in encBody and the wrapped
+// keys are taken from the OCI Descriptor. The OpenPGP message
+// is reassembled from the encBody and wrapped key.
+// The layerNum and platform are used to pick the symmetric key
+// used for decrypting the layer given its number and platform.
 func Decrypt(dc *DecryptConfig, encBody []byte, desc ocispec.Descriptor, layerNum int32, platform string) ([]byte, error) {
 
 	keys, err := getWrappedKeys(desc)
@@ -180,13 +185,12 @@ func Decrypt(dc *DecryptConfig, encBody []byte, desc ocispec.Descriptor, layerNu
 	data := assembleEncryptedMessage(encBody, keys)
 
 	index := fmt.Sprintf("%s:%d", platform, layerNum)
-	r := bytes.NewReader(data)
-
 	symKey := dc.LayerSymKeyMap[index].SymKeyData
 	if len(symKey) == 0 {
 		return nil, errors.Wrapf(errdefs.ErrInvalidArgument, "Unable to retrieve symkey for layer %s", index)
 	}
 
+	r := bytes.NewReader(data)
 	md, err := ReadMessage(r, symKey, packet.CipherFunction(dc.LayerSymKeyMap[index].SymKeyCipher))
 	if err != nil {
 		return []byte{}, err
