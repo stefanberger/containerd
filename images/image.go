@@ -391,7 +391,7 @@ func Children(ctx context.Context, provider content.Provider, desc ocispec.Descr
 
 		descs = append(descs, index.Manifests...)
 	case MediaTypeDockerSchema2Layer, MediaTypeDockerSchema2LayerGzip,
-		MediaTypeDockerSchema2LayerPGP, MediaTypeDockerSchema2LayerGzipPGP,
+		MediaTypeDockerSchema2LayerEnc, MediaTypeDockerSchema2LayerGzipEnc,
 		MediaTypeDockerSchema2LayerForeign, MediaTypeDockerSchema2LayerForeignGzip,
 		MediaTypeDockerSchema2Config, ocispec.MediaTypeImageConfig,
 		ocispec.MediaTypeImageLayer, ocispec.MediaTypeImageLayerGzip,
@@ -429,7 +429,7 @@ func RootFS(ctx context.Context, provider content.Provider, configDesc ocispec.D
 func IsCompressedDiff(ctx context.Context, mediaType string) (bool, error) {
 	switch mediaType {
 	case ocispec.MediaTypeImageLayer, MediaTypeDockerSchema2Layer:
-	case ocispec.MediaTypeImageLayerGzip, MediaTypeDockerSchema2LayerGzip, MediaTypeDockerSchema2LayerGzipPGP:
+	case ocispec.MediaTypeImageLayerGzip, MediaTypeDockerSchema2LayerGzip, MediaTypeDockerSchema2LayerGzipEnc:
 		return true, nil
 	default:
 		// Still apply all generic media types *.tar[.+]gzip and *.tar
@@ -482,22 +482,27 @@ func encryptLayer(cc *CryptoConfig, data []byte, desc ocispec.Descriptor, layerN
 
 	switch desc.MediaType {
 	case MediaTypeDockerSchema2LayerGzip:
-		newDesc.MediaType = MediaTypeDockerSchema2LayerGzipPGP
+		newDesc.MediaType = MediaTypeDockerSchema2LayerGzipEnc
 	case MediaTypeDockerSchema2Layer:
-		newDesc.MediaType = MediaTypeDockerSchema2LayerPGP
-	case MediaTypeDockerSchema2LayerGzipPGP:
-		newDesc.MediaType = MediaTypeDockerSchema2LayerGzipPGP
-	case MediaTypeDockerSchema2LayerPGP:
-		newDesc.MediaType = MediaTypeDockerSchema2LayerPGP
+		newDesc.MediaType = MediaTypeDockerSchema2LayerEnc
+	case MediaTypeDockerSchema2LayerGzipEnc:
+		newDesc.MediaType = MediaTypeDockerSchema2LayerGzipEnc
+	case MediaTypeDockerSchema2LayerEnc:
+		newDesc.MediaType = MediaTypeDockerSchema2LayerEnc
 
 		// TODO: Mediatypes to be added in ocispec
 	case ocispec.MediaTypeImageLayerGzip:
-		newDesc.MediaType = MediaTypeDockerSchema2LayerGzipPGP
+		newDesc.MediaType = MediaTypeDockerSchema2LayerGzipEnc
 	case ocispec.MediaTypeImageLayer:
-		newDesc.MediaType = MediaTypeDockerSchema2LayerPGP
+		newDesc.MediaType = MediaTypeDockerSchema2LayerEnc
 
 	default:
 		return ocispec.Descriptor{}, []byte{}, errors.Errorf("Encryption: unsupporter layer MediaType: %s\n", desc.MediaType)
+	}
+
+	switch newDesc.MediaType {
+	case MediaTypeDockerSchema2LayerGzipEnc, MediaTypeDockerSchema2LayerEnc:
+		newDesc.Annotations["org.opencontainers.image.enc.scheme"] = "pgp"
 	}
 	return newDesc, p, nil
 }
@@ -517,9 +522,9 @@ func decryptLayer(cc *CryptoConfig, data []byte, desc ocispec.Descriptor, layerN
 	}
 
 	switch desc.MediaType {
-	case MediaTypeDockerSchema2LayerGzipPGP:
+	case MediaTypeDockerSchema2LayerGzipEnc:
 		newDesc.MediaType = MediaTypeDockerSchema2LayerGzip
-	case MediaTypeDockerSchema2LayerPGP:
+	case MediaTypeDockerSchema2LayerEnc:
 		newDesc.MediaType = MediaTypeDockerSchema2Layer
 	default:
 		return ocispec.Descriptor{}, []byte{}, errors.Errorf("Decryption: unsupporter layer MediaType: %s\n", desc.MediaType)
@@ -613,7 +618,7 @@ func decodeWrappedKeys(keys string) ([][]byte, error) {
 func isDescriptorALayer(desc ocispec.Descriptor) bool {
 	switch desc.MediaType {
 	case MediaTypeDockerSchema2LayerGzip, MediaTypeDockerSchema2Layer,
-		MediaTypeDockerSchema2LayerGzipPGP, MediaTypeDockerSchema2LayerPGP:
+		MediaTypeDockerSchema2LayerGzipEnc, MediaTypeDockerSchema2LayerEnc:
 		return true
 	}
 	return false
@@ -702,7 +707,7 @@ func cryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descripto
 				newLayers = append(newLayers, child)
 			}
 			layerNum = layerNum + 1
-		case MediaTypeDockerSchema2LayerGzipPGP, MediaTypeDockerSchema2LayerPGP:
+		case MediaTypeDockerSchema2LayerGzipEnc, MediaTypeDockerSchema2LayerEnc:
 			// this one can be decrypted but also its recpients list changed
 			if isUserSelectedLayer(layerNum, layersTotal, lf.Layers) && isUserSelectedPlatform(thisPlatform, lf.Platforms) {
 				nl, err := cryptLayer(ctx, cs, child, cc, layerNum, thisPlatform, encrypt)
@@ -911,7 +916,7 @@ func getImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descr
 		}
 		lis = append(lis, li)
 	case MediaTypeDockerSchema2Config, ocispec.MediaTypeImageConfig:
-	case MediaTypeDockerSchema2LayerPGP, MediaTypeDockerSchema2LayerGzipPGP:
+	case MediaTypeDockerSchema2LayerEnc, MediaTypeDockerSchema2LayerGzipEnc:
 		wrappedKeys, err := getWrappedKeys(desc)
 		if err != nil {
 			return []LayerInfo{}, err
@@ -919,7 +924,7 @@ func getImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descr
 		li := LayerInfo{
 			WrappedKeys: wrappedKeys,
 			Digest:      desc.Digest.String(),
-			Encryption:  "pgp",
+			Encryption:  desc.Annotations["org.opencontainers.image.enc.scheme"],
 			FileSize:    desc.Size,
 			ID:          uint32(layerNum),
 			Platform:    platform,
@@ -953,9 +958,9 @@ func DecryptLayers(ctx context.Context, cs content.Store, layers []rootfs.Layer,
 			Platform: platforms.DefaultString(),
 		}
 		switch layer.Blob.MediaType {
-		case MediaTypeDockerSchema2LayerPGP, MediaTypeDockerSchema2LayerGzipPGP:
+		case MediaTypeDockerSchema2LayerEnc, MediaTypeDockerSchema2LayerGzipEnc:
 			isEncrypted = true
-			layerInfo.Encryption = "pgp"
+			layerInfo.Encryption = layer.Blob.Annotations["org.opencontainers.image.enc.scheme"]
 
 			layerInfo.WrappedKeys, err = getWrappedKeys(layer.Blob)
 			if err != nil {
