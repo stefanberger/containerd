@@ -23,6 +23,7 @@ import (
 	"github.com/containerd/containerd/cmd/ctr/commands"
 	"github.com/containerd/containerd/cmd/ctr/commands/content"
 	"github.com/containerd/containerd/images"
+	"github.com/containerd/containerd/images/encryption"
 	"github.com/containerd/containerd/log"
 	"github.com/containerd/containerd/platforms"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
@@ -118,20 +119,20 @@ command. As part of this process, we do the following:
 
 		// Create gpg client
 		gpgVersion := context.String("gpg-version")
-		v := new(images.GPGVersion)
+		v := new(encryption.GPGVersion)
 		switch gpgVersion {
 		case "v1":
-			*v = images.GPGv1
+			*v = encryption.GPGv1
 		case "v2":
-			*v = images.GPGv2
+			*v = encryption.GPGv2
 		default:
 			v = nil
 		}
-		gpgClient, err := images.NewGPGClient(v, context.String("gpg-homedir"))
+		gpgClient, err := encryption.NewGPGClient(v, context.String("gpg-homedir"))
 		if err != nil {
 			return errors.New("Unable to create GPG Client")
 		}
-		gpgVault := images.NewGPGVault()
+		gpgVault := encryption.NewGPGVault()
 		err = gpgVault.AddSecretKeyRingFiles(context.StringSlice("key"))
 		if err != nil {
 			return err

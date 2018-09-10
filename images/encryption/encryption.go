@@ -14,10 +14,11 @@
    limitations under the License.
 */
 
-package images
+package encryption
 
 import (
 	"bytes"
+	"encoding/base64"
 	"fmt"
 	"io/ioutil"
 	"net/mail"
@@ -31,6 +32,31 @@ import (
 	"golang.org/x/crypto/openpgp/packet"
 	"golang.org/x/crypto/ssh/terminal"
 )
+
+// LayerInfo holds information about an image layer
+type LayerInfo struct {
+	// The Id of the layer starting at 0
+	ID uint32
+	// Array of wrapped keys from which KeyIds can be derived
+	WrappedKeys [][]byte
+	// The Digest of the layer
+	Digest string
+	// The Encryption method used for encrypting the layer
+	Encryption string
+	// The size of the layer file
+	FileSize int64
+	// The platform for which this layer is
+	Platform string
+}
+
+// LayerFilter holds criteria for which layer to select
+type LayerFilter struct {
+	// IDs of layers to touch; may be negative number to start from topmost layer
+	// empty array means 'all layers'
+	Layers []int32
+	// Platforms to touch; empty array means 'all platforms'
+	Platforms []ocispec.Platform
+}
 
 // EncryptConfig is the container image PGP encryption configuration holding
 // the identifiers of those that will be able to decrypt the container and
@@ -134,6 +160,19 @@ func getSymKeyParameters(layerSymKeyMap map[string]DecryptKeyData, index string)
 	return v.SymKeyData, packet.CipherFunction(v.SymKeyCipher)
 }
 
+// assembleEncryptedMessage takes in the openpgp encrypted body packets and
+// assembles the openpgp message
+func assembleEncryptedMessage(encBody []byte, keys [][]byte) []byte {
+	encMsg := make([]byte, 0)
+
+	for _, k := range keys {
+		encMsg = append(encMsg, k...)
+	}
+	encMsg = append(encMsg, encBody...)
+
+	return encMsg
+}
+
 // HandleEncrypt encrypts a byte array using data from the EncryptConfig. It
 // also manages the list of recipients' keys by enabling removal or addition
 // of recipients.
@@ -178,16 +217,11 @@ func HandleEncrypt(ec *EncryptConfig, data []byte, keys [][]byte, layerNum int32
 
 // Decrypt decrypts a byte array using data from the DecryptConfig
 // The encrypted bulk data is provided in encBody and the wrapped
-// keys are taken from the OCI Descriptor. The OpenPGP message
+// keys were taken from the OCI Descriptor. The OpenPGP message
 // is reassembled from the encBody and wrapped key.
 // The layerNum and platform are used to pick the symmetric key
 // used for decrypting the layer given its number and platform.
-func Decrypt(dc *DecryptConfig, encBody []byte, desc ocispec.Descriptor, layerNum int32, platform string) ([]byte, error) {
-
-	keys, err := getWrappedKeys(desc)
-	if err != nil {
-		return nil, err
-	}
+func Decrypt(dc *DecryptConfig, encBody []byte, keys [][]byte, layerNum int32, platform string) ([]byte, error) {
 
 	data := assembleEncryptedMessage(encBody, keys)
 
@@ -295,4 +329,33 @@ func GetSymmetricKeys(layerInfos []LayerInfo, gpgClient GPGClient, gpgVault GPGV
 		}
 	}
 	return layerSymkeyMap, nil
+}
+
+// EncodeWrappedKeys encodes wrapped openpgp keys to a string readable ','
+// separated base64 strings.
+func EncodeWrappedKeys(keys [][]byte) string {
+	var keyArray []string
+
+	for _, k := range keys {
+		keyArray = append(keyArray, base64.StdEncoding.EncodeToString(k))
+	}
+
+	return strings.Join(keyArray, ",")
+}
+
+// DecodeWrappedKeys decodes wrapped openpgp keys from string readable ','
+// separated base64 strings to their byte values
+func DecodeWrappedKeys(keys string) ([][]byte, error) {
+	keySplit := strings.Split(keys, ",")
+	keyBytes := make([][]byte, 0, len(keySplit))
+
+	for _, v := range keySplit {
+		data, err := base64.StdEncoding.DecodeString(v)
+		if err != nil {
+			return nil, err
+		}
+		keyBytes = append(keyBytes, data)
+	}
+
+	return keyBytes, nil
 }

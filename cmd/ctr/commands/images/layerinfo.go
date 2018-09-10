@@ -24,7 +24,7 @@ import (
 	"text/tabwriter"
 
 	"github.com/containerd/containerd/cmd/ctr/commands"
-	"github.com/containerd/containerd/images"
+	"github.com/containerd/containerd/images/encryption"
 	"github.com/pkg/errors"
 	"github.com/urfave/cli"
 )
@@ -73,7 +73,7 @@ var layerinfoCommand = cli.Command{
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', tabwriter.AlignRight)
 		fmt.Fprintf(w, "#\tDIGEST\tPLATFORM\tSIZE\tENCRYPTION\tKEY IDS\t\n")
 		for _, layer := range LayerInfos {
-			keyIds, err := images.WrappedKeysToKeyIds(layer.WrappedKeys)
+			keyIds, err := encryption.WrappedKeysToKeyIds(layer.WrappedKeys)
 			if err != nil {
 				return err
 			}
