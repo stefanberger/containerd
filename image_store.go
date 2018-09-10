@@ -23,6 +23,7 @@ import (
 	"github.com/containerd/containerd/api/types"
 	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/images"
+	"github.com/containerd/containerd/images/encryption"
 	ptypes "github.com/gogo/protobuf/types"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )
@@ -125,7 +126,7 @@ func imageFromProto(imagepb *imagesapi.Image) images.Image {
 	}
 }
 
-func (s *remoteImages) EncryptImage(ctx context.Context, name, newName string, cc *images.CryptoConfig, layers []int32, platforms []string) (images.Image, error) {
+func (s *remoteImages) EncryptImage(ctx context.Context, name, newName string, cc *encryption.CryptoConfig, layers []int32, platforms []string) (images.Image, error) {
 	layerSymKeyMap := convLayerSymKeyMap(cc.Ec.Dc.LayerSymKeyMap)
 
 	resp, err := s.client.EncryptImage(ctx, &imagesapi.EncryptImageRequest{
@@ -149,7 +150,7 @@ func (s *remoteImages) EncryptImage(ctx context.Context, name, newName string, c
 	return imageFromProto(&resp.Image), nil
 }
 
-func (s *remoteImages) DecryptImage(ctx context.Context, name, newName string, cc *images.CryptoConfig, layers []int32, platforms []string) (images.Image, error) {
+func (s *remoteImages) DecryptImage(ctx context.Context, name, newName string, cc *encryption.CryptoConfig, layers []int32, platforms []string) (images.Image, error) {
 	layerSymKeyMap := convLayerSymKeyMap(cc.Dc.LayerSymKeyMap)
 
 	resp, err := s.client.DecryptImage(ctx, &imagesapi.DecryptImageRequest{
@@ -168,17 +169,17 @@ func (s *remoteImages) DecryptImage(ctx context.Context, name, newName string, c
 	return imageFromProto(&resp.Image), nil
 }
 
-func (s *remoteImages) GetImageLayerInfo(ctx context.Context, name string, layers []int32, platforms []string) ([]images.LayerInfo, error) {
+func (s *remoteImages) GetImageLayerInfo(ctx context.Context, name string, layers []int32, platforms []string) ([]encryption.LayerInfo, error) {
 	resp, err := s.client.GetImageLayerInfo(ctx, &imagesapi.GetImageLayerInfoRequest{
 		Name:      name,
 		Layers:    layers,
 		Platforms: platforms,
 	})
 	if err != nil {
-		return []images.LayerInfo{}, errdefs.FromGRPC(err)
+		return []encryption.LayerInfo{}, errdefs.FromGRPC(err)
 	}
 
-	li := make([]images.LayerInfo, len(resp.LayerInfo))
+	li := make([]encryption.LayerInfo, len(resp.LayerInfo))
 	for i := 0; i < len(resp.LayerInfo); i++ {
 		li[i].ID = resp.LayerInfo[i].ID
 		li[i].WrappedKeys = resp.LayerInfo[i].WrappedKeys
@@ -191,7 +192,7 @@ func (s *remoteImages) GetImageLayerInfo(ctx context.Context, name string, layer
 	return li, nil
 }
 
-func convLayerSymKeyMap(layerSymKeyMap map[string]images.DecryptKeyData) map[string]*imagesapi.DecryptKeyData {
+func convLayerSymKeyMap(layerSymKeyMap map[string]encryption.DecryptKeyData) map[string]*imagesapi.DecryptKeyData {
 	layerSymKeyMapOut := make(map[string]*imagesapi.DecryptKeyData)
 
 	for k, v := range layerSymKeyMap {

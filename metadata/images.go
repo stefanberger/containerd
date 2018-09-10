@@ -27,6 +27,7 @@ import (
 	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/filters"
 	"github.com/containerd/containerd/images"
+	"github.com/containerd/containerd/images/encryption"
 	"github.com/containerd/containerd/labels"
 	"github.com/containerd/containerd/metadata/boltutil"
 	"github.com/containerd/containerd/namespaces"
@@ -259,7 +260,7 @@ func (s *imageStore) Delete(ctx context.Context, name string, opts ...images.Del
 
 // cryptImage encrypts or decrypts an image with the given name and stores it either under the newName
 // or updates the existing one
-func (s *imageStore) cryptImage(ctx context.Context, name, newName string, cc *images.CryptoConfig, layers []int32, platformList []string, encrypt bool) (images.Image, error) {
+func (s *imageStore) cryptImage(ctx context.Context, name, newName string, cc *encryption.CryptoConfig, layers []int32, platformList []string, encrypt bool) (images.Image, error) {
 	var image images.Image
 
 	namespace, err := namespaces.NamespaceRequired(ctx)
@@ -293,7 +294,7 @@ func (s *imageStore) cryptImage(ctx context.Context, name, newName string, cc *i
 		return image, err
 	}
 
-	lf := &images.LayerFilter{
+	lf := &encryption.LayerFilter{
 		Layers:    layers,
 		Platforms: pl,
 	}
@@ -373,20 +374,20 @@ func (s *imageStore) cryptImage(ctx context.Context, name, newName string, cc *i
 	return image, nil
 }
 
-func (s *imageStore) EncryptImage(ctx context.Context, name, newName string, cc *images.CryptoConfig, layers []int32, platformList []string) (images.Image, error) {
+func (s *imageStore) EncryptImage(ctx context.Context, name, newName string, cc *encryption.CryptoConfig, layers []int32, platformList []string) (images.Image, error) {
 	return s.cryptImage(ctx, name, newName, cc, layers, platformList, true)
 }
 
-func (s *imageStore) DecryptImage(ctx context.Context, name, newName string, cc *images.CryptoConfig, layers []int32, platformList []string) (images.Image, error) {
+func (s *imageStore) DecryptImage(ctx context.Context, name, newName string, cc *encryption.CryptoConfig, layers []int32, platformList []string) (images.Image, error) {
 	return s.cryptImage(ctx, name, newName, cc, layers, platformList, false)
 }
 
-func (s *imageStore) GetImageLayerInfo(ctx context.Context, name string, layers []int32, platformList []string) ([]images.LayerInfo, error) {
+func (s *imageStore) GetImageLayerInfo(ctx context.Context, name string, layers []int32, platformList []string) ([]encryption.LayerInfo, error) {
 	var image images.Image
 
 	namespace, err := namespaces.NamespaceRequired(ctx)
 	if err != nil {
-		return []images.LayerInfo{}, err
+		return []encryption.LayerInfo{}, err
 	}
 
 	if err := view(ctx, s.db, func(tx *bolt.Tx) error {
@@ -407,14 +408,14 @@ func (s *imageStore) GetImageLayerInfo(ctx context.Context, name string, layers 
 
 		return nil
 	}); err != nil {
-		return []images.LayerInfo{}, err
+		return []encryption.LayerInfo{}, err
 	}
 
 	pl, err := platforms.ParseArray(platformList)
 	if err != nil {
-		return []images.LayerInfo{}, err
+		return []encryption.LayerInfo{}, err
 	}
-	lf := &images.LayerFilter{
+	lf := &encryption.LayerFilter{
 		Layers:    layers,
 		Platforms: pl,
 	}
