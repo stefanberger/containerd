@@ -20,7 +20,7 @@ import (
 	"fmt"
 
 	"github.com/containerd/containerd/cmd/ctr/commands"
-	"github.com/containerd/containerd/images"
+	"github.com/containerd/containerd/images/encryption"
 	"github.com/pkg/errors"
 	"github.com/urfave/cli"
 )
@@ -89,16 +89,16 @@ var encryptCommand = cli.Command{
 
 		// Create gpg client
 		gpgVersion := context.String("gpg-version")
-		v := new(images.GPGVersion)
+		v := new(encryption.GPGVersion)
 		switch gpgVersion {
 		case "v1":
-			*v = images.GPGv1
+			*v = encryption.GPGv1
 		case "v2":
-			*v = images.GPGv2
+			*v = encryption.GPGv2
 		default:
 			v = nil
 		}
-		gpgClient, err := images.NewGPGClient(v, context.String("gpg-homedir"))
+		gpgClient, err := encryption.NewGPGClient(v, context.String("gpg-homedir"))
 		if err != nil {
 			return errors.New("Unable to create GPG Client")
 		}
@@ -108,37 +108,37 @@ var encryptCommand = cli.Command{
 			return err
 		}
 
-		gpgVault := images.NewGPGVault()
+		gpgVault := encryption.NewGPGVault()
 		err = gpgVault.AddSecretKeyRingFiles(context.StringSlice("key"))
 		if err != nil {
 			return err
 		}
 
-		operation := images.OperationAddRecipients
+		operation := encryption.OperationAddRecipients
 		if context.Bool("remove") {
-			operation = images.OperationRemoveRecipients
+			operation = encryption.OperationRemoveRecipients
 		}
 
 		layers32 := commands.IntToInt32Array(context.IntSlice("layer"))
 
-		layerSymKeyMap := make(map[string]images.DecryptKeyData)
-		if operation == images.OperationAddRecipients {
+		layerSymKeyMap := make(map[string]encryption.DecryptKeyData)
+		if operation == encryption.OperationAddRecipients {
 			layerInfos, err := client.ImageService().GetImageLayerInfo(ctx, local, layers32, context.StringSlice("platform"))
 			if err != nil {
 				return err
 			}
-			layerSymKeyMap, err = images.GetSymmetricKeys(layerInfos, gpgClient, gpgVault)
+			layerSymKeyMap, err = encryption.GetSymmetricKeys(layerInfos, gpgClient, gpgVault)
 			if err != nil {
 				return err
 			}
 		}
 
-		cc := &images.CryptoConfig{
-			Ec: &images.EncryptConfig{
+		cc := &encryption.CryptoConfig{
+			Ec: &encryption.EncryptConfig{
 				GPGPubRingFile: gpgPubRingFile,
 				Recipients:     recipients,
 				Operation:      operation,
-				Dc: images.DecryptConfig{
+				Dc: encryption.DecryptConfig{
 					LayerSymKeyMap: layerSymKeyMap,
 				},
 			},

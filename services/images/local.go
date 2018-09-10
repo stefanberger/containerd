@@ -25,6 +25,7 @@ import (
 	"github.com/containerd/containerd/events"
 	"github.com/containerd/containerd/gc"
 	"github.com/containerd/containerd/images"
+	"github.com/containerd/containerd/images/encryption"
 	"github.com/containerd/containerd/log"
 	"github.com/containerd/containerd/metadata"
 	"github.com/containerd/containerd/plugin"
@@ -188,12 +189,12 @@ func (l *local) EncryptImage(ctx context.Context, req *imagesapi.EncryptImageReq
 
 	layerSymKeyMap := convLayerSymKeyMap(req.Ec.Dc.LayerSymKeyMap)
 
-	encrypted, err := l.store.EncryptImage(ctx, req.Name, req.NewName, &images.CryptoConfig{
-		Ec: &images.EncryptConfig{
+	encrypted, err := l.store.EncryptImage(ctx, req.Name, req.NewName, &encryption.CryptoConfig{
+		Ec: &encryption.EncryptConfig{
 			Recipients:     req.Ec.Recipients,
 			GPGPubRingFile: req.Ec.Gpgpubkeyring,
 			Operation:      req.Ec.Operation,
-			Dc: images.DecryptConfig{
+			Dc: encryption.DecryptConfig{
 				LayerSymKeyMap: layerSymKeyMap,
 			},
 		},
@@ -221,8 +222,8 @@ func (l *local) DecryptImage(ctx context.Context, req *imagesapi.DecryptImageReq
 
 	layerSymKeyMap := convLayerSymKeyMap(req.Dc.LayerSymKeyMap)
 
-	encrypted, err := l.store.DecryptImage(ctx, req.Name, req.NewName, &images.CryptoConfig{
-		Dc: &images.DecryptConfig{
+	encrypted, err := l.store.DecryptImage(ctx, req.Name, req.NewName, &encryption.CryptoConfig{
+		Dc: &encryption.DecryptConfig{
 			LayerSymKeyMap: layerSymKeyMap,
 		},
 	}, req.Layers, req.Platforms)
@@ -266,11 +267,11 @@ func (l *local) GetImageLayerInfo(ctx context.Context, req *imagesapi.GetImageLa
 	return &resp, nil
 }
 
-func convLayerSymKeyMap(layerSymKeyMap map[string]*imagesapi.DecryptKeyData) map[string]images.DecryptKeyData {
-	layerSymKeyMapOut := make(map[string]images.DecryptKeyData)
+func convLayerSymKeyMap(layerSymKeyMap map[string]*imagesapi.DecryptKeyData) map[string]encryption.DecryptKeyData {
+	layerSymKeyMapOut := make(map[string]encryption.DecryptKeyData)
 
 	for k, v := range layerSymKeyMap {
-		layerSymKeyMapOut[k] = images.DecryptKeyData{
+		layerSymKeyMapOut[k] = encryption.DecryptKeyData{
 			SymKeyData:   v.SymKeyData,
 			SymKeyCipher: uint8(v.SymKeyCipher),
 		}
