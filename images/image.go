@@ -19,7 +19,6 @@ package images
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -28,6 +27,7 @@ import (
 
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/errdefs"
+	"github.com/containerd/containerd/images/encryption"
 	"github.com/containerd/containerd/log"
 	"github.com/containerd/containerd/platforms"
 	"github.com/containerd/containerd/rootfs"
@@ -61,31 +61,6 @@ type Image struct {
 	CreatedAt, UpdatedAt time.Time
 }
 
-// LayerInfo holds information about an image layer
-type LayerInfo struct {
-	// The Id of the layer starting at 0
-	ID uint32
-	// Array of wrapped keys from which KeyIds can be derived
-	WrappedKeys [][]byte
-	// The Digest of the layer
-	Digest string
-	// The Encryption method used for encrypting the layer
-	Encryption string
-	// The size of the layer file
-	FileSize int64
-	// The platform for which this layer is
-	Platform string
-}
-
-// LayerFilter holds criteria for which layer to select
-type LayerFilter struct {
-	// IDs of layers to touch; may be negative number to start from topmost layer
-	// empty array means 'all layers'
-	Layers []int32
-	// Platforms to touch; empty array means 'all platforms'
-	Platforms []ocispec.Platform
-}
-
 // DeleteOptions provide options on image delete
 type DeleteOptions struct {
 	Synchronous bool
@@ -115,9 +90,9 @@ type Store interface {
 
 	Delete(ctx context.Context, name string, opts ...DeleteOpt) error
 
-	EncryptImage(ctx context.Context, name, newName string, ec *CryptoConfig, layers []int32, platforms []string) (Image, error)
-	DecryptImage(ctx context.Context, name, newName string, ec *CryptoConfig, layers []int32, platforms []string) (Image, error)
-	GetImageLayerInfo(ctx context.Context, name string, layers []int32, platforms []string) ([]LayerInfo, error)
+	EncryptImage(ctx context.Context, name, newName string, ec *encryption.CryptoConfig, layers []int32, platforms []string) (Image, error)
+	DecryptImage(ctx context.Context, name, newName string, ec *encryption.CryptoConfig, layers []int32, platforms []string) (Image, error)
+	GetImageLayerInfo(ctx context.Context, name string, layers []int32, platforms []string) ([]encryption.LayerInfo, error)
 }
 
 // TODO(stevvooe): Many of these functions make strong platform assumptions,
@@ -442,10 +417,24 @@ func IsCompressedDiff(ctx context.Context, mediaType string) (bool, error) {
 	return false, nil
 }
 
+// getWrappedKeys gets the wrapped keys from the OCI Descriptor's
+// annotation and returns them as an array of byte arrays.
+func getWrappedKeys(desc ocispec.Descriptor) ([][]byte, error) {
+	// Parse and decode keys
+	if v, ok := desc.Annotations["org.opencontainers.image.pgp.keys"]; ok {
+		keys, err := encryption.DecodeWrappedKeys(v)
+		if err != nil {
+			return nil, err
+		}
+		return keys, nil
+	}
+	return make([][]byte, 0), nil
+}
+
 // encryptLayer encrypts the layer using the CryptoConfig and creates a new OCI Descriptor.
 // A call to this function may also only manipulate the wrapped keys list.
 // The caller is expected to store the returned encrypted data and OCI Descriptor
-func encryptLayer(cc *CryptoConfig, data []byte, desc ocispec.Descriptor, layerNum int32, platform *ocispec.Platform) (ocispec.Descriptor, []byte, error) {
+func encryptLayer(cc *encryption.CryptoConfig, data []byte, desc ocispec.Descriptor, layerNum int32, platform *ocispec.Platform) (ocispec.Descriptor, []byte, error) {
 	var (
 		keys [][]byte
 		size int64
@@ -458,7 +447,7 @@ func encryptLayer(cc *CryptoConfig, data []byte, desc ocispec.Descriptor, layerN
 		return ocispec.Descriptor{}, []byte{}, err
 	}
 
-	p, keys, err := HandleEncrypt(cc.Ec, data, keys, layerNum, platforms.Format(*platform))
+	p, keys, err := encryption.HandleEncrypt(cc.Ec, data, keys, layerNum, platforms.Format(*platform))
 	if err != nil {
 		return ocispec.Descriptor{}, []byte{}, err
 	}
@@ -478,7 +467,7 @@ func encryptLayer(cc *CryptoConfig, data []byte, desc ocispec.Descriptor, layerN
 		Platform: desc.Platform,
 	}
 	newDesc.Annotations = make(map[string]string)
-	newDesc.Annotations["org.opencontainers.image.pgp.keys"] = encodeWrappedKeys(keys)
+	newDesc.Annotations["org.opencontainers.image.pgp.keys"] = encryption.EncodeWrappedKeys(keys)
 
 	switch desc.MediaType {
 	case MediaTypeDockerSchema2LayerGzip:
@@ -509,8 +498,13 @@ func encryptLayer(cc *CryptoConfig, data []byte, desc ocispec.Descriptor, layerN
 
 // decryptLayer decrypts the layer using the CryptoConfig and creates a new OCI Descriptor.
 // The caller is expected to store the returned plain data and OCI Descriptor
-func decryptLayer(cc *CryptoConfig, data []byte, desc ocispec.Descriptor, layerNum int32, platform *ocispec.Platform) (ocispec.Descriptor, []byte, error) {
-	p, err := Decrypt(cc.Dc, data, desc, layerNum, platforms.Format(*platform))
+func decryptLayer(cc *encryption.CryptoConfig, data []byte, desc ocispec.Descriptor, layerNum int32, platform *ocispec.Platform) (ocispec.Descriptor, []byte, error) {
+	keys, err := getWrappedKeys(desc)
+	if err != nil {
+		return ocispec.Descriptor{}, []byte{}, err
+	}
+
+	p, err := encryption.Decrypt(cc.Dc, data, keys, layerNum, platforms.Format(*platform))
 	if err != nil {
 		return ocispec.Descriptor{}, []byte{}, err
 	}
@@ -533,7 +527,7 @@ func decryptLayer(cc *CryptoConfig, data []byte, desc ocispec.Descriptor, layerN
 }
 
 // cryptLayer handles the changes due to encryption or decryption of a layer
-func cryptLayer(ctx context.Context, cs content.Store, desc ocispec.Descriptor, cc *CryptoConfig, layerNum int32, platform *ocispec.Platform, encrypt bool) (ocispec.Descriptor, error) {
+func cryptLayer(ctx context.Context, cs content.Store, desc ocispec.Descriptor, cc *encryption.CryptoConfig, layerNum int32, platform *ocispec.Platform, encrypt bool) (ocispec.Descriptor, error) {
 	var (
 		p       []byte
 		newDesc ocispec.Descriptor
@@ -558,60 +552,6 @@ func cryptLayer(ctx context.Context, cs content.Store, desc ocispec.Descriptor, 
 		err = content.WriteBlob(ctx, cs, ref, bytes.NewReader(p), newDesc)
 	}
 	return newDesc, err
-}
-
-func getWrappedKeys(desc ocispec.Descriptor) ([][]byte, error) {
-	// Parse and decode keys
-	if v, ok := desc.Annotations["org.opencontainers.image.pgp.keys"]; ok {
-		keys, err := decodeWrappedKeys(v)
-		if err != nil {
-			return nil, err
-		}
-		return keys, nil
-	}
-	return make([][]byte, 0), nil
-}
-
-// assembleEncryptedMessage takes in the openpgp encrypted body packets and
-// assembles the openpgp message
-func assembleEncryptedMessage(encBody []byte, keys [][]byte) []byte {
-	encMsg := make([]byte, 0)
-
-	for _, k := range keys {
-		encMsg = append(encMsg, k...)
-	}
-	encMsg = append(encMsg, encBody...)
-
-	return encMsg
-}
-
-// encodeWrappedKeys encodes wrapped openpgp keys to a string readable ','
-// separated base64 strings.
-func encodeWrappedKeys(keys [][]byte) string {
-	var keyArray []string
-
-	for _, k := range keys {
-		keyArray = append(keyArray, base64.StdEncoding.EncodeToString(k))
-	}
-
-	return strings.Join(keyArray, ",")
-}
-
-// decodeWrappedKeys decodes wrapped openpgp keys from string readable ','
-// separated base64 strings to their byte values
-func decodeWrappedKeys(keys string) ([][]byte, error) {
-	keySplit := strings.Split(keys, ",")
-	keyBytes := make([][]byte, 0, len(keySplit))
-
-	for _, v := range keySplit {
-		data, err := base64.StdEncoding.DecodeString(v)
-		if err != nil {
-			return nil, err
-		}
-		keyBytes = append(keyBytes, data)
-	}
-
-	return keyBytes, nil
 }
 
 // isDecriptorALayer determines whether the given Descriptor describes an image layer
@@ -672,7 +612,7 @@ func isUserSelectedPlatform(platform *ocispec.Platform, platformList []ocispec.P
 }
 
 // Encrypt all the Children of a given descriptor
-func cryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descriptor, cc *CryptoConfig, lf *LayerFilter, encrypt bool, thisPlatform *ocispec.Platform) (ocispec.Descriptor, bool, error) {
+func cryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descriptor, cc *encryption.CryptoConfig, lf *encryption.LayerFilter, encrypt bool, thisPlatform *ocispec.Platform) (ocispec.Descriptor, bool, error) {
 	layerNum := int32(0)
 
 	children, err := Children(ctx, cs, desc)
@@ -763,7 +703,7 @@ func cryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descripto
 }
 
 // cryptManifest encrypt or decrypt the children of a top level manifest
-func cryptManifest(ctx context.Context, cs content.Store, desc ocispec.Descriptor, cc *CryptoConfig, lf *LayerFilter, encrypt bool) (ocispec.Descriptor, bool, error) {
+func cryptManifest(ctx context.Context, cs content.Store, desc ocispec.Descriptor, cc *encryption.CryptoConfig, lf *encryption.LayerFilter, encrypt bool) (ocispec.Descriptor, bool, error) {
 	p, err := content.ReadBlob(ctx, cs, desc)
 	if err != nil {
 		return ocispec.Descriptor{}, false, err
@@ -781,7 +721,7 @@ func cryptManifest(ctx context.Context, cs content.Store, desc ocispec.Descripto
 }
 
 // cryptManifestList encrypts or decrypts the children of a top level manifest list
-func cryptManifestList(ctx context.Context, cs content.Store, desc ocispec.Descriptor, cc *CryptoConfig, lf *LayerFilter, encrypt bool) (ocispec.Descriptor, bool, error) {
+func cryptManifestList(ctx context.Context, cs content.Store, desc ocispec.Descriptor, cc *encryption.CryptoConfig, lf *encryption.LayerFilter, encrypt bool) (ocispec.Descriptor, bool, error) {
 	// read the index; if any layer is encrypted and any manifests change we will need to rewrite it
 	b, err := content.ReadBlob(ctx, cs, desc)
 	if err != nil {
@@ -842,7 +782,7 @@ func cryptManifestList(ctx context.Context, cs content.Store, desc ocispec.Descr
 
 // CryptImage is the dispatcher to encrypt/decrypt an image; it accepts either an OCI descriptor
 // representing a manifest list or a single manifest
-func CryptImage(ctx context.Context, cs content.Store, desc ocispec.Descriptor, cc *CryptoConfig, lf *LayerFilter, encrypt bool) (ocispec.Descriptor, bool, error) {
+func CryptImage(ctx context.Context, cs content.Store, desc ocispec.Descriptor, cc *encryption.CryptoConfig, lf *encryption.LayerFilter, encrypt bool) (ocispec.Descriptor, bool, error) {
 	switch desc.MediaType {
 	case ocispec.MediaTypeImageIndex, MediaTypeDockerSchema2ManifestList:
 		return cryptManifestList(ctx, cs, desc, cc, lf, encrypt)
@@ -856,16 +796,16 @@ func CryptImage(ctx context.Context, cs content.Store, desc ocispec.Descriptor, 
 // GetImageLayerInfo gets the image key Ids necessary for decrypting an image
 // We determine the KeyIds starting with  the given OCI Decriptor, recursing to lower-level descriptors
 // until we get them from the layer descriptors
-func GetImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descriptor, lf *LayerFilter, layerNum int32) ([]LayerInfo, error) {
+func GetImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descriptor, lf *encryption.LayerFilter, layerNum int32) ([]encryption.LayerInfo, error) {
 	return getImageLayerInfo(ctx, cs, desc, lf, layerNum, platforms.DefaultString())
 }
 
 // getImageLayerInfo is the recursive version of GetImageLayerInfo that takes the platform
 // as additional parameter
-func getImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descriptor, lf *LayerFilter, layerNum int32, platform string) ([]LayerInfo, error) {
+func getImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descriptor, lf *encryption.LayerFilter, layerNum int32, platform string) ([]encryption.LayerInfo, error) {
 	var (
-		lis []LayerInfo
-		tmp []LayerInfo
+		lis []encryption.LayerInfo
+		tmp []encryption.LayerInfo
 	)
 
 	switch desc.MediaType {
@@ -874,15 +814,15 @@ func getImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descr
 		children, err := Children(ctx, cs, desc)
 		if desc.Platform != nil {
 			if !isUserSelectedPlatform(desc.Platform, lf.Platforms) {
-				return []LayerInfo{}, nil
+				return []encryption.LayerInfo{}, nil
 			}
 			platform = platforms.Format(*desc.Platform)
 		}
 		if err != nil {
 			if errdefs.IsNotFound(err) {
-				return []LayerInfo{}, nil
+				return []encryption.LayerInfo{}, nil
 			}
-			return []LayerInfo{}, err
+			return []encryption.LayerInfo{}, err
 		}
 
 		layersTotal := countLayers(children)
@@ -900,13 +840,13 @@ func getImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descr
 				tmp, err = GetImageLayerInfo(ctx, cs, child, lf, -1)
 			}
 			if err != nil {
-				return []LayerInfo{}, err
+				return []encryption.LayerInfo{}, err
 			}
 
 			lis = append(lis, tmp...)
 		}
 	case MediaTypeDockerSchema2Layer, MediaTypeDockerSchema2LayerGzip:
-		li := LayerInfo{
+		li := encryption.LayerInfo{
 			WrappedKeys: [][]byte{},
 			Digest:      desc.Digest.String(),
 			Encryption:  "",
@@ -919,9 +859,9 @@ func getImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descr
 	case MediaTypeDockerSchema2LayerEnc, MediaTypeDockerSchema2LayerGzipEnc:
 		wrappedKeys, err := getWrappedKeys(desc)
 		if err != nil {
-			return []LayerInfo{}, err
+			return []encryption.LayerInfo{}, err
 		}
-		li := LayerInfo{
+		li := encryption.LayerInfo{
 			WrappedKeys: wrappedKeys,
 			Digest:      desc.Digest.String(),
 			Encryption:  desc.Annotations["org.opencontainers.image.enc.scheme"],
@@ -931,7 +871,7 @@ func getImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descr
 		}
 		lis = append(lis, li)
 	default:
-		return []LayerInfo{}, errors.Wrapf(errdefs.ErrInvalidArgument, "GetImageLayerInfo: Unhandled media type %s", desc.MediaType)
+		return []encryption.LayerInfo{}, errors.Wrapf(errdefs.ErrInvalidArgument, "GetImageLayerInfo: Unhandled media type %s", desc.MediaType)
 	}
 
 	return lis, nil
@@ -941,18 +881,18 @@ func getImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descr
 // rootfs.Layer with the OCI descriptors adapted to point to the decrypted layers.
 // This function will determine the necessary key(s) to decrypt the image and search
 // for them using the gpg client
-func DecryptLayers(ctx context.Context, cs content.Store, layers []rootfs.Layer, gpgClient GPGClient, gpgVault GPGVault) ([]rootfs.Layer, error) {
+func DecryptLayers(ctx context.Context, cs content.Store, layers []rootfs.Layer, gpgClient encryption.GPGClient, gpgVault encryption.GPGVault) ([]rootfs.Layer, error) {
 	var (
 		newLayers      []rootfs.Layer
-		layerInfos     []LayerInfo
-		layerSymKeyMap map[string]DecryptKeyData
+		layerInfos     []encryption.LayerInfo
+		layerSymKeyMap map[string]encryption.DecryptKeyData
 		err            error
 	)
 
 	// in the 1st pass through the layers we gather required keys
 	isEncrypted := false
 	for id, layer := range layers {
-		layerInfo := LayerInfo{
+		layerInfo := encryption.LayerInfo{
 			ID:       uint32(id),
 			Digest:   layer.Blob.Digest.String(),
 			Platform: platforms.DefaultString(),
@@ -981,12 +921,12 @@ func DecryptLayers(ctx context.Context, cs content.Store, layers []rootfs.Layer,
 	}
 
 	// in ctr case we may just want to consult gpg/gpg2 for the key(s)
-	layerSymKeyMap, err = GetSymmetricKeys(layerInfos, gpgClient, gpgVault)
+	layerSymKeyMap, err = encryption.GetSymmetricKeys(layerInfos, gpgClient, gpgVault)
 	if err != nil {
 		return []rootfs.Layer{}, err
 	}
-	cc := &CryptoConfig{
-		Dc: &DecryptConfig{
+	cc := &encryption.CryptoConfig{
+		Dc: &encryption.DecryptConfig{
 			LayerSymKeyMap: layerSymKeyMap,
 		},
 	}

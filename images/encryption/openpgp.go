@@ -47,7 +47,7 @@
    OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-package images
+package encryption
 
 import (
 	"bytes"
@@ -60,6 +60,7 @@ import (
 
 	"github.com/containerd/containerd/errdefs"
 	"github.com/pkg/errors"
+
 	"golang.org/x/crypto/openpgp"
 	"golang.org/x/crypto/openpgp/packet"
 )
