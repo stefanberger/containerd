@@ -14,7 +14,7 @@
    limitations under the License.
 */
 
-package images
+package encryption
 
 import (
 	"fmt"
