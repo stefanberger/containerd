@@ -23,6 +23,7 @@ import (
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/images"
+	"github.com/containerd/containerd/images/encryption"
 	"github.com/containerd/containerd/platforms"
 	"github.com/containerd/containerd/rootfs"
 	digest "github.com/opencontainers/go-digest"
@@ -52,9 +53,9 @@ type Image interface {
 	// ContentStore provides a content store which contains image blob data
 	ContentStore() content.Store
 	// SetGPGClient sets the GPG client to use when decrypting the image
-	SetGPGClient(gpgClient images.GPGClient)
+	SetGPGClient(gpgClient encryption.GPGClient)
 	// SetGPGVault sets the GPGVault to use when decrypting the image
-	SetGPGVault(gpgVault images.GPGVault)
+	SetGPGVault(gpgVault encryption.GPGVault)
 }
 
 var _ = (Image)(&image{})
@@ -82,8 +83,8 @@ type image struct {
 
 	i         images.Image
 	platform  platforms.MatchComparer
-	gpgClient images.GPGClient
-	gpgVault  images.GPGVault
+	gpgClient encryption.GPGClient
+	gpgVault  encryption.GPGVault
 }
 
 func (i *image) Name() string {
@@ -229,10 +230,10 @@ func (i *image) ContentStore() content.Store {
 	return i.client.ContentStore()
 }
 
-func (i *image) SetGPGClient(gpgClient images.GPGClient) {
+func (i *image) SetGPGClient(gpgClient encryption.GPGClient) {
 	i.gpgClient = gpgClient
 }
 
-func (i *image) SetGPGVault(gpgVault images.GPGVault) {
+func (i *image) SetGPGVault(gpgVault encryption.GPGVault) {
 	i.gpgVault = gpgVault
 }

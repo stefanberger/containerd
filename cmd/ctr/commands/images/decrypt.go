@@ -20,7 +20,7 @@ import (
 	"fmt"
 
 	"github.com/containerd/containerd/cmd/ctr/commands"
-	"github.com/containerd/containerd/images"
+	"github.com/containerd/containerd/images/encryption"
 	"github.com/pkg/errors"
 	"github.com/urfave/cli"
 )
@@ -72,16 +72,16 @@ var decryptCommand = cli.Command{
 
 		// Create gpg client
 		gpgVersion := context.String("gpg-version")
-		v := new(images.GPGVersion)
+		v := new(encryption.GPGVersion)
 		switch gpgVersion {
 		case "v1":
-			*v = images.GPGv1
+			*v = encryption.GPGv1
 		case "v2":
-			*v = images.GPGv2
+			*v = encryption.GPGv2
 		default:
 			v = nil
 		}
-		gpgClient, err := images.NewGPGClient(v, context.String("gpg-homedir"))
+		gpgClient, err := encryption.NewGPGClient(v, context.String("gpg-homedir"))
 		if err != nil {
 			return errors.New("Unable to create GPG Client")
 		}
@@ -104,20 +104,20 @@ var decryptCommand = cli.Command{
 			return nil
 		}
 
-		gpgVault := images.NewGPGVault()
+		gpgVault := encryption.NewGPGVault()
 		err = gpgVault.AddSecretKeyRingFiles(context.StringSlice("key"))
 		if err != nil {
 			return err
 		}
 
-		layerSymKeyMap, err := images.GetSymmetricKeys(layerInfos, gpgClient, gpgVault)
+		layerSymKeyMap, err := encryption.GetSymmetricKeys(layerInfos, gpgClient, gpgVault)
 		if err != nil {
 			return err
 		}
 		fmt.Printf("\n")
 
-		cc := &images.CryptoConfig{
-			Dc: &images.DecryptConfig{
+		cc := &encryption.CryptoConfig{
+			Dc: &encryption.DecryptConfig{
 				LayerSymKeyMap: layerSymKeyMap,
 			},
 		}
