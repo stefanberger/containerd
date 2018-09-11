@@ -78,6 +78,10 @@ const (
 	OperationRemoveRecipients = int32(iota)
 )
 
+const (
+	DefaultEncryptionScheme = "pgp"
+)
+
 // DecryptKeyData stores private key data for decryption and the necessary password
 // for being able to access/decrypt the private key data.
 type DecryptKeyData struct {
@@ -99,9 +103,38 @@ type CryptoConfig struct {
 	Dc *DecryptConfig
 }
 
+// LayerEncryptor is the interface used for encryting and decrypting layers using
+// a specific encryption technology (pgp, jwe)
+type LayerEncryptor interface {
+	HandleEncrypt(ec *EncryptConfig, data []byte, keys [][]byte, layerNum int32, platform string) ([]byte, [][]byte, error)
+	Decrypt(dc *DecryptConfig, encBody []byte, keys [][]byte, layerNum int32, platform string) ([]byte, error)
+	EncodeWrappedKeys(keys [][]byte) string
+	DecodeWrappedKeys(keys string) ([][]byte, error)
+	GetAnnotationID() string
+}
+
+func init() {
+	encryptors = make(map[string]LayerEncryptor)
+	registerLayerEncryptor("pgp", &pgpLayerEncryptor{})
+}
+
+var encryptors map[string]LayerEncryptor
+
+func registerLayerEncryptor(scheme string, iface LayerEncryptor) {
+	encryptors[scheme] = iface
+}
+
+// GetEncryptor looks up the encryptor interface given an encryption scheme (gpg, jwe)
+func GetEncryptor(scheme string) LayerEncryptor {
+	return encryptors[scheme]
+}
+
+type pgpLayerEncryptor struct {
+}
+
 // createEntityList creates the opengpg EntityList by reading the KeyRing
 // first and then filtering out recipients' keys
-func createEntityList(ec *EncryptConfig) (openpgp.EntityList, error) {
+func (le *pgpLayerEncryptor) createEntityList(ec *EncryptConfig) (openpgp.EntityList, error) {
 	r := bytes.NewReader(ec.GPGPubRingFile)
 
 	entityList, err := openpgp.ReadKeyRing(r)
@@ -152,7 +185,7 @@ func createEntityList(ec *EncryptConfig) (openpgp.EntityList, error) {
 	return filteredList, nil
 }
 
-func getSymKeyParameters(layerSymKeyMap map[string]DecryptKeyData, index string) ([]byte, packet.CipherFunction) {
+func (le *pgpLayerEncryptor) getSymKeyParameters(layerSymKeyMap map[string]DecryptKeyData, index string) ([]byte, packet.CipherFunction) {
 	v, ok := layerSymKeyMap[index]
 	if !ok {
 		return nil, packet.CipherFunction(0)
@@ -162,7 +195,7 @@ func getSymKeyParameters(layerSymKeyMap map[string]DecryptKeyData, index string)
 
 // assembleEncryptedMessage takes in the openpgp encrypted body packets and
 // assembles the openpgp message
-func assembleEncryptedMessage(encBody []byte, keys [][]byte) []byte {
+func (le *pgpLayerEncryptor) assembleEncryptedMessage(encBody []byte, keys [][]byte) []byte {
 	encMsg := make([]byte, 0)
 
 	for _, k := range keys {
@@ -176,14 +209,14 @@ func assembleEncryptedMessage(encBody []byte, keys [][]byte) []byte {
 // HandleEncrypt encrypts a byte array using data from the EncryptConfig. It
 // also manages the list of recipients' keys by enabling removal or addition
 // of recipients.
-func HandleEncrypt(ec *EncryptConfig, data []byte, keys [][]byte, layerNum int32, platform string) ([]byte, [][]byte, error) {
+func (le *pgpLayerEncryptor) HandleEncrypt(ec *EncryptConfig, data []byte, keys [][]byte, layerNum int32, platform string) ([]byte, [][]byte, error) {
 	var (
 		encBlob     []byte
 		wrappedKeys [][]byte
 		err         error
 	)
 
-	filteredList, err := createEntityList(ec)
+	filteredList, err := le.createEntityList(ec)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -195,7 +228,7 @@ func HandleEncrypt(ec *EncryptConfig, data []byte, keys [][]byte, layerNum int32
 	case OperationAddRecipients:
 		if len(keys) > 0 {
 			index := fmt.Sprintf("%s:%d", platform, layerNum)
-			symKey, symKeyCipher := getSymKeyParameters(ec.Dc.LayerSymKeyMap, index)
+			symKey, symKeyCipher := le.getSymKeyParameters(ec.Dc.LayerSymKeyMap, index)
 			if len(symKey) == 0 {
 				return nil, nil, errors.Wrapf(errdefs.ErrInvalidArgument, "Unable to retrieve symkey for layer %s", index)
 			}
@@ -221,21 +254,54 @@ func HandleEncrypt(ec *EncryptConfig, data []byte, keys [][]byte, layerNum int32
 // is reassembled from the encBody and wrapped key.
 // The layerNum and platform are used to pick the symmetric key
 // used for decrypting the layer given its number and platform.
-func Decrypt(dc *DecryptConfig, encBody []byte, keys [][]byte, layerNum int32, platform string) ([]byte, error) {
+func (le *pgpLayerEncryptor) Decrypt(dc *DecryptConfig, encBody []byte, keys [][]byte, layerNum int32, platform string) ([]byte, error) {
 
 	index := fmt.Sprintf("%s:%d", platform, layerNum)
-	symKey, symKeyCipher := getSymKeyParameters(dc.LayerSymKeyMap, index)
+	symKey, symKeyCipher := le.getSymKeyParameters(dc.LayerSymKeyMap, index)
 	if len(symKey) == 0 {
 		return nil, errors.Wrapf(errdefs.ErrInvalidArgument, "Unable to retrieve symkey for layer %s", index)
 	}
 
-	data := assembleEncryptedMessage(encBody, keys)
+	data := le.assembleEncryptedMessage(encBody, keys)
 	r := bytes.NewReader(data)
 	md, err := ReadMessage(r, symKey, symKeyCipher)
 	if err != nil {
 		return []byte{}, err
 	}
 	return ioutil.ReadAll(md.UnverifiedBody)
+}
+
+// EncodeWrappedKeys encodes wrapped openpgp keys to a string readable ','
+// separated base64 strings.
+func (le *pgpLayerEncryptor) EncodeWrappedKeys(keys [][]byte) string {
+	var keyArray []string
+
+	for _, k := range keys {
+		keyArray = append(keyArray, base64.StdEncoding.EncodeToString(k))
+	}
+
+	return strings.Join(keyArray, ",")
+}
+
+// DecodeWrappedKeys decodes wrapped openpgp keys from string readable ','
+// separated base64 strings to their byte values
+func (le *pgpLayerEncryptor) DecodeWrappedKeys(keys string) ([][]byte, error) {
+	keySplit := strings.Split(keys, ",")
+	keyBytes := make([][]byte, 0, len(keySplit))
+
+	for _, v := range keySplit {
+		data, err := base64.StdEncoding.DecodeString(v)
+		if err != nil {
+			return nil, err
+		}
+		keyBytes = append(keyBytes, data)
+	}
+
+	return keyBytes, nil
+}
+
+func (le *pgpLayerEncryptor) GetAnnotationID() string {
+	return "org.opencontainers.image.pgp.keys"
 }
 
 // GetSymmetricKeys walks the list of layerInfos and tries to decrypt the
@@ -328,33 +394,4 @@ func GetSymmetricKeys(layerInfos []LayerInfo, gpgClient GPGClient, gpgVault GPGV
 		}
 	}
 	return layerSymkeyMap, nil
-}
-
-// EncodeWrappedKeys encodes wrapped openpgp keys to a string readable ','
-// separated base64 strings.
-func EncodeWrappedKeys(keys [][]byte) string {
-	var keyArray []string
-
-	for _, k := range keys {
-		keyArray = append(keyArray, base64.StdEncoding.EncodeToString(k))
-	}
-
-	return strings.Join(keyArray, ",")
-}
-
-// DecodeWrappedKeys decodes wrapped openpgp keys from string readable ','
-// separated base64 strings to their byte values
-func DecodeWrappedKeys(keys string) ([][]byte, error) {
-	keySplit := strings.Split(keys, ",")
-	keyBytes := make([][]byte, 0, len(keySplit))
-
-	for _, v := range keySplit {
-		data, err := base64.StdEncoding.DecodeString(v)
-		if err != nil {
-			return nil, err
-		}
-		keyBytes = append(keyBytes, data)
-	}
-
-	return keyBytes, nil
 }
