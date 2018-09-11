@@ -424,6 +424,13 @@ func getWrappedKeys(desc ocispec.Descriptor) ([][]byte, error) {
 	return make([][]byte, 0), nil
 }
 
+func getEncryptionScheme(desc ocispec.Descriptor) string {
+	if _, ok := desc.Annotations["org.opencontainers.image.pgp.keys"]; ok {
+		return "pgp"
+	}
+	return ""
+}
+
 // encryptLayer encrypts the layer using the CryptoConfig and creates a new OCI Descriptor.
 // A call to this function may also only manipulate the wrapped keys list.
 // The caller is expected to store the returned encrypted data and OCI Descriptor
@@ -482,10 +489,6 @@ func encryptLayer(cc *encryption.CryptoConfig, data []byte, desc ocispec.Descrip
 		return ocispec.Descriptor{}, []byte{}, errors.Errorf("Encryption: unsupporter layer MediaType: %s\n", desc.MediaType)
 	}
 
-	switch newDesc.MediaType {
-	case MediaTypeDockerSchema2LayerGzipEnc, MediaTypeDockerSchema2LayerEnc:
-		newDesc.Annotations["org.opencontainers.image.enc.scheme"] = "pgp"
-	}
 	return newDesc, p, nil
 }
 
@@ -857,7 +860,7 @@ func getImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descr
 		li := encryption.LayerInfo{
 			WrappedKeys: wrappedKeys,
 			Digest:      desc.Digest.String(),
-			Encryption:  desc.Annotations["org.opencontainers.image.enc.scheme"],
+			Encryption:  getEncryptionScheme(desc),
 			FileSize:    desc.Size,
 			ID:          uint32(layerNum),
 			Platform:    platform,
@@ -893,7 +896,7 @@ func DecryptLayers(ctx context.Context, cs content.Store, layers []rootfs.Layer,
 		switch layer.Blob.MediaType {
 		case MediaTypeDockerSchema2LayerEnc, MediaTypeDockerSchema2LayerGzipEnc:
 			isEncrypted = true
-			layerInfo.Encryption = layer.Blob.Annotations["org.opencontainers.image.enc.scheme"]
+			layerInfo.Encryption = getEncryptionScheme(layer.Blob)
 
 			layerInfo.WrappedKeys, err = getWrappedKeys(layer.Blob)
 			if err != nil {
