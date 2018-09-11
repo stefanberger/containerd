@@ -421,8 +421,13 @@ func IsCompressedDiff(ctx context.Context, mediaType string) (bool, error) {
 // annotation and returns them as an array of byte arrays.
 func getWrappedKeys(desc ocispec.Descriptor) ([][]byte, error) {
 	// Parse and decode keys
+	encryptor, err := getEncryptor(desc, "")
+	if err != nil {
+		return nil, err
+	}
+
 	if v, ok := desc.Annotations["org.opencontainers.image.pgp.keys"]; ok {
-		keys, err := encryption.DecodeWrappedKeys(v)
+		keys, err := encryptor.DecodeWrappedKeys(v)
 		if err != nil {
 			return nil, err
 		}
@@ -436,6 +441,21 @@ func getEncryptionScheme(desc ocispec.Descriptor) string {
 		return "pgp"
 	}
 	return ""
+}
+
+// getEncryptor gets the LayerEncryptor for the encryption scheme used for
+// encrypting the layer; if no encryption scheme is found the 'def' scheme
+// will be used to get the encryptor
+func getEncryptor(desc ocispec.Descriptor, def string) (encryption.LayerEncryptor, error) {
+	scheme := getEncryptionScheme(desc)
+	if scheme == "" {
+		scheme = def
+	}
+	encryptor := encryption.GetEncryptor(scheme)
+	if encryptor == nil {
+		return nil, errors.Errorf("No encryptor found for encryption scheme '%s'.", scheme)
+	}
+	return encryptor, nil
 }
 
 // encryptLayer encrypts the layer using the CryptoConfig and creates a new OCI Descriptor.
@@ -454,7 +474,12 @@ func encryptLayer(cc *encryption.CryptoConfig, data []byte, desc ocispec.Descrip
 		return ocispec.Descriptor{}, []byte{}, err
 	}
 
-	p, keys, err := encryption.HandleEncrypt(cc.Ec, data, keys, layerNum, platforms.Format(*platform))
+	encryptor, err := getEncryptor(desc, encryption.DefaultEncryptionScheme)
+	if err != nil {
+		return ocispec.Descriptor{}, []byte{}, err
+	}
+
+	p, keys, err := encryptor.HandleEncrypt(cc.Ec, data, keys, layerNum, platforms.Format(*platform))
 	if err != nil {
 		return ocispec.Descriptor{}, []byte{}, err
 	}
@@ -474,7 +499,7 @@ func encryptLayer(cc *encryption.CryptoConfig, data []byte, desc ocispec.Descrip
 		Platform: desc.Platform,
 	}
 	newDesc.Annotations = make(map[string]string)
-	newDesc.Annotations["org.opencontainers.image.pgp.keys"] = encryption.EncodeWrappedKeys(keys)
+	newDesc.Annotations[encryptor.GetAnnotationID()] = encryptor.EncodeWrappedKeys(keys)
 
 	switch desc.MediaType {
 	case MediaTypeDockerSchema2LayerGzip:
@@ -507,7 +532,12 @@ func decryptLayer(cc *encryption.CryptoConfig, data []byte, desc ocispec.Descrip
 		return ocispec.Descriptor{}, []byte{}, err
 	}
 
-	p, err := encryption.Decrypt(cc.Dc, data, keys, layerNum, platforms.Format(*platform))
+	encryptor, err := getEncryptor(desc, "")
+	if err != nil {
+		return ocispec.Descriptor{}, []byte{}, err
+	}
+
+	p, err := encryptor.Decrypt(cc.Dc, data, keys, layerNum, platforms.Format(*platform))
 	if err != nil {
 		return ocispec.Descriptor{}, []byte{}, err
 	}
