@@ -695,7 +695,7 @@ func cryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descripto
 	return desc, modified, nil
 }
 
-// cryptManifest encrypt or decrypt the children of a top level manifest
+// cryptManifest encrypts or decrypts the children of a top level manifest
 func cryptManifest(ctx context.Context, cs content.Store, desc ocispec.Descriptor, cc *encryption.CryptoConfig, lf *encryption.LayerFilter, encrypt bool) (ocispec.Descriptor, bool, error) {
 	p, err := content.ReadBlob(ctx, cs, desc)
 	if err != nil {
