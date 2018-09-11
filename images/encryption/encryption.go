@@ -223,14 +223,13 @@ func HandleEncrypt(ec *EncryptConfig, data []byte, keys [][]byte, layerNum int32
 // used for decrypting the layer given its number and platform.
 func Decrypt(dc *DecryptConfig, encBody []byte, keys [][]byte, layerNum int32, platform string) ([]byte, error) {
 
-	data := assembleEncryptedMessage(encBody, keys)
-
 	index := fmt.Sprintf("%s:%d", platform, layerNum)
 	symKey, symKeyCipher := getSymKeyParameters(dc.LayerSymKeyMap, index)
 	if len(symKey) == 0 {
 		return nil, errors.Wrapf(errdefs.ErrInvalidArgument, "Unable to retrieve symkey for layer %s", index)
 	}
 
+	data := assembleEncryptedMessage(encBody, keys)
 	r := bytes.NewReader(data)
 	md, err := ReadMessage(r, symKey, symKeyCipher)
 	if err != nil {
