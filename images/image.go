@@ -421,12 +421,12 @@ func IsCompressedDiff(ctx context.Context, mediaType string) (bool, error) {
 // annotation and returns them as an array of byte arrays.
 func getWrappedKeys(desc ocispec.Descriptor) ([][]byte, error) {
 	// Parse and decode keys
-	encryptor, err := getEncryptor(desc, "")
+	encryptor, err := getEncryptor(desc, encryption.DefaultEncryptionScheme)
 	if err != nil {
 		return nil, err
 	}
 
-	if v, ok := desc.Annotations["org.opencontainers.image.pgp.keys"]; ok {
+	if v, ok := desc.Annotations[encryptor.GetAnnotationID()]; ok {
 		keys, err := encryptor.DecodeWrappedKeys(v)
 		if err != nil {
 			return nil, err
