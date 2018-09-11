@@ -85,7 +85,7 @@ type DecryptKeyData struct {
 	SymKeyCipher uint8
 }
 
-// DecryptConfig stores the platform and layer number encode in a string as a
+// DecryptConfig stores the platform and layer number encoded in a string as a
 // key to the map. The symmetric key needed for decrypting a platform specific
 // layer is stored as value.
 type DecryptConfig struct {
