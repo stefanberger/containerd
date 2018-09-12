@@ -73,7 +73,11 @@ var layerinfoCommand = cli.Command{
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', tabwriter.AlignRight)
 		fmt.Fprintf(w, "#\tDIGEST\tPLATFORM\tSIZE\tENCRYPTION\tKEY IDS\t\n")
 		for _, layer := range LayerInfos {
-			keyIds, err := encryption.WrappedKeysToKeyIds(layer.WrappedKeys)
+			keys, err := encryption.DecodeWrappedKeys(layer.WrappedKeys)
+			if err != nil {
+				return err
+			}
+			keyIds, err := encryption.WrappedKeysToKeyIds(keys)
 			if err != nil {
 				return err
 			}
