@@ -2476,8 +2476,8 @@ file {
     field {
       name: "WrappedKeys"
       number: 2
-      label: LABEL_REPEATED
-      type: TYPE_BYTES
+      label: LABEL_OPTIONAL
+      type: TYPE_STRING
       json_name: "WrappedKeys"
     }
     field {
