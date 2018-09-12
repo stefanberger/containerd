@@ -185,12 +185,13 @@ func (le *pgpLayerEncryptor) createEntityList(ec *EncryptConfig) (openpgp.Entity
 	return filteredList, nil
 }
 
-func (le *pgpLayerEncryptor) getSymKeyParameters(layerSymKeyMap map[string]DecryptKeyData, index string) ([]byte, packet.CipherFunction) {
+func (le *pgpLayerEncryptor) getSymKeyParameters(layerSymKeyMap map[string]DecryptKeyData, layerNum int32, platform string) ([]byte, packet.CipherFunction, error) {
+	index := fmt.Sprintf("%s:%d", platform, layerNum)
 	v, ok := layerSymKeyMap[index]
-	if !ok {
-		return nil, packet.CipherFunction(0)
+	if !ok || len(v.SymKeyData) == 0 {
+		return nil, packet.CipherFunction(0), errors.Wrapf(errdefs.ErrInvalidArgument, "Unable to retrieve symkey for layer %s", index)
 	}
-	return v.SymKeyData, packet.CipherFunction(v.SymKeyCipher)
+	return v.SymKeyData, packet.CipherFunction(v.SymKeyCipher), nil
 }
 
 // assembleEncryptedMessage takes in the openpgp encrypted body packets and
@@ -227,10 +228,9 @@ func (le *pgpLayerEncryptor) HandleEncrypt(ec *EncryptConfig, data []byte, keys 
 	switch ec.Operation {
 	case OperationAddRecipients:
 		if len(keys) > 0 {
-			index := fmt.Sprintf("%s:%d", platform, layerNum)
-			symKey, symKeyCipher := le.getSymKeyParameters(ec.Dc.LayerSymKeyMap, index)
-			if len(symKey) == 0 {
-				return nil, nil, errors.Wrapf(errdefs.ErrInvalidArgument, "Unable to retrieve symkey for layer %s", index)
+			symKey, symKeyCipher, err := le.getSymKeyParameters(ec.Dc.LayerSymKeyMap, layerNum, platform)
+			if err != nil {
+				return nil, nil, err
 			}
 			wrappedKeys, err = addRecipientsToKeys(keys, filteredList, symKey, symKeyCipher, nil)
 		} else {
@@ -256,10 +256,9 @@ func (le *pgpLayerEncryptor) HandleEncrypt(ec *EncryptConfig, data []byte, keys 
 // used for decrypting the layer given its number and platform.
 func (le *pgpLayerEncryptor) Decrypt(dc *DecryptConfig, encBody []byte, keys [][]byte, layerNum int32, platform string) ([]byte, error) {
 
-	index := fmt.Sprintf("%s:%d", platform, layerNum)
-	symKey, symKeyCipher := le.getSymKeyParameters(dc.LayerSymKeyMap, index)
-	if len(symKey) == 0 {
-		return nil, errors.Wrapf(errdefs.ErrInvalidArgument, "Unable to retrieve symkey for layer %s", index)
+	symKey, symKeyCipher, err := le.getSymKeyParameters(dc.LayerSymKeyMap, layerNum, platform)
+	if err != nil {
+		return []byte{}, err
 	}
 
 	data := le.assembleEncryptedMessage(encBody, keys)
