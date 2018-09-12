@@ -185,7 +185,7 @@ message GetImageLayerInfoRequest {
 
 message LayerInfo {
 	uint32 id = 1;
-	repeated bytes WrappedKeys = 2;
+	string WrappedKeys = 2;
 	string digest = 3;
 	string encryption = 4;
 	int64 fileSize = 5;
