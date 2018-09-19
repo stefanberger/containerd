@@ -123,13 +123,13 @@ var encryptCommand = cli.Command{
 
 		layers32 := commands.IntToInt32Array(context.IntSlice("layer"))
 
-		layerSymKeyMap := make(map[string]encryption.DecryptKeyData)
+		var dcparameters map[string]string
 		if operation == encryption.OperationAddRecipients {
 			layerInfos, err := client.ImageService().GetImageLayerInfo(ctx, local, layers32, context.StringSlice("platform"))
 			if err != nil {
 				return err
 			}
-			layerSymKeyMap, err = encryption.GetSymmetricKeys(layerInfos, gpgClient, gpgVault)
+			dcparameters, err = encryption.GetPrivateKey(layerInfos, gpgClient, gpgVault)
 			if err != nil {
 				return err
 			}
@@ -146,7 +146,7 @@ var encryptCommand = cli.Command{
 				Parameters: parameters,
 				Operation:  operation,
 				Dc: encryption.DecryptConfig{
-					LayerSymKeyMap: layerSymKeyMap,
+					Parameters    : dcparameters,
 				},
 			},
 		}

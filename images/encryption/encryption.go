@@ -98,7 +98,7 @@ type DecryptKeyData struct {
 // key to the map. The symmetric key needed for decrypting a platform specific
 // layer is stored as value.
 type DecryptConfig struct {
-	LayerSymKeyMap map[string]DecryptKeyData
+	Parameters map[string]string
 }
 
 // CryptoConfig is a common wrapper for EncryptConfig and DecrypConfig that can
@@ -111,8 +111,8 @@ type CryptoConfig struct {
 // LayerEncryptor is the interface used for encryting and decrypting layers using
 // a specific encryption technology (pgp, jwe)
 type LayerEncryptor interface {
-	HandleEncrypt(ec *EncryptConfig, planeLayer []byte, wrappedKeys string, layerNum int32, platform string) ([]byte, string, error)
-	Decrypt(dc *DecryptConfig, encLayer []byte, wrappedKeys string, layerNum int32, platform string) ([]byte, error)
+	HandleEncrypt(ec *EncryptConfig, planeLayer []byte, wrappedKeys string) ([]byte, string, error)
+	Decrypt(dc *DecryptConfig, encLayer []byte, wrappedKeys string) ([]byte, error)
 	GetAnnotationID() string
 
 	GetKeyIdsFromWrappedKeys(wrappedKeys string) ([]uint64, [][]byte, error)
@@ -247,15 +247,6 @@ func (le *pgpLayerEncryptor) createEntityList(ec *EncryptConfig) (openpgp.Entity
 	return filteredList, nil
 }
 
-func (le *pgpLayerEncryptor) getSymKeyParameters(layerSymKeyMap map[string]DecryptKeyData, layerNum int32, platform string) ([]byte, packet.CipherFunction, error) {
-	index := fmt.Sprintf("%s:%d", platform, layerNum)
-	v, ok := layerSymKeyMap[index]
-	if !ok || len(v.SymKeyData) == 0 {
-		return nil, packet.CipherFunction(0), errors.Wrapf(errdefs.ErrInvalidArgument, "Unable to retrieve symkey for layer %s", index)
-	}
-	return v.SymKeyData, packet.CipherFunction(v.SymKeyCipher), nil
-}
-
 // assembleEncryptedMessage takes in the openpgp encrypted body packets and
 // assembles the openpgp message
 func (le *pgpLayerEncryptor) assembleEncryptedMessage(encBody []byte, keys [][]byte) []byte {
@@ -272,7 +263,7 @@ func (le *pgpLayerEncryptor) assembleEncryptedMessage(encBody []byte, keys [][]b
 // HandleEncrypt encrypts a byte array using data from the EncryptConfig. It
 // also manages the list of recipients' keys by enabling removal or addition
 // of recipients.
-func (le *pgpLayerEncryptor) HandleEncrypt(ec *EncryptConfig, plainLayer []byte, wrappedKeys string, layerNum int32, platform string) ([]byte, string, error) {
+func (le *pgpLayerEncryptor) HandleEncrypt(ec *EncryptConfig, plainLayer []byte, wrappedKeys string) ([]byte, string, error) {
 	var (
 		encLayer []byte
 		err      error
@@ -293,7 +284,7 @@ func (le *pgpLayerEncryptor) HandleEncrypt(ec *EncryptConfig, plainLayer []byte,
 	switch ec.Operation {
 	case OperationAddRecipients:
 		if len(keys) > 0 {
-			symKey, symKeyCipher, err := le.getSymKeyParameters(ec.Dc.LayerSymKeyMap, layerNum, platform)
+			symKey, symKeyCipher, err := le.getSymKeyParameters(ec.Dc.Parameters, keys)
 			if err != nil {
 				return nil, "", err
 			}
@@ -327,17 +318,14 @@ func (le *pgpLayerEncryptor) HandleEncrypt(ec *EncryptConfig, plainLayer []byte,
 // is reassembled from the encBody and wrapped key.
 // The layerNum and platform are used to pick the symmetric key
 // used for decrypting the layer given its number and platform.
-func (le *pgpLayerEncryptor) Decrypt(dc *DecryptConfig, encLayer []byte, wrappedKeys string, layerNum int32, platform string) ([]byte, error) {
+func (le *pgpLayerEncryptor) Decrypt(dc *DecryptConfig, encLayer []byte, wrappedKeys string) ([]byte, error) {
 
 	keys, pgpTail, err := le.decodeWrappedKeys(wrappedKeys)
 	if err != nil {
 		return nil, err
 	}
 
-	symKey, symKeyCipher, err := le.getSymKeyParameters(dc.LayerSymKeyMap, layerNum, platform)
-	if err != nil {
-		return nil, err
-	}
+	symKey, symKeyCipher, err := le.getSymKeyParameters(dc.Parameters, keys)
 
 	data := le.assembleEncryptedMessage(pgpTail, keys)
 	r := bytes.NewReader(data)
@@ -425,22 +413,22 @@ func (le *pgpLayerEncryptor) GetAnnotationID() string {
 	return "org.opencontainers.image.pgp.keys"
 }
 
-// GetSymmetricKeys walks the list of layerInfos and tries to decrypt the
-// wrapped symmetric keys. For this it determines whether private keys are
+// GetPrivateKey walks the list of layerInfos and tries to decrypt the
+// wrapped symmetric keys. For this it determines whether a private key is
 // in the GPGVault or on this system and prompts for the passwords for those
 // that are available. If we do not find a private key on the system for
 // getting to the symmetric key of a layer then an error is generated.
-// Otherwise the wrapped symmetric key is decrypted using the private key and
-// added to a map that describes the layer by platform name and layer number
-// as key and the symmetric key data as value.
-func GetSymmetricKeys(layerInfos []LayerInfo, gpgClient GPGClient, gpgVault GPGVault) (map[string]DecryptKeyData, error) {
-	type PrivKeyData struct {
+// Otherwise the wrapped symmetric key is test-decrypted using the private key.
+func GetPrivateKey(layerInfos []LayerInfo, gpgClient GPGClient, gpgVault GPGVault) (map[string]string, error) {
+	// PrivateKeyData describes a private key
+	type PrivateKeyData struct {
 		KeyData         []byte
 		KeyDataPassword []byte
+		KeyID           uint64
 	}
-	var pkd PrivKeyData
-	keyIDPasswordMap := make(map[uint64]PrivKeyData)
-	layerSymkeyMap := make(map[string]DecryptKeyData)
+	var pkd PrivateKeyData
+	parameters := make(map[string]string)
+	keyIDPasswordMap := make(map[uint64]PrivateKeyData)
 
 	encryptor := GetEncryptor("pgp")
 
@@ -448,7 +436,7 @@ func GetSymmetricKeys(layerInfos []LayerInfo, gpgClient GPGClient, gpgVault GPGV
 	for _, layerInfo := range layerInfos {
 		keyIds, keys, err := encryptor.GetKeyIdsFromWrappedKeys(layerInfo.WrappedKeys)
 		if err != nil {
-			return layerSymkeyMap, err
+			return parameters, err
 		}
 
 		found := false
@@ -457,9 +445,10 @@ func GetSymmetricKeys(layerInfos []LayerInfo, gpgClient GPGClient, gpgVault GPGV
 			if gpgVault != nil {
 				_, keydata := gpgVault.GetGPGPrivateKey(keyid)
 				if len(keydata) > 0 {
-					pkd = PrivKeyData{
+					pkd = PrivateKeyData{
 						KeyData:         keydata,
 						KeyDataPassword: nil, // password not supported in this case
+						KeyID:           keyid,
 					}
 					keyIDPasswordMap[keyid] = pkd
 				}
@@ -480,32 +469,29 @@ func GetSymmetricKeys(layerInfos []LayerInfo, gpgClient GPGClient, gpgVault GPGV
 					password, err := terminal.ReadPassword(int(os.Stdin.Fd()))
 					fmt.Printf("\n")
 					if err != nil {
-						return layerSymkeyMap, err
+						return parameters, err
 					}
 					keydata, err := gpgClient.GetGPGPrivateKey(keyid, string(password))
 					if err != nil {
-						return layerSymkeyMap, err
+						return parameters, err
 					}
-					pkd = PrivKeyData{
+					pkd = PrivateKeyData{
 						KeyData:         keydata,
 						KeyDataPassword: password,
+						KeyID:           keyid,
 					}
 					keyIDPasswordMap[keyid] = pkd
 				}
 			} else {
-				return layerSymkeyMap, errors.Wrapf(errdefs.ErrInvalidArgument, "No GPGVault or GPGClient passed.")
+				return parameters, errors.Wrapf(errdefs.ErrInvalidArgument, "No GPGVault or GPGClient passed.")
 			}
 
-			symKeyData, symKeyCipher, err := PGPDecryptSymmetricKey(keys, keyid, pkd.KeyData, pkd.KeyDataPassword, nil)
+			// test the password by trying a decryption
+			_, _, err := PGPDecryptSymmetricKey(keys, keyid, pkd.KeyData, pkd.KeyDataPassword, nil)
 			if err != nil {
-				return layerSymkeyMap, err
+				return parameters, err
 			}
 
-			index := fmt.Sprintf("%s:%d", layerInfo.Platform, layerInfo.ID)
-			layerSymkeyMap[index] = DecryptKeyData{
-				SymKeyData:   symKeyData,
-				SymKeyCipher: uint8(symKeyCipher),
-			}
 			found = true
 			break
 		}
@@ -513,8 +499,32 @@ func GetSymmetricKeys(layerInfos []LayerInfo, gpgClient GPGClient, gpgVault GPGV
 			keyIds, _ := PGPWrappedKeysToKeyIds(keys)
 			ids := Uint64ToStringArray("0x%x", keyIds)
 
-			return layerSymkeyMap, errors.Wrapf(errdefs.ErrNotFound, "Missing key for decryption of layer %d of %s. Need one of the following keys: %s", layerInfo.ID, layerInfo.Platform, strings.Join(ids, ", "))
+			return parameters, errors.Wrapf(errdefs.ErrNotFound, "Missing key for decryption of layer %d of %s. Need one of the following keys: %s", layerInfo.ID, layerInfo.Platform, strings.Join(ids, ", "))
 		}
 	}
-	return layerSymkeyMap, nil
+
+	parameters["gpg-privatekey"] = base64.StdEncoding.EncodeToString(pkd.KeyData)
+	parameters["gpg-privatekey-password"] = base64.StdEncoding.EncodeToString(pkd.KeyDataPassword)
+	parameters["gpg-privatekey-keyid"] = fmt.Sprintf("0x%x", pkd.KeyID)
+
+	return parameters, nil
 }
+
+func (le *pgpLayerEncryptor) getSymKeyParameters(dcparameters map[string]string, keys [][]byte) ([]byte, packet.CipherFunction, error) {
+	var keyid uint64
+
+	_, err := fmt.Sscanf(dcparameters["gpg-privatekey-keyid"], "0x%x", &keyid)
+	if err != nil {
+		return nil, packet.CipherFunction(0), errors.Wrapf(err, "Could not Sscan %s as hex number\n", dcparameters["gpg-privatekey-keyid"])
+	}
+	gpgPrivateKey, err := base64.StdEncoding.DecodeString(dcparameters["gpg-privatekey"])
+	if err != nil {
+		return nil, packet.CipherFunction(0), errors.Wrapf(err, "Could not base64 decode gpg-privatekey\n")
+	}
+	gpgPrivateKeyPwd, err := base64.StdEncoding.DecodeString(dcparameters["gpg-privatekey-password"])
+	if err != nil {
+		return nil, packet.CipherFunction(0), errors.Wrapf(err, "Could not base64 decode gpg-privatekey-password\n")
+	}
+	return PGPDecryptSymmetricKey(keys, keyid, gpgPrivateKey, gpgPrivateKeyPwd, nil)
+}
+

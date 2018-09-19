@@ -133,9 +133,9 @@ message DeleteImageRequest {
 // EncryptConfig holds recipients' identifiers and the gpg public key ring
 message EncryptConfig {
 	map<string, string> parameters = 1;
-	int32 operation = 3;
+	int32 operation = 2;
 
-	DecryptConfig dc = 4;
+	DecryptConfig dc = 3;
 }
 
 // DecryptKeyData holds the private key data and the password for the private key
@@ -147,7 +147,7 @@ message DecryptKeyData {
 // DecrypConfig holds the Ids of public keys and their corresponding private keys
 // needed for decrypting data
 message DecryptConfig {
-	map<string, DecryptKeyData> layerSymKeyMap = 1;
+	map<string, string> parameters = 1;
 }
 
 message EncryptImageRequest {
