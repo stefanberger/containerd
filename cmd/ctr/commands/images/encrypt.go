@@ -17,7 +17,9 @@
 package images
 
 import (
+	"encoding/base64"
 	"fmt"
+	"strings"
 
 	"github.com/containerd/containerd/cmd/ctr/commands"
 	"github.com/containerd/containerd/images/encryption"
@@ -132,12 +134,17 @@ var encryptCommand = cli.Command{
 				return err
 			}
 		}
+		parameters := make(map[string]string)
+		parameters["gpg-recipients"] = strings.Join(recipients, ",")
+		parameters["gpg-pubkeyringfile"] = base64.StdEncoding.EncodeToString(gpgPubRingFile)
+		if err != nil {
+			return err
+		}
 
 		cc := &encryption.CryptoConfig{
 			Ec: &encryption.EncryptConfig{
-				GPGPubRingFile: gpgPubRingFile,
-				Recipients:     recipients,
-				Operation:      operation,
+				Parameters: parameters,
+				Operation:  operation,
 				Dc: encryption.DecryptConfig{
 					LayerSymKeyMap: layerSymKeyMap,
 				},
