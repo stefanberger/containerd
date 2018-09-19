@@ -11,7 +11,9 @@ type LayerCipherType string
 const (
 	AeadAes128Gcm LayerCipherType = "AEAD_AES_128_GCM"
 	AeadAes256Gcm LayerCipherType = "AEAD_AES_256_GCM"
+    CipherTypeOpt = "type"
 )
+
 
 // LayerBlockCipherOptions includes the information required to encrypt/decrypt
 // an image
@@ -37,13 +39,21 @@ type LayerBlockCipherHandler struct {
 // Encrypt is the handler for the layer decrpytion routine
 func (h *LayerBlockCipherHandler) Encrypt(layerData []byte, typ LayerCipherType, opt LayerBlockCipherOptions) ([]byte, LayerBlockCipherOptions, error) {
 	if c, ok := h.cipherMap[typ]; ok {
-		return c.Encrypt(layerData, opt)
+        data, newopt, err := c.Encrypt(layerData, opt)
+        if err == nil {
+            newopt[CipherTypeOpt] = typ
+        }
+        return data, newopt, err
 	}
 	return nil, LayerBlockCipherOptions{}, errors.New("Not supported Cipher Type")
 }
 
 // Decrypt is the handler for the layer decrpytion routine
-func (h *LayerBlockCipherHandler) Decrypt(layerData []byte, typ LayerCipherType, opt LayerBlockCipherOptions) ([]byte, LayerBlockCipherOptions, error) {
+func (h *LayerBlockCipherHandler) Decrypt(layerData []byte, opt LayerBlockCipherOptions) ([]byte, LayerBlockCipherOptions, error) {
+    typ, ok := opt.CipherOptions[CipherTypeOpt]
+    if ! ok {
+        return nil, errors.New("No cipher type provided")
+    }
 	if c, ok := h.cipherMap[typ]; ok {
 		return c.Decrypt(layerData, opt)
 	}
