@@ -2265,14 +2265,14 @@ file {
     }
     field {
       name: "operation"
-      number: 3
+      number: 2
       label: LABEL_OPTIONAL
       type: TYPE_INT32
       json_name: "operation"
     }
     field {
       name: "dc"
-      number: 4
+      number: 3
       label: LABEL_OPTIONAL
       type: TYPE_MESSAGE
       type_name: ".containerd.services.images.v1.DecryptConfig"
@@ -2319,15 +2319,15 @@ file {
   message_type {
     name: "DecryptConfig"
     field {
-      name: "layerSymKeyMap"
+      name: "parameters"
       number: 1
       label: LABEL_REPEATED
       type: TYPE_MESSAGE
-      type_name: ".containerd.services.images.v1.DecryptConfig.LayerSymKeyMapEntry"
-      json_name: "layerSymKeyMap"
+      type_name: ".containerd.services.images.v1.DecryptConfig.ParametersEntry"
+      json_name: "parameters"
     }
     nested_type {
-      name: "LayerSymKeyMapEntry"
+      name: "ParametersEntry"
       field {
         name: "key"
         number: 1
@@ -2339,8 +2339,7 @@ file {
         name: "value"
         number: 2
         label: LABEL_OPTIONAL
-        type: TYPE_MESSAGE
-        type_name: ".containerd.services.images.v1.DecryptKeyData"
+        type: TYPE_STRING
         json_name: "value"
       }
       options {
