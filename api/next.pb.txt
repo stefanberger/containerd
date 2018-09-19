@@ -2221,18 +2221,12 @@ file {
   message_type {
     name: "EncryptConfig"
     field {
-      name: "recipients"
+      name: "parameters"
       number: 1
       label: LABEL_REPEATED
-      type: TYPE_STRING
-      json_name: "recipients"
-    }
-    field {
-      name: "gpgpubkeyring"
-      number: 2
-      label: LABEL_OPTIONAL
-      type: TYPE_BYTES
-      json_name: "gpgpubkeyring"
+      type: TYPE_MESSAGE
+      type_name: ".containerd.services.images.v1.EncryptConfig.ParametersEntry"
+      json_name: "parameters"
     }
     field {
       name: "operation"
@@ -2248,6 +2242,26 @@ file {
       type: TYPE_MESSAGE
       type_name: ".containerd.services.images.v1.DecryptConfig"
       json_name: "dc"
+    }
+    nested_type {
+      name: "ParametersEntry"
+      field {
+        name: "key"
+        number: 1
+        label: LABEL_OPTIONAL
+        type: TYPE_STRING
+        json_name: "key"
+      }
+      field {
+        name: "value"
+        number: 2
+        label: LABEL_OPTIONAL
+        type: TYPE_STRING
+        json_name: "value"
+      }
+      options {
+        map_entry: true
+      }
     }
   }
   message_type {

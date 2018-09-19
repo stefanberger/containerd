@@ -133,8 +133,7 @@ func (s *remoteImages) EncryptImage(ctx context.Context, name, newName string, c
 		Name:    name,
 		NewName: newName,
 		Ec: &imagesapi.EncryptConfig{
-			Recipients:    cc.Ec.Recipients,
-			Gpgpubkeyring: cc.Ec.GPGPubRingFile,
+			Parameters:    cc.Ec.Parameters,
 			Operation:     cc.Ec.Operation,
 			Dc: &imagesapi.DecryptConfig{
 				LayerSymKeyMap: layerSymKeyMap,
