@@ -132,8 +132,7 @@ message DeleteImageRequest {
 
 // EncryptConfig holds recipients' identifiers and the gpg public key ring
 message EncryptConfig {
-	repeated string recipients = 1;
-	bytes gpgpubkeyring = 2;
+	map<string, string> parameters = 1;
 	int32 operation = 3;
 
 	DecryptConfig dc = 4;
