@@ -185,14 +185,12 @@ func (l *local) EncryptImage(ctx context.Context, req *imagesapi.EncryptImageReq
 
 	var resp imagesapi.EncryptImageResponse
 
-	layerSymKeyMap := convLayerSymKeyMap(req.Ec.Dc.LayerSymKeyMap)
-
 	encrypted, err := l.store.EncryptImage(ctx, req.Name, req.NewName, &encryption.CryptoConfig{
 		Ec: &encryption.EncryptConfig{
 			Parameters:     req.Ec.Parameters,
 			Operation:      req.Ec.Operation,
 			Dc: encryption.DecryptConfig{
-				LayerSymKeyMap: layerSymKeyMap,
+				Parameters    : req.Ec.Dc.Parameters,
 			},
 		},
 	}, req.Layers, req.Platforms)
@@ -217,11 +215,9 @@ func (l *local) DecryptImage(ctx context.Context, req *imagesapi.DecryptImageReq
 
 	var resp imagesapi.DecryptImageResponse
 
-	layerSymKeyMap := convLayerSymKeyMap(req.Dc.LayerSymKeyMap)
-
 	encrypted, err := l.store.DecryptImage(ctx, req.Name, req.NewName, &encryption.CryptoConfig{
 		Dc: &encryption.DecryptConfig{
-			LayerSymKeyMap: layerSymKeyMap,
+			Parameters    : req.Dc.Parameters,
 		},
 	}, req.Layers, req.Platforms)
 	if err != nil {
@@ -262,16 +258,4 @@ func (l *local) GetImageLayerInfo(ctx context.Context, req *imagesapi.GetImageLa
 	}
 
 	return &resp, nil
-}
-
-func convLayerSymKeyMap(layerSymKeyMap map[string]*imagesapi.DecryptKeyData) map[string]encryption.DecryptKeyData {
-	layerSymKeyMapOut := make(map[string]encryption.DecryptKeyData)
-
-	for k, v := range layerSymKeyMap {
-		layerSymKeyMapOut[k] = encryption.DecryptKeyData{
-			SymKeyData:   v.SymKeyData,
-			SymKeyCipher: uint8(v.SymKeyCipher),
-		}
-	}
-	return layerSymKeyMapOut
 }

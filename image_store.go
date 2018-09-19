@@ -127,7 +127,6 @@ func imageFromProto(imagepb *imagesapi.Image) images.Image {
 }
 
 func (s *remoteImages) EncryptImage(ctx context.Context, name, newName string, cc *encryption.CryptoConfig, layers []int32, platforms []string) (images.Image, error) {
-	layerSymKeyMap := convLayerSymKeyMap(cc.Ec.Dc.LayerSymKeyMap)
 
 	resp, err := s.client.EncryptImage(ctx, &imagesapi.EncryptImageRequest{
 		Name:    name,
@@ -136,7 +135,7 @@ func (s *remoteImages) EncryptImage(ctx context.Context, name, newName string, c
 			Parameters:    cc.Ec.Parameters,
 			Operation:     cc.Ec.Operation,
 			Dc: &imagesapi.DecryptConfig{
-				LayerSymKeyMap: layerSymKeyMap,
+				Parameters    : cc.Ec.Dc.Parameters,
 			},
 		},
 		Layers:    layers,
@@ -150,13 +149,12 @@ func (s *remoteImages) EncryptImage(ctx context.Context, name, newName string, c
 }
 
 func (s *remoteImages) DecryptImage(ctx context.Context, name, newName string, cc *encryption.CryptoConfig, layers []int32, platforms []string) (images.Image, error) {
-	layerSymKeyMap := convLayerSymKeyMap(cc.Dc.LayerSymKeyMap)
 
 	resp, err := s.client.DecryptImage(ctx, &imagesapi.DecryptImageRequest{
 		Name:    name,
 		NewName: newName,
 		Dc: &imagesapi.DecryptConfig{
-			LayerSymKeyMap: layerSymKeyMap,
+			Parameters:     cc.Dc.Parameters,
 		},
 		Layers:    layers,
 		Platforms: platforms,
@@ -189,18 +187,6 @@ func (s *remoteImages) GetImageLayerInfo(ctx context.Context, name string, layer
 	}
 
 	return li, nil
-}
-
-func convLayerSymKeyMap(layerSymKeyMap map[string]encryption.DecryptKeyData) map[string]*imagesapi.DecryptKeyData {
-	layerSymKeyMapOut := make(map[string]*imagesapi.DecryptKeyData)
-
-	for k, v := range layerSymKeyMap {
-		layerSymKeyMapOut[k] = &imagesapi.DecryptKeyData{
-			SymKeyData:   v.SymKeyData,
-			SymKeyCipher: uint32(v.SymKeyCipher),
-		}
-	}
-	return layerSymKeyMapOut
 }
 
 func imagesFromProto(imagespb []imagesapi.Image) []images.Image {
