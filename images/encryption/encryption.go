@@ -18,8 +18,11 @@ package encryption
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/mail"
 	"os"
@@ -107,8 +110,8 @@ type CryptoConfig struct {
 // LayerEncryptor is the interface used for encryting and decrypting layers using
 // a specific encryption technology (pgp, jwe)
 type LayerEncryptor interface {
-	HandleEncrypt(ec *EncryptConfig, data []byte, wrappedKeys string, layerNum int32, platform string) ([]byte, string, error)
-	Decrypt(dc *DecryptConfig, encBody []byte, wrappedKeys string, layerNum int32, platform string) ([]byte, error)
+	HandleEncrypt(ec *EncryptConfig, planeLayer []byte, wrappedKeys string, layerNum int32, platform string) ([]byte, string, error)
+	Decrypt(dc *DecryptConfig, encLayer []byte, wrappedKeys string, layerNum int32, platform string) ([]byte, error)
 	GetAnnotationID() string
 
 	GetKeyIdsFromWrappedKeys(wrappedKeys string) ([]uint64, [][]byte, error)
@@ -212,12 +215,12 @@ func (le *pgpLayerEncryptor) assembleEncryptedMessage(encBody []byte, keys [][]b
 // HandleEncrypt encrypts a byte array using data from the EncryptConfig. It
 // also manages the list of recipients' keys by enabling removal or addition
 // of recipients.
-func (le *pgpLayerEncryptor) HandleEncrypt(ec *EncryptConfig, data []byte, wrappedKeys string, layerNum int32, platform string) ([]byte, string, error) {
+func (le *pgpLayerEncryptor) HandleEncrypt(ec *EncryptConfig, plainLayer []byte, wrappedKeys string, layerNum int32, platform string) ([]byte, string, error) {
 	var (
-		encBlob []byte
-		err     error
+		encLayer []byte
+		err      error
 	)
-	keys, err := le.decodeWrappedKeys(wrappedKeys)
+	keys, pgpTail, err := le.decodeWrappedKeys(wrappedKeys)
 	if err != nil {
 		return nil, "", err
 	}
@@ -239,7 +242,31 @@ func (le *pgpLayerEncryptor) HandleEncrypt(ec *EncryptConfig, data []byte, wrapp
 			}
 			keys, err = addRecipientsToKeys(keys, filteredList, symKey, symKeyCipher, nil)
 		} else {
-			encBlob, keys, err = encryptData(data, filteredList, nil)
+			// first encrypte the data with a symmetric key
+			symKey := make([]byte, 256/8)
+			_, err := io.ReadFull(rand.Reader, symKey)
+			if err != nil {
+				return nil, "", errors.Wrapf(err, "Could not create symmetric key")
+			}
+			opts := LayerBlockCipherOptions {
+				SymmetricKey: symKey,
+			}
+			lbch, err := NewLayerBlockCipherHandler()
+			if err != nil {
+				return nil, "", err
+			}
+
+			encLayer, opts, err = lbch.Encrypt(plainLayer, AeadAes256Gcm, opts)
+			if err != nil {
+				return nil, "", err
+			}
+
+			// then encrypt the JSON of the returned options
+			optsData, err := json.Marshal(opts)
+			if err != nil {
+				return nil, "", errors.Wrapf(err, "Could not json marshal opts")
+			}
+			pgpTail, keys, err = encryptData(optsData, filteredList, nil)
 		}
 	case OperationRemoveRecipients:
 		keys, err = removeRecipientsFromKeys(keys, filteredList)
@@ -250,9 +277,9 @@ func (le *pgpLayerEncryptor) HandleEncrypt(ec *EncryptConfig, data []byte, wrapp
 		return nil, "", err
 	}
 
-	wrappedKeys = le.encodeWrappedKeys(keys)
+	wrappedKeys = le.encodeWrappedKeys(keys, pgpTail)
 
-	return encBlob, wrappedKeys, nil
+	return encLayer, wrappedKeys, nil
 }
 
 // Decrypt decrypts a byte array using data from the DecryptConfig
@@ -261,62 +288,93 @@ func (le *pgpLayerEncryptor) HandleEncrypt(ec *EncryptConfig, data []byte, wrapp
 // is reassembled from the encBody and wrapped key.
 // The layerNum and platform are used to pick the symmetric key
 // used for decrypting the layer given its number and platform.
-func (le *pgpLayerEncryptor) Decrypt(dc *DecryptConfig, encBody []byte, wrappedKeys string, layerNum int32, platform string) ([]byte, error) {
+func (le *pgpLayerEncryptor) Decrypt(dc *DecryptConfig, encLayer []byte, wrappedKeys string, layerNum int32, platform string) ([]byte, error) {
 
-	keys, err := le.decodeWrappedKeys(wrappedKeys)
+	keys, pgpTail, err := le.decodeWrappedKeys(wrappedKeys)
 	if err != nil {
 		return nil, err
 	}
 
 	symKey, symKeyCipher, err := le.getSymKeyParameters(dc.LayerSymKeyMap, layerNum, platform)
 	if err != nil {
-		return []byte{}, err
+		return nil, err
 	}
 
-	data := le.assembleEncryptedMessage(encBody, keys)
+	data := le.assembleEncryptedMessage(pgpTail, keys)
 	r := bytes.NewReader(data)
 	md, err := ReadMessage(r, symKey, symKeyCipher)
 	if err != nil {
-		return []byte{}, err
+		return nil, err
 	}
-	return ioutil.ReadAll(md.UnverifiedBody)
+	// we get the plain key options back
+	optsData, err := ioutil.ReadAll(md.UnverifiedBody)
+	if err != nil {
+		return nil, errors.Wrapf(err, "Could not read PGP body")
+	}
+	opts := LayerBlockCipherOptions{}
+	err = json.Unmarshal(optsData, &opts)
+	if err != nil {
+		return nil, errors.Wrapf(err, "Could not JSON unmarshal optsData")
+	}
+
+	lbch, err := NewLayerBlockCipherHandler()
+	if err != nil {
+		return nil, err
+	}
+
+	plainLayer, opts, err := lbch.Decrypt(encLayer, opts)
+	if err != nil {
+		return nil, err
+	}
+	
+	return plainLayer, nil
 }
 
 // encodeWrappedKeys encodes wrapped openpgp keys to a string readable ','
-// separated base64 strings.
-func (le *pgpLayerEncryptor) encodeWrappedKeys(keys [][]byte) string {
+// separated base64 strings. The last item is the encrypted body
+func (le *pgpLayerEncryptor) encodeWrappedKeys(keys [][]byte, pgpTail []byte) string {
 	var keyArray []string
 
 	for _, k := range keys {
 		keyArray = append(keyArray, base64.StdEncoding.EncodeToString(k))
 	}
+	keyArray = append(keyArray, base64.StdEncoding.EncodeToString(pgpTail))
 
 	return strings.Join(keyArray, ",")
 }
 
 // decodeWrappedKeys decodes wrapped openpgp keys from string readable ','
-// separated base64 strings to their byte values
-func (le *pgpLayerEncryptor) decodeWrappedKeys(keys string) ([][]byte, error) {
+// separated base64 strings to their byte values; the last item in the
+// list is the encrypted body
+func (le *pgpLayerEncryptor) decodeWrappedKeys(keys string) ([][]byte, []byte, error) {
 	if keys == "" {
-		return nil, nil
+		return nil, nil, nil
 	}
 	keySplit := strings.Split(keys, ",")
+
+	// last item is the encrypted data block; remove it from keySplit
+	pgpTail, err := base64.StdEncoding.DecodeString(keySplit[len(keySplit) - 1])
+	if err != nil {
+		return nil, nil, errors.Wrapf(err, "Could not base64 decode pgpTail")
+	}
+	keySplit = keySplit[:len(keySplit) - 1]
+
 	keyBytes := make([][]byte, 0, len(keySplit))
 
 	for _, v := range keySplit {
 		data, err := base64.StdEncoding.DecodeString(v)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		keyBytes = append(keyBytes, data)
 	}
 
-	return keyBytes, nil
+	return keyBytes, pgpTail, nil
 }
 
 // GetKeyIdsFromWrappedKeys converts the wrappedKeys to uint64 keyIds
 func (le *pgpLayerEncryptor) GetKeyIdsFromWrappedKeys(wrappedKeys string) ([]uint64, [][]byte, error) {
-	keys, err := le.decodeWrappedKeys(wrappedKeys)
+	keys, _, err := le.decodeWrappedKeys(wrappedKeys)
 	if err != nil {
 		return nil, nil, err
 	}
