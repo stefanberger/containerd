@@ -137,6 +137,57 @@ func GetEncryptor(scheme string) LayerEncryptor {
 type pgpLayerEncryptor struct {
 }
 
+// commonEncryptLayer is a function to encrypt the plain layer using a new random
+// symmetric key and return the LayerBlockCipherHandler's JSON in string form for
+// later use during encryption
+func commonEncryptLayer(plainLayer []byte, typ LayerCipherType) ([]byte, []byte, error) {
+	symKey := make([]byte, 256/8)
+	_, err := io.ReadFull(rand.Reader, symKey)
+	if err != nil {
+		return nil, nil, errors.Wrapf(err, "Could not create symmetric key")
+	}
+	opts := LayerBlockCipherOptions {
+		SymmetricKey: symKey,
+	}
+	lbch, err := NewLayerBlockCipherHandler()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	encLayer, opts, err := lbch.Encrypt(plainLayer, typ, opts)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	optsData, err := json.Marshal(opts)
+	if err != nil {
+		return nil, nil, errors.Wrapf(err, "Could not JSON marshal opts")
+	}
+	return encLayer, optsData, err
+}
+
+// commonDecryptLayer decrypts an encrypted layer previously encrypted with commonEncryptLayer
+// by passing along the optsData
+func commonDecryptLayer(encLayer []byte, optsData []byte) ([]byte, error) {
+	opts := LayerBlockCipherOptions{}
+	err := json.Unmarshal(optsData, &opts)
+	if err != nil {
+		return nil, errors.Wrapf(err, "Could not JSON unmarshal optsData")
+	}
+
+	lbch, err := NewLayerBlockCipherHandler()
+	if err != nil {
+		return nil, err
+	}
+
+	plainLayer, opts, err := lbch.Decrypt(encLayer, opts)
+	if err != nil {
+		return nil, err
+	}
+	
+	return plainLayer, nil
+}
+
 // createEntityList creates the opengpg EntityList by reading the KeyRing
 // first and then filtering out recipients' keys
 func (le *pgpLayerEncryptor) createEntityList(ec *EncryptConfig) (openpgp.EntityList, error) {
@@ -242,31 +293,13 @@ func (le *pgpLayerEncryptor) HandleEncrypt(ec *EncryptConfig, plainLayer []byte,
 			}
 			keys, err = addRecipientsToKeys(keys, filteredList, symKey, symKeyCipher, nil)
 		} else {
-			// first encrypte the data with a symmetric key
-			symKey := make([]byte, 256/8)
-			_, err := io.ReadFull(rand.Reader, symKey)
-			if err != nil {
-				return nil, "", errors.Wrapf(err, "Could not create symmetric key")
+			var optsData []byte
+			// first encrypt the data with a symmetric key
+			encLayer, optsData, err = commonEncryptLayer(plainLayer, AeadAes256Gcm)
+			if err == nil {
+				// then encrypt the returned options that hold the key, IV, etc.
+				pgpTail, keys, err = encryptData(optsData, filteredList, nil)
 			}
-			opts := LayerBlockCipherOptions {
-				SymmetricKey: symKey,
-			}
-			lbch, err := NewLayerBlockCipherHandler()
-			if err != nil {
-				return nil, "", err
-			}
-
-			encLayer, opts, err = lbch.Encrypt(plainLayer, AeadAes256Gcm, opts)
-			if err != nil {
-				return nil, "", err
-			}
-
-			// then encrypt the JSON of the returned options
-			optsData, err := json.Marshal(opts)
-			if err != nil {
-				return nil, "", errors.Wrapf(err, "Could not json marshal opts")
-			}
-			pgpTail, keys, err = encryptData(optsData, filteredList, nil)
 		}
 	case OperationRemoveRecipients:
 		keys, err = removeRecipientsFromKeys(keys, filteredList)
@@ -311,23 +344,7 @@ func (le *pgpLayerEncryptor) Decrypt(dc *DecryptConfig, encLayer []byte, wrapped
 	if err != nil {
 		return nil, errors.Wrapf(err, "Could not read PGP body")
 	}
-	opts := LayerBlockCipherOptions{}
-	err = json.Unmarshal(optsData, &opts)
-	if err != nil {
-		return nil, errors.Wrapf(err, "Could not JSON unmarshal optsData")
-	}
-
-	lbch, err := NewLayerBlockCipherHandler()
-	if err != nil {
-		return nil, err
-	}
-
-	plainLayer, opts, err := lbch.Decrypt(encLayer, opts)
-	if err != nil {
-		return nil, err
-	}
-	
-	return plainLayer, nil
+	return commonDecryptLayer(encLayer, optsData)
 }
 
 // encodeWrappedKeys encodes wrapped openpgp keys to a string readable ','
