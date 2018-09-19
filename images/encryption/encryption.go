@@ -139,7 +139,7 @@ type pgpLayerEncryptor struct {
 
 // commonEncryptLayer is a function to encrypt the plain layer using a new random
 // symmetric key and return the LayerBlockCipherHandler's JSON in string form for
-// later use during encryption
+// later use during decryption
 func commonEncryptLayer(plainLayer []byte, typ LayerCipherType) ([]byte, []byte, error) {
 	symKey := make([]byte, 256/8)
 	_, err := io.ReadFull(rand.Reader, symKey)
@@ -291,18 +291,18 @@ func (le *pgpLayerEncryptor) HandleEncrypt(ec *EncryptConfig, plainLayer []byte,
 			if err != nil {
 				return nil, "", err
 			}
-			keys, err = addRecipientsToKeys(keys, filteredList, symKey, symKeyCipher, nil)
+			keys, err = pgpAddRecipientsToKeys(keys, filteredList, symKey, symKeyCipher, nil)
 		} else {
 			var optsData []byte
 			// first encrypt the data with a symmetric key
 			encLayer, optsData, err = commonEncryptLayer(plainLayer, AeadAes256Gcm)
 			if err == nil {
 				// then encrypt the returned options that hold the key, IV, etc.
-				pgpTail, keys, err = encryptData(optsData, filteredList, nil)
+				pgpTail, keys, err = pgpEncryptData(optsData, filteredList, nil)
 			}
 		}
 	case OperationRemoveRecipients:
-		keys, err = removeRecipientsFromKeys(keys, filteredList)
+		keys, err = pgpRemoveRecipientsFromKeys(keys, filteredList)
 		// encBlob stays empty to indicate it wasn't touched
 	}
 
@@ -335,7 +335,7 @@ func (le *pgpLayerEncryptor) Decrypt(dc *DecryptConfig, encLayer []byte, wrapped
 
 	data := le.assembleEncryptedMessage(pgpTail, keys)
 	r := bytes.NewReader(data)
-	md, err := ReadMessage(r, symKey, symKeyCipher)
+	md, err := PGPReadMessage(r, symKey, symKeyCipher)
 	if err != nil {
 		return nil, err
 	}
@@ -395,7 +395,7 @@ func (le *pgpLayerEncryptor) GetKeyIdsFromWrappedKeys(wrappedKeys string) ([]uin
 	if err != nil {
 		return nil, nil, err
 	}
-	keyIds, err := WrappedKeysToKeyIds(keys)
+	keyIds, err := PGPWrappedKeysToKeyIds(keys)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -490,7 +490,7 @@ func GetSymmetricKeys(layerInfos []LayerInfo, gpgClient GPGClient, gpgVault GPGV
 				return layerSymkeyMap, errors.Wrapf(errdefs.ErrInvalidArgument, "No GPGVault or GPGClient passed.")
 			}
 
-			symKeyData, symKeyCipher, err := DecryptSymmetricKey(keys, keyid, pkd.KeyData, pkd.KeyDataPassword, nil)
+			symKeyData, symKeyCipher, err := PGPDecryptSymmetricKey(keys, keyid, pkd.KeyData, pkd.KeyDataPassword, nil)
 			if err != nil {
 				return layerSymkeyMap, err
 			}
@@ -504,7 +504,7 @@ func GetSymmetricKeys(layerInfos []LayerInfo, gpgClient GPGClient, gpgVault GPGV
 			break
 		}
 		if !found && len(layerInfo.WrappedKeys) > 0 {
-			keyIds, _ := WrappedKeysToKeyIds(keys)
+			keyIds, _ := PGPWrappedKeysToKeyIds(keys)
 			ids := Uint64ToStringArray("0x%x", keyIds)
 
 			return layerSymkeyMap, errors.Wrapf(errdefs.ErrNotFound, "Missing key for decryption of layer %d of %s. Need one of the following keys: %s", layerInfo.ID, layerInfo.Platform, strings.Join(ids, ", "))
