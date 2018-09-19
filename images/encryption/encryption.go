@@ -217,7 +217,7 @@ func (le *pgpLayerEncryptor) HandleEncrypt(ec *EncryptConfig, data []byte, wrapp
 		encBlob []byte
 		err     error
 	)
-	keys, err := le.DecodeWrappedKeys(wrappedKeys)
+	keys, err := le.decodeWrappedKeys(wrappedKeys)
 	if err != nil {
 		return nil, "", err
 	}
@@ -263,7 +263,7 @@ func (le *pgpLayerEncryptor) HandleEncrypt(ec *EncryptConfig, data []byte, wrapp
 // used for decrypting the layer given its number and platform.
 func (le *pgpLayerEncryptor) Decrypt(dc *DecryptConfig, encBody []byte, wrappedKeys string, layerNum int32, platform string) ([]byte, error) {
 
-	keys, err := le.DecodeWrappedKeys(wrappedKeys)
+	keys, err := le.decodeWrappedKeys(wrappedKeys)
 	if err != nil {
 		return nil, err
 	}
@@ -294,9 +294,9 @@ func (le *pgpLayerEncryptor) encodeWrappedKeys(keys [][]byte) string {
 	return strings.Join(keyArray, ",")
 }
 
-// DecodeWrappedKeys decodes wrapped openpgp keys from string readable ','
+// decodeWrappedKeys decodes wrapped openpgp keys from string readable ','
 // separated base64 strings to their byte values
-func (le *pgpLayerEncryptor) DecodeWrappedKeys(keys string) ([][]byte, error) {
+func (le *pgpLayerEncryptor) decodeWrappedKeys(keys string) ([][]byte, error) {
 	if keys == "" {
 		return nil, nil
 	}
@@ -316,7 +316,7 @@ func (le *pgpLayerEncryptor) DecodeWrappedKeys(keys string) ([][]byte, error) {
 
 // GetKeyIdsFromWrappedKeys converts the wrappedKeys to uint64 keyIds
 func (le *pgpLayerEncryptor) GetKeyIdsFromWrappedKeys(wrappedKeys string) ([]uint64, [][]byte, error) {
-	keys, err := le.DecodeWrappedKeys(wrappedKeys)
+	keys, err := le.decodeWrappedKeys(wrappedKeys)
 	if err != nil {
 		return nil, nil, err
 	}
