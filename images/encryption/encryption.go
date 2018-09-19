@@ -23,6 +23,7 @@ import (
 	"io/ioutil"
 	"net/mail"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/containerd/containerd/errdefs"
@@ -109,6 +110,9 @@ type LayerEncryptor interface {
 	HandleEncrypt(ec *EncryptConfig, data []byte, wrappedKeys string, layerNum int32, platform string) ([]byte, string, error)
 	Decrypt(dc *DecryptConfig, encBody []byte, wrappedKeys string, layerNum int32, platform string) ([]byte, error)
 	GetAnnotationID() string
+
+	GetKeyIdsFromWrappedKeys(wrappedKeys string) ([]uint64, [][]byte, error)
+	GetRecipients(wrappedKeys string) ([]string, error)
 }
 
 func init() {
@@ -213,7 +217,7 @@ func (le *pgpLayerEncryptor) HandleEncrypt(ec *EncryptConfig, data []byte, wrapp
 		encBlob []byte
 		err     error
 	)
-	keys, err := DecodeWrappedKeys(wrappedKeys)
+	keys, err := le.DecodeWrappedKeys(wrappedKeys)
 	if err != nil {
 		return nil, "", err
 	}
@@ -259,7 +263,7 @@ func (le *pgpLayerEncryptor) HandleEncrypt(ec *EncryptConfig, data []byte, wrapp
 // used for decrypting the layer given its number and platform.
 func (le *pgpLayerEncryptor) Decrypt(dc *DecryptConfig, encBody []byte, wrappedKeys string, layerNum int32, platform string) ([]byte, error) {
 
-	keys, err := DecodeWrappedKeys(wrappedKeys)
+	keys, err := le.DecodeWrappedKeys(wrappedKeys)
 	if err != nil {
 		return nil, err
 	}
@@ -292,7 +296,7 @@ func (le *pgpLayerEncryptor) encodeWrappedKeys(keys [][]byte) string {
 
 // DecodeWrappedKeys decodes wrapped openpgp keys from string readable ','
 // separated base64 strings to their byte values
-func DecodeWrappedKeys(keys string) ([][]byte, error) {
+func (le *pgpLayerEncryptor) DecodeWrappedKeys(keys string) ([][]byte, error) {
 	if keys == "" {
 		return nil, nil
 	}
@@ -308,6 +312,32 @@ func DecodeWrappedKeys(keys string) ([][]byte, error) {
 	}
 
 	return keyBytes, nil
+}
+
+// GetKeyIdsFromWrappedKeys converts the wrappedKeys to uint64 keyIds
+func (le *pgpLayerEncryptor) GetKeyIdsFromWrappedKeys(wrappedKeys string) ([]uint64, [][]byte, error) {
+	keys, err := le.DecodeWrappedKeys(wrappedKeys)
+	if err != nil {
+		return nil, nil, err
+	}
+	keyIds, err := WrappedKeysToKeyIds(keys)
+	if err != nil {
+		return nil, nil, err
+	}
+	return keyIds, keys, err
+}
+
+// GetRecipients converts the wrappedKeys to an array of recipients
+func (le *pgpLayerEncryptor) GetRecipients(wrappedKeys string) ([]string, error) {
+	keyIds , _, err := le.GetKeyIdsFromWrappedKeys(wrappedKeys)
+	if err != nil {
+		return nil, err
+	}
+	var array []string
+	for _, keyid := range keyIds {
+		array = append(array, "0x"+strconv.FormatUint(keyid, 16))
+	}
+	return array, nil
 }
 
 func (le *pgpLayerEncryptor) GetAnnotationID() string {
@@ -331,14 +361,11 @@ func GetSymmetricKeys(layerInfos []LayerInfo, gpgClient GPGClient, gpgVault GPGV
 	keyIDPasswordMap := make(map[uint64]PrivKeyData)
 	layerSymkeyMap := make(map[string]DecryptKeyData)
 
+	encryptor := GetEncryptor("pgp")
+
 	// we need to decrypt one symmetric key per encrypted layer per platform
 	for _, layerInfo := range layerInfos {
-		keys, err := DecodeWrappedKeys(layerInfo.WrappedKeys)
-		if err != nil {
-			return layerSymkeyMap, err
-		}
-
-		keyIds, err := WrappedKeysToKeyIds(keys)
+		keyIds, keys, err := encryptor.GetKeyIdsFromWrappedKeys(layerInfo.WrappedKeys)
 		if err != nil {
 			return layerSymkeyMap, err
 		}
