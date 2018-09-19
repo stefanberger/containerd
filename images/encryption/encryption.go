@@ -66,9 +66,10 @@ type LayerFilter struct {
 // the identifiers of those that will be able to decrypt the container and
 // the PGP public keyring file data that contains their public keys.
 type EncryptConfig struct {
-	Recipients     []string
-	GPGPubRingFile []byte
-	Operation      int32
+	// map holding 'gpg-recipients' and 'gpg-pubkeyringfile'
+	Parameters map[string]string
+
+	Operation  int32
 	// for adding recipients on an already encrypted image we need the
 	// symmetric keys for the layers so we can wrap them with the recpient's
 	// public key
@@ -191,15 +192,20 @@ func commonDecryptLayer(encLayer []byte, optsData []byte) ([]byte, error) {
 // createEntityList creates the opengpg EntityList by reading the KeyRing
 // first and then filtering out recipients' keys
 func (le *pgpLayerEncryptor) createEntityList(ec *EncryptConfig) (openpgp.EntityList, error) {
-	r := bytes.NewReader(ec.GPGPubRingFile)
+	gpgpubringfile, err := base64.StdEncoding.DecodeString(ec.Parameters["gpg-pubkeyringfile"])
+	if err != nil {
+		return nil, errors.Wrapf(err, "")
+	}
+	r := bytes.NewReader(gpgpubringfile)
 
 	entityList, err := openpgp.ReadKeyRing(r)
 	if err != nil {
 		return nil, err
 	}
 
+	recipients := strings.Split(ec.Parameters["gpg-recipients"], ",") 
 	rSet := make(map[string]int)
-	for _, r := range ec.Recipients {
+	for _, r := range recipients {
 		rSet[r] = 0
 	}
 
@@ -210,7 +216,7 @@ func (le *pgpLayerEncryptor) createEntityList(ec *EncryptConfig) (openpgp.Entity
 			if err != nil {
 				return nil, err
 			}
-			for _, r := range ec.Recipients {
+			for _, r := range recipients {
 				if strings.Compare(addr.Name, r) == 0 || strings.Compare(addr.Address, r) == 0 {
 					filteredList = append(filteredList, entity)
 					rSet[r] = rSet[r] + 1
