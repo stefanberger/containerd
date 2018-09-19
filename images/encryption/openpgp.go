@@ -77,7 +77,7 @@ var (
 )
 
 // encryptData encrypts data with openpgp and returns the encrypted blob and wrapped keys separately
-func encryptData(data []byte, recipients openpgp.EntityList, symKey []byte) (encBlob []byte, wrappedKeys [][]byte, err error) {
+func pgpEncryptData(data []byte, recipients openpgp.EntityList, symKey []byte) (encBlob []byte, wrappedKeys [][]byte, err error) {
 	config := DefaultEncryptConfig
 
 	// If no symkey, generate
@@ -88,12 +88,12 @@ func encryptData(data []byte, recipients openpgp.EntityList, symKey []byte) (enc
 		}
 	}
 
-	wrappedKeys, err = createWrappedKeys(symKey, recipients, config)
+	wrappedKeys, err = pgpCreateWrappedKeys(symKey, recipients, config)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	encBlob, err = createEncryptedBlob(data, symKey, config)
+	encBlob, err = pgpCreateEncryptedBlob(data, symKey, config)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -102,15 +102,15 @@ func encryptData(data []byte, recipients openpgp.EntityList, symKey []byte) (enc
 }
 
 // createWrappedKeys creates wrapped key bytes
-func createWrappedKeys(symKey []byte, recipients openpgp.EntityList, config *packet.Config) (wrappedKeys [][]byte, err error) {
-	return addRecipientsToKeys([][]byte{}, recipients, symKey, config.DefaultCipher, config)
+func pgpCreateWrappedKeys(symKey []byte, recipients openpgp.EntityList, config *packet.Config) (wrappedKeys [][]byte, err error) {
+	return pgpAddRecipientsToKeys([][]byte{}, recipients, symKey, config.DefaultCipher, config)
 }
 
 // addRecipientsToKeys adds wrapped keys to an existing list of wrapped keys by
 // encrypting the given symmetric key (symKey) with a public key of each one
 // of the recipients
-func addRecipientsToKeys(keys [][]byte, recipients openpgp.EntityList, symKey []byte, symKeyCipher packet.CipherFunction, config *packet.Config) ([][]byte, error) {
-	keyIds, err := WrappedKeysToKeyIds(keys)
+func pgpAddRecipientsToKeys(keys [][]byte, recipients openpgp.EntityList, symKey []byte, symKeyCipher packet.CipherFunction, config *packet.Config) ([][]byte, error) {
+	keyIds, err := PGPWrappedKeysToKeyIds(keys)
 	if err != nil {
 		return nil, err
 	}
@@ -118,7 +118,7 @@ func addRecipientsToKeys(keys [][]byte, recipients openpgp.EntityList, symKey []
 	encKeys := keys
 
 	for _, et := range recipients {
-		pkey, canEncrypt := encryptionKey(et, time.Now())
+		pkey, canEncrypt := pgpEncryptionKey(et, time.Now())
 		if !canEncrypt {
 			return nil, errors.Wrapf(errdefs.ErrInvalidArgument, "key doesn't support encryption")
 		}
@@ -142,7 +142,7 @@ func addRecipientsToKeys(keys [][]byte, recipients openpgp.EntityList, symKey []
 	return encKeys, nil
 }
 
-func removeRecipientsFromKeys(keys [][]byte, removeRecipients openpgp.EntityList) ([][]byte, error) {
+func pgpRemoveRecipientsFromKeys(keys [][]byte, removeRecipients openpgp.EntityList) ([][]byte, error) {
 	var wrappedKeys [][]byte
 
 	for _, ek := range keys {
@@ -163,7 +163,7 @@ func removeRecipientsFromKeys(keys [][]byte, removeRecipients openpgp.EntityList
 }
 
 // createEncryptedBlob creates encrypted data blob bytes
-func createEncryptedBlob(data []byte, symKey []byte, config *packet.Config) (encBlob []byte, err error) {
+func pgpCreateEncryptedBlob(data []byte, symKey []byte, config *packet.Config) (encBlob []byte, err error) {
 	// Perform encryption
 	encData := new(bytes.Buffer)
 	encContent, err := packet.SerializeSymmetricallyEncrypted(encData, config.DefaultCipher, symKey, config)
@@ -193,7 +193,7 @@ func createEncryptedBlob(data []byte, symKey []byte, config *packet.Config) (enc
 
 // encryptionKey returns the best candidate Key for encrypting a message to the
 // given Entity.
-func encryptionKey(e *openpgp.Entity, now time.Time) (openpgp.Key, bool) {
+func pgpEncryptionKey(e *openpgp.Entity, now time.Time) (openpgp.Key, bool) {
 	candidateSubkey := -1
 
 	// Iterate the keys to find the newest key
@@ -218,7 +218,7 @@ func encryptionKey(e *openpgp.Entity, now time.Time) (openpgp.Key, bool) {
 	// the primary key doesn't have any usage metadata then we
 	// assume that the primary key is ok. Or, if the primary key is
 	// marked as ok to encrypt to, then we can obviously use it.
-	i := primaryIdentity(e)
+	i := pgpPrimaryIdentity(e)
 	if !i.SelfSignature.FlagsValid || i.SelfSignature.FlagEncryptCommunications &&
 		e.PrimaryKey.PubKeyAlgo.CanEncrypt() &&
 		!i.SelfSignature.KeyExpired(now) {
@@ -231,7 +231,7 @@ func encryptionKey(e *openpgp.Entity, now time.Time) (openpgp.Key, bool) {
 
 // primaryIdentity returns the Identity marked as primary or the first identity
 // if none are so marked.
-func primaryIdentity(e *openpgp.Entity) *openpgp.Identity {
+func pgpPrimaryIdentity(e *openpgp.Entity) *openpgp.Identity {
 	var firstIdentity *openpgp.Identity
 	for _, ident := range e.Identities {
 		if firstIdentity == nil {
@@ -246,7 +246,7 @@ func primaryIdentity(e *openpgp.Entity) *openpgp.Identity {
 
 // WrappedKeysToKeyIds converts an array of wrapped keys into an array of
 // their key Ids
-func WrappedKeysToKeyIds(keys [][]byte) ([]uint64, error) {
+func PGPWrappedKeysToKeyIds(keys [][]byte) ([]uint64, error) {
 	var keyids []uint64
 
 	kbytes := make([]byte, 0)
@@ -277,7 +277,7 @@ ParsePackets:
 // key with the given keyid is retrieved from the keyData byte array and decrypted using
 // the given keyDataPassword; the private key is then used to decrypt the wrapped symmetric
 // key
-func DecryptSymmetricKey(keys [][]byte, keyid uint64, keyData []byte, keyDataPassword []byte, config *packet.Config) ([]byte, packet.CipherFunction, error) {
+func PGPDecryptSymmetricKey(keys [][]byte, keyid uint64, keyData []byte, keyDataPassword []byte, config *packet.Config) ([]byte, packet.CipherFunction, error) {
 	kbytes := make([]byte, 0)
 	for _, k := range keys {
 		kbytes = append(kbytes, k...)
@@ -340,7 +340,7 @@ ParsePackets:
 
 // ReadMessage reads an OpenPGP byte stream and decrypts the SymmetricallyEncrypted
 // part with the given symmetric key and cipher
-func ReadMessage(r io.Reader, symKey []byte, symKeyCipher packet.CipherFunction) (*openpgp.MessageDetails, error) {
+func PGPReadMessage(r io.Reader, symKey []byte, symKeyCipher packet.CipherFunction) (*openpgp.MessageDetails, error) {
 	var se *packet.SymmetricallyEncrypted
 
 	packets := packet.NewReader(r)
