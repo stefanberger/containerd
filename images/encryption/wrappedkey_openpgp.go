@@ -8,6 +8,7 @@ import (
 	"crypto"
 	"crypto/rand"
 	"encoding/base64"
+	"io/ioutil"
 	"net/mail"
 	"strings"
 
@@ -53,11 +54,10 @@ type openpgpEncryptConfig struct {
 // the identifiers of those that will be able to decrypt the container and
 // the PGP public keyring file data that contains their public keys.
 type openpgpDecryptConfig struct {
-	Recipients     []string
-	GPGPubRingFile []byte
+	GPGPrivRingFile []byte
 }
 
-func (s *openpgpWrappedKeyService) parseOptions(opt map[string]string) (*openpgpEncryptConfig, error) {
+func (s *openpgpWrappedKeyService) parseEncryptOptions(opt map[string]string) (*openpgpEncryptConfig, error) {
 	recipientsStr := opt[RecipientsOpt]
 	gpgPubRingFileStr, ok := opt[PubKeyRingOpt]
 	if !ok {
@@ -73,12 +73,27 @@ func (s *openpgpWrappedKeyService) parseOptions(opt map[string]string) (*openpgp
 		Recipients:     strings.Split(recipientsStr, ","),
 		GPGPubRingFile: gpgPubRingFile,
 	}, nil
+}
 
+func (s *openpgpWrappedKeyService) parseDecryptOptions(opt map[string]string) (*openpgpDecryptConfig, error) {
+	gpgPrivRingFileStr, ok := opt[PrivKeyRingOpt]
+	if !ok {
+		return nil, errors.New("No public keyring provided for openpgp encryption")
+	}
+
+	gpgPrivRingFile, err := base64.StdEncoding.DecodeString(gpgPrivRingFileStr)
+	if err != nil {
+		return nil, errors.Wrap(err, "Unable to decode gpg pubkeyring")
+	}
+
+	return &openpgpDecryptConfig{
+		GPGPrivRingFile: gpgPrivRingFile,
+	}, nil
 }
 
 // Wrap takes a key and wraps it based on the options given
 func (s *openpgpWrappedKeyService) Wrap(req *WrapKeyRequest) (*WrapKeyResponse, error) {
-	ec, err := s.parseOptions(req.Opt)
+	ec, err := s.parseEncryptOptions(req.Opt)
 	if err != nil {
 		return nil, errors.Wrap(err, "Unable to parse encryption options")
 	}
@@ -110,9 +125,39 @@ func (s *openpgpWrappedKeyService) Wrap(req *WrapKeyRequest) (*WrapKeyResponse, 
 	return resp, nil
 }
 
-// Unwrap takes wrapped keys and wraps it based on the options given (TODO)
+// Unwrap takes wrapped keys and wraps it based on the options given
 func (s *openpgpWrappedKeyService) Unwrap(req *UnwrapKeyRequest) (*UnwrapKeyResponse, error) {
-	return nil, errors.New("Not implemented")
+	dc, err := s.parseDecryptOptions(req.Opt)
+	if err != nil {
+		return nil, errors.Wrap(err, "Unable to parse decryption options")
+	}
+
+	r := bytes.NewReader(dc.GPGPrivRingFile)
+	entityList, err := openpgp.ReadKeyRing(r)
+	if err != nil {
+		return nil, errors.Wrap(err, "Unable to parse private keys")
+	}
+
+	for _, wk := range req.WrappedKeys {
+		stream := bytes.NewBuffer(wk)
+		md, err := openpgp.ReadMessage(stream, entityList,
+			nil, /* prompt */
+			GPGDefaultEncryptConfig)
+		if err != nil {
+			continue
+		}
+
+		key, err := ioutil.ReadAll(md.UnverifiedBody)
+		if err != nil {
+			continue
+		}
+
+		return &UnwrapKeyResponse{
+			Key: key,
+		}, nil
+	}
+
+	return nil, errors.New("Not able to decrypt any keys")
 }
 
 // Helper Functions
