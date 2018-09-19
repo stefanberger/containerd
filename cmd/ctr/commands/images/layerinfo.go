@@ -19,7 +19,6 @@ package images
 import (
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
 	"text/tabwriter"
 
@@ -70,23 +69,21 @@ var layerinfoCommand = cli.Command{
 			return nil
 		}
 
+
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', tabwriter.AlignRight)
 		fmt.Fprintf(w, "#\tDIGEST\tPLATFORM\tSIZE\tENCRYPTION\tKEY IDS\t\n")
 		for _, layer := range LayerInfos {
-			keys, err := encryption.DecodeWrappedKeys(layer.WrappedKeys)
-			if err != nil {
-				return err
+			var recipients []string
+			encryptor := encryption.GetEncryptor(layer.Encryption)
+			if encryptor != nil {
+				recipients, err = encryptor.GetRecipients(layer.WrappedKeys)
+				if err != nil {
+					return err
+				}
+			} else {
+				recipients = append(recipients, "decode error")
 			}
-			keyIds, err := encryption.WrappedKeysToKeyIds(keys)
-			if err != nil {
-				return err
-			}
-
-			var array []string
-			for _, keyid := range keyIds {
-				array = append(array, "0x"+strconv.FormatUint(keyid, 16))
-			}
-			fmt.Fprintf(w, "%d\t%s\t%s\t%d\t%s\t%s\t\n", layer.ID, layer.Digest, layer.Platform, layer.FileSize, layer.Encryption, strings.Join(array, ", "))
+			fmt.Fprintf(w, "%d\t%s\t%s\t%d\t%s\t%s\t\n", layer.ID, layer.Digest, layer.Platform, layer.FileSize, layer.Encryption, strings.Join(recipients, ", "))
 		}
 		w.Flush()
 		return nil
