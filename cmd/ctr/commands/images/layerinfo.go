@@ -74,14 +74,16 @@ var layerinfoCommand = cli.Command{
 		fmt.Fprintf(w, "#\tDIGEST\tPLATFORM\tSIZE\tENCRYPTION\tKEY IDS\t\n")
 		for _, layer := range LayerInfos {
 			var recipients []string
-			encryptor := encryption.GetEncryptor(layer.Encryption)
-			if encryptor != nil {
-				recipients, err = encryptor.GetRecipients(layer.WrappedKeys)
-				if err != nil {
-					return err
+			if layer.Encryption != "" {
+				encryptor := encryption.GetEncryptor(layer.Encryption)
+				if encryptor != nil {
+					recipients, err = encryptor.GetRecipients(layer.WrappedKeys)
+					if err != nil {
+						return err
+					}
+				} else {
+					recipients = append(recipients, fmt.Sprintf("No %s decryptor", layer.Encryption))
 				}
-			} else {
-				recipients = append(recipients, "decode error")
 			}
 			fmt.Fprintf(w, "%d\t%s\t%s\t%d\t%s\t%s\t\n", layer.ID, layer.Digest, layer.Platform, layer.FileSize, layer.Encryption, strings.Join(recipients, ", "))
 		}
