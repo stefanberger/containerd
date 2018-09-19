@@ -457,7 +457,7 @@ func getEncryptor(desc ocispec.Descriptor, def string) (encryption.LayerEncrypto
 // encryptLayer encrypts the layer using the CryptoConfig and creates a new OCI Descriptor.
 // A call to this function may also only manipulate the wrapped keys list.
 // The caller is expected to store the returned encrypted data and OCI Descriptor
-func encryptLayer(cc *encryption.CryptoConfig, data []byte, desc ocispec.Descriptor, layerNum int32, platform *ocispec.Platform) (ocispec.Descriptor, []byte, error) {
+func encryptLayer(cc *encryption.CryptoConfig, data []byte, desc ocispec.Descriptor) (ocispec.Descriptor, []byte, error) {
 	var (
 		wrappedKeys string
 		size        int64
@@ -475,7 +475,7 @@ func encryptLayer(cc *encryption.CryptoConfig, data []byte, desc ocispec.Descrip
 		return ocispec.Descriptor{}, []byte{}, err
 	}
 
-	p, wrappedKeys, err := encryptor.HandleEncrypt(cc.Ec, data, wrappedKeys, layerNum, platforms.Format(*platform))
+	p, wrappedKeys, err := encryptor.HandleEncrypt(cc.Ec, data, wrappedKeys)
 	if err != nil {
 		return ocispec.Descriptor{}, []byte{}, err
 	}
@@ -522,7 +522,7 @@ func encryptLayer(cc *encryption.CryptoConfig, data []byte, desc ocispec.Descrip
 
 // decryptLayer decrypts the layer using the CryptoConfig and creates a new OCI Descriptor.
 // The caller is expected to store the returned plain data and OCI Descriptor
-func decryptLayer(cc *encryption.CryptoConfig, data []byte, desc ocispec.Descriptor, layerNum int32, platform *ocispec.Platform) (ocispec.Descriptor, []byte, error) {
+func decryptLayer(cc *encryption.CryptoConfig, data []byte, desc ocispec.Descriptor) (ocispec.Descriptor, []byte, error) {
 	wrappedKeys, err := getWrappedKeys(desc)
 	if err != nil {
 		return ocispec.Descriptor{}, []byte{}, err
@@ -533,7 +533,7 @@ func decryptLayer(cc *encryption.CryptoConfig, data []byte, desc ocispec.Descrip
 		return ocispec.Descriptor{}, []byte{}, err
 	}
 
-	p, err := encryptor.Decrypt(cc.Dc, data, wrappedKeys, layerNum, platforms.Format(*platform))
+	p, err := encryptor.Decrypt(cc.Dc, data, wrappedKeys)
 	if err != nil {
 		return ocispec.Descriptor{}, []byte{}, err
 	}
@@ -556,7 +556,7 @@ func decryptLayer(cc *encryption.CryptoConfig, data []byte, desc ocispec.Descrip
 }
 
 // cryptLayer handles the changes due to encryption or decryption of a layer
-func cryptLayer(ctx context.Context, cs content.Store, desc ocispec.Descriptor, cc *encryption.CryptoConfig, layerNum int32, platform *ocispec.Platform, encrypt bool) (ocispec.Descriptor, error) {
+func cryptLayer(ctx context.Context, cs content.Store, desc ocispec.Descriptor, cc *encryption.CryptoConfig, encrypt bool) (ocispec.Descriptor, error) {
 	var (
 		p       []byte
 		newDesc ocispec.Descriptor
@@ -568,9 +568,9 @@ func cryptLayer(ctx context.Context, cs content.Store, desc ocispec.Descriptor, 
 	}
 
 	if encrypt {
-		newDesc, p, err = encryptLayer(cc, data, desc, layerNum, platform)
+		newDesc, p, err = encryptLayer(cc, data, desc)
 	} else {
-		newDesc, p, err = decryptLayer(cc, data, desc, layerNum, platform)
+		newDesc, p, err = decryptLayer(cc, data, desc)
 	}
 	if err != nil {
 		return ocispec.Descriptor{}, err
@@ -666,7 +666,7 @@ func cryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descripto
 		case MediaTypeDockerSchema2LayerGzip, MediaTypeDockerSchema2Layer,
 			ocispec.MediaTypeImageLayerGzip, ocispec.MediaTypeImageLayer:
 			if encrypt && isUserSelectedLayer(layerNum, layersTotal, lf.Layers) && isUserSelectedPlatform(thisPlatform, lf.Platforms) {
-				nl, err := cryptLayer(ctx, cs, child, cc, layerNum, thisPlatform, true)
+				nl, err := cryptLayer(ctx, cs, child, cc, true)
 				if err != nil {
 					return ocispec.Descriptor{}, false, err
 				}
@@ -679,7 +679,7 @@ func cryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descripto
 		case MediaTypeDockerSchema2LayerGzipEnc, MediaTypeDockerSchema2LayerEnc:
 			// this one can be decrypted but also its recpients list changed
 			if isUserSelectedLayer(layerNum, layersTotal, lf.Layers) && isUserSelectedPlatform(thisPlatform, lf.Platforms) {
-				nl, err := cryptLayer(ctx, cs, child, cc, layerNum, thisPlatform, encrypt)
+				nl, err := cryptLayer(ctx, cs, child, cc, encrypt)
 				if err != nil {
 					return ocispec.Descriptor{}, false, err
 				}
@@ -914,7 +914,6 @@ func DecryptLayers(ctx context.Context, cs content.Store, layers []rootfs.Layer,
 	var (
 		newLayers      []rootfs.Layer
 		layerInfos     []encryption.LayerInfo
-		layerSymKeyMap map[string]encryption.DecryptKeyData
 		err            error
 	)
 
@@ -945,22 +944,21 @@ func DecryptLayers(ctx context.Context, cs content.Store, layers []rootfs.Layer,
 	}
 
 	// in ctr case we may just want to consult gpg/gpg2 for the key(s)
-	layerSymKeyMap, err = encryption.GetSymmetricKeys(layerInfos, gpgClient, gpgVault)
+	dcparameters, err := encryption.GetPrivateKey(layerInfos, gpgClient, gpgVault)
 	if err != nil {
 		return []rootfs.Layer{}, err
 	}
 	cc := &encryption.CryptoConfig{
 		Dc: &encryption.DecryptConfig{
-			LayerSymKeyMap: layerSymKeyMap,
+			Parameters    : dcparameters,
 		},
 	}
-	thisPlatform := platforms.DefaultSpec()
 
 	// in the 2nd pass we decrypt the layers
 	for i, layer := range layers {
 		if layerInfos[i].Encryption != "" {
 			// need to decrypt this layer
-			newDesc, err := cryptLayer(ctx, cs, layer.Blob, cc, int32(i), &thisPlatform, false)
+			newDesc, err := cryptLayer(ctx, cs, layer.Blob, cc, false)
 			if err != nil {
 				return []rootfs.Layer{}, err
 			}

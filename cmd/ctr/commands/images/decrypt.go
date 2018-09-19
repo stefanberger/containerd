@@ -110,7 +110,7 @@ var decryptCommand = cli.Command{
 			return err
 		}
 
-		layerSymKeyMap, err := encryption.GetSymmetricKeys(layerInfos, gpgClient, gpgVault)
+		dcparameters, err := encryption.GetPrivateKey(layerInfos, gpgClient, gpgVault)
 		if err != nil {
 			return err
 		}
@@ -118,7 +118,7 @@ var decryptCommand = cli.Command{
 
 		cc := &encryption.CryptoConfig{
 			Dc: &encryption.DecryptConfig{
-				LayerSymKeyMap: layerSymKeyMap,
+				Parameters    : dcparameters,
 			},
 		}
 		_, err = client.ImageService().DecryptImage(ctx, local, newName, cc, layers32, context.StringSlice("platform"))
