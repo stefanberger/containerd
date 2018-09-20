@@ -836,7 +836,7 @@ func getImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descr
 		li := encryption.LayerInfo{
 			WrappedKeys: wrappedKeys,
 			Digest:      desc.Digest.String(),
-			Encryption:  encryption.GetEncryptionScheme(desc),
+			Encryption:  encryption.GetKeyWrapScheme(desc),
 			FileSize:    desc.Size,
 			ID:          uint32(layerNum),
 			Platform:    platform,
@@ -871,7 +871,7 @@ func DecryptLayers(ctx context.Context, cs content.Store, layers []rootfs.Layer,
 		switch layer.Blob.MediaType {
 		case MediaTypeDockerSchema2LayerEnc, MediaTypeDockerSchema2LayerGzipEnc:
 			isEncrypted = true
-			layerInfo.Encryption = encryption.GetEncryptionScheme(layer.Blob)
+			layerInfo.Encryption = encryption.GetKeyWrapScheme(layer.Blob)
 
 			layerInfo.WrappedKeys, err = encryption.GetWrappedKeys(layer.Blob)
 			if err != nil {

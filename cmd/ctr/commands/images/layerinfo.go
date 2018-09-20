@@ -75,7 +75,7 @@ var layerinfoCommand = cli.Command{
 		for _, layer := range LayerInfos {
 			var recipients []string
 			if layer.Encryption != "" {
-				encryptor := encryption.GetEncryptor(layer.Encryption)
+				encryptor := encryption.GetKeyWrapper(layer.Encryption)
 				if encryptor != nil {
 					recipients, err = encryptor.GetRecipients(layer.WrappedKeys)
 					if err != nil {

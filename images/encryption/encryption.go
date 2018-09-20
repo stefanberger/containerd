@@ -108,11 +108,11 @@ type CryptoConfig struct {
 	Dc *DecryptConfig
 }
 
-// LayerEncryptor is the interface used for encryting and decrypting layers using
+// KeyWrapper is the interface used for wrapping keys using
 // a specific encryption technology (pgp, jwe)
-type LayerEncryptor interface {
-	HandleEncrypt(ec *EncryptConfig, planeLayer []byte, wrappedKeys string) ([]byte, string, error)
-	Decrypt(dc *DecryptConfig, encLayer []byte, wrappedKeys string) ([]byte, error)
+type KeyWrapper interface {
+	WrapKeys(ec *EncryptConfig, encLayer []byte, wrappedKeys string, optsData []byte) ([]byte, string, error)
+	UnwrapKey(dc *DecryptConfig, wrappedKeys string) ([]byte, error)
 	GetAnnotationID() string
 
 	GetKeyIdsFromWrappedKeys(wrappedKeys string) ([]uint64, [][]byte, error)
@@ -120,29 +120,54 @@ type LayerEncryptor interface {
 }
 
 func init() {
-	encryptors = make(map[string]LayerEncryptor)
-	registerLayerEncryptor("pgp", &pgpLayerEncryptor{})
+	keyWrappers = make(map[string]KeyWrapper)
+	keyWrapperAnnotations = make(map[string]string)
+	registerKeyWrapper("pgp", &pgpKeyWrapper{})
 }
 
-var encryptors map[string]LayerEncryptor
+var keyWrappers map[string]KeyWrapper
+var keyWrapperAnnotations map[string]string
 
-func registerLayerEncryptor(scheme string, iface LayerEncryptor) {
-	encryptors[scheme] = iface
+func registerKeyWrapper(scheme string, iface KeyWrapper) {
+	keyWrappers[scheme] = iface
+	keyWrapperAnnotations[iface.GetAnnotationID()] = scheme
 }
 
-// GetEncryptor looks up the encryptor interface given an encryption scheme (gpg, jwe)
-func GetEncryptor(scheme string) LayerEncryptor {
-	return encryptors[scheme]
+// GetKeyWrapper looks up the encryptor interface given an encryption scheme (gpg, jwe)
+func GetKeyWrapper(scheme string) KeyWrapper {
+	return keyWrappers[scheme]
 }
 
-type pgpLayerEncryptor struct {
+type pgpKeyWrapper struct {
+}
+
+func GetKeyWrapScheme(desc ocispec.Descriptor) string {
+	if _, ok := desc.Annotations["org.opencontainers.image.pgp.keys"]; ok {
+		return "pgp"
+	}
+	return ""
+}
+
+// getKeyWrapper gets the KeyWrapper for the encryption scheme used for
+// encrypting the layer; if no encryption scheme is found the 'def' scheme
+// will be used to get the encryptor
+func getKeyWrapper(desc ocispec.Descriptor, def string) (KeyWrapper, error) {
+	scheme := GetKeyWrapScheme(desc)
+	if scheme == "" {
+		scheme = def
+	}
+	encryptor := GetKeyWrapper(scheme)
+	if encryptor == nil {
+		return nil, errors.Errorf("No encryptor found for encryption scheme '%s'.", scheme)
+	}
+	return encryptor, nil
 }
 
 // getWrappedKeys gets the wrapped keys from the OCI Descriptor's
 // annotation and returns them as an array of byte arrays.
 func GetWrappedKeys(desc ocispec.Descriptor) (string, error) {
 	// Parse and decode keys
-	encryptor, err := getEncryptor(desc, DefaultEncryptionScheme)
+	encryptor, err := getKeyWrapper(desc, DefaultEncryptionScheme)
 	if err != nil {
 		return "", err
 	}
@@ -153,67 +178,64 @@ func GetWrappedKeys(desc ocispec.Descriptor) (string, error) {
 	return "", nil
 }
 
-func GetEncryptionScheme(desc ocispec.Descriptor) string {
-	if _, ok := desc.Annotations["org.opencontainers.image.pgp.keys"]; ok {
-		return "pgp"
-	}
-	return ""
-}
-
-// getEncryptor gets the LayerEncryptor for the encryption scheme used for
-// encrypting the layer; if no encryption scheme is found the 'def' scheme
-// will be used to get the encryptor
-func getEncryptor(desc ocispec.Descriptor, def string) (LayerEncryptor, error) {
-	scheme := GetEncryptionScheme(desc)
-	if scheme == "" {
-		scheme = def
-	}
-	encryptor := GetEncryptor(scheme)
-	if encryptor == nil {
-		return nil, errors.Errorf("No encryptor found for encryption scheme '%s'.", scheme)
-	}
-	return encryptor, nil
-}
-
+// EncryptLayer encrypts the layer by running one encryptor after the other
 func EncryptLayer(ec *EncryptConfig, plainLayer []byte, desc ocispec.Descriptor) ([]byte, string, string, error) {
-	wrappedKeys, err := GetWrappedKeys(desc)
+	var (
+		encLayer []byte
+		err      error
+		optsData []byte
+	)
+
+	// TODO: to support multiple encryption schemes at the same time we would need
+	// to find the existing symmetric key first...
+
+	symKey := make([]byte, 256/8)
+	_, err = io.ReadFull(rand.Reader, symKey)
 	if err != nil {
-		return nil, "", "", err
+		return nil, "", "", errors.Wrapf(err, "Could not create symmetric key")
 	}
 
-	encryptor, err := getEncryptor(desc, DefaultEncryptionScheme)
-	if err != nil {
-		return nil, "", "", err
+	for annotationsID, scheme := range keyWrapperAnnotations {
+		wrappedKeysBefore := desc.Annotations[annotationsID]
+		if wrappedKeysBefore == "" && len(encLayer) == 0 {
+			encLayer, optsData, err = commonEncryptLayer(plainLayer, symKey, AeadAes256Gcm)
+			if err != nil {
+				return nil, "", "", err
+			}
+		} else {
+			if len(encLayer) == 0 {
+				encLayer = plainLayer
+			}
+		}
+		encryptor := GetKeyWrapper(scheme)
+		encLayer, wrappedKeysAfter, err := encryptor.WrapKeys(ec, encLayer, wrappedKeysBefore, optsData)
+		if wrappedKeysAfter != wrappedKeysBefore {
+			return encLayer, wrappedKeysAfter, encryptor.GetAnnotationID(), err
+		}
 	}
-
-	encLayer, wrappedKeys, err := encryptor.HandleEncrypt(ec, plainLayer, wrappedKeys)
-
-	return encLayer, wrappedKeys, encryptor.GetAnnotationID(), err
+	return nil, "", "", errors.Errorf("No encryptor found to handle encryption")
 }
 
 func DecryptLayer(dc *DecryptConfig, encLayer []byte, desc ocispec.Descriptor) ([]byte, error) {
-	wrappedKeys, err := GetWrappedKeys(desc)
-	if err != nil {
-		return nil, err
+	for annotationsID, scheme := range keyWrapperAnnotations {
+		wrappedKeys := desc.Annotations[annotationsID]
+		if wrappedKeys != "" {
+			encryptor := GetKeyWrapper(scheme)
+			optsData, err := encryptor.UnwrapKey(dc, wrappedKeys)
+			if err != nil {
+				return nil, err
+			}
+			// TODO: check if decryption happened, otherwise loop again
+			return commonDecryptLayer(encLayer, optsData)
+		}
 	}
-
-	encryptor, err := getEncryptor(desc, "")
-	if err != nil {
-		return nil, err
-	}
-
-	return encryptor.Decrypt(dc, encLayer, wrappedKeys)
+	return nil, errors.Errorf("No decryptor found")
 }
 
 // commonEncryptLayer is a function to encrypt the plain layer using a new random
 // symmetric key and return the LayerBlockCipherHandler's JSON in string form for
 // later use during decryption
-func commonEncryptLayer(plainLayer []byte, typ LayerCipherType) ([]byte, []byte, error) {
-	symKey := make([]byte, 256/8)
-	_, err := io.ReadFull(rand.Reader, symKey)
-	if err != nil {
-		return nil, nil, errors.Wrapf(err, "Could not create symmetric key")
-	}
+func commonEncryptLayer(plainLayer []byte, symKey []byte, typ LayerCipherType) ([]byte, []byte, error) {
 	opts := LayerBlockCipherOptions {
 		SymmetricKey: symKey,
 	}
@@ -258,7 +280,7 @@ func commonDecryptLayer(encLayer []byte, optsData []byte) ([]byte, error) {
 
 // createEntityList creates the opengpg EntityList by reading the KeyRing
 // first and then filtering out recipients' keys
-func (le *pgpLayerEncryptor) createEntityList(ec *EncryptConfig) (openpgp.EntityList, error) {
+func (le *pgpKeyWrapper) createEntityList(ec *EncryptConfig) (openpgp.EntityList, error) {
 	gpgpubringfile, err := base64.StdEncoding.DecodeString(ec.Parameters["gpg-pubkeyringfile"])
 	if err != nil {
 		return nil, errors.Wrapf(err, "")
@@ -316,7 +338,7 @@ func (le *pgpLayerEncryptor) createEntityList(ec *EncryptConfig) (openpgp.Entity
 
 // assembleEncryptedMessage takes in the openpgp encrypted body packets and
 // assembles the openpgp message
-func (le *pgpLayerEncryptor) assembleEncryptedMessage(encBody []byte, keys [][]byte) []byte {
+func (le *pgpKeyWrapper) assembleEncryptedMessage(encBody []byte, keys [][]byte) []byte {
 	encMsg := make([]byte, 0)
 
 	for _, k := range keys {
@@ -330,9 +352,8 @@ func (le *pgpLayerEncryptor) assembleEncryptedMessage(encBody []byte, keys [][]b
 // HandleEncrypt encrypts a byte array using data from the EncryptConfig. It
 // also manages the list of recipients' keys by enabling removal or addition
 // of recipients.
-func (le *pgpLayerEncryptor) HandleEncrypt(ec *EncryptConfig, plainLayer []byte, wrappedKeys string) ([]byte, string, error) {
+func (le *pgpKeyWrapper) WrapKeys(ec *EncryptConfig, encLayer []byte, wrappedKeys string, optsData []byte) ([]byte, string, error) {
 	var (
-		encLayer []byte
 		err      error
 	)
 	keys, pgpTail, err := le.decodeWrappedKeys(wrappedKeys)
@@ -357,13 +378,7 @@ func (le *pgpLayerEncryptor) HandleEncrypt(ec *EncryptConfig, plainLayer []byte,
 			}
 			keys, err = pgpAddRecipientsToKeys(keys, filteredList, symKey, symKeyCipher, nil)
 		} else {
-			var optsData []byte
-			// first encrypt the data with a symmetric key
-			encLayer, optsData, err = commonEncryptLayer(plainLayer, AeadAes256Gcm)
-			if err == nil {
-				// then encrypt the returned options that hold the key, IV, etc.
-				pgpTail, keys, err = pgpEncryptData(optsData, filteredList, nil)
-			}
+			pgpTail, keys, err = pgpEncryptData(optsData, filteredList, nil)
 		}
 	case OperationRemoveRecipients:
 		keys, err = pgpRemoveRecipientsFromKeys(keys, filteredList)
@@ -385,7 +400,7 @@ func (le *pgpLayerEncryptor) HandleEncrypt(ec *EncryptConfig, plainLayer []byte,
 // is reassembled from the encBody and wrapped key.
 // The layerNum and platform are used to pick the symmetric key
 // used for decrypting the layer given its number and platform.
-func (le *pgpLayerEncryptor) Decrypt(dc *DecryptConfig, encLayer []byte, wrappedKeys string) ([]byte, error) {
+func (le *pgpKeyWrapper) UnwrapKey(dc *DecryptConfig, wrappedKeys string) ([]byte, error) {
 
 	keys, pgpTail, err := le.decodeWrappedKeys(wrappedKeys)
 	if err != nil {
@@ -405,12 +420,12 @@ func (le *pgpLayerEncryptor) Decrypt(dc *DecryptConfig, encLayer []byte, wrapped
 	if err != nil {
 		return nil, errors.Wrapf(err, "Could not read PGP body")
 	}
-	return commonDecryptLayer(encLayer, optsData)
+	return optsData, nil
 }
 
 // encodeWrappedKeys encodes wrapped openpgp keys to a string readable ','
 // separated base64 strings. The last item is the encrypted body
-func (le *pgpLayerEncryptor) encodeWrappedKeys(keys [][]byte, pgpTail []byte) string {
+func (le *pgpKeyWrapper) encodeWrappedKeys(keys [][]byte, pgpTail []byte) string {
 	var keyArray []string
 
 	for _, k := range keys {
@@ -424,7 +439,7 @@ func (le *pgpLayerEncryptor) encodeWrappedKeys(keys [][]byte, pgpTail []byte) st
 // decodeWrappedKeys decodes wrapped openpgp keys from string readable ','
 // separated base64 strings to their byte values; the last item in the
 // list is the encrypted body
-func (le *pgpLayerEncryptor) decodeWrappedKeys(keys string) ([][]byte, []byte, error) {
+func (le *pgpKeyWrapper) decodeWrappedKeys(keys string) ([][]byte, []byte, error) {
 	if keys == "" {
 		return nil, nil, nil
 	}
@@ -451,7 +466,7 @@ func (le *pgpLayerEncryptor) decodeWrappedKeys(keys string) ([][]byte, []byte, e
 }
 
 // GetKeyIdsFromWrappedKeys converts the wrappedKeys to uint64 keyIds
-func (le *pgpLayerEncryptor) GetKeyIdsFromWrappedKeys(wrappedKeys string) ([]uint64, [][]byte, error) {
+func (le *pgpKeyWrapper) GetKeyIdsFromWrappedKeys(wrappedKeys string) ([]uint64, [][]byte, error) {
 	keys, _, err := le.decodeWrappedKeys(wrappedKeys)
 	if err != nil {
 		return nil, nil, err
@@ -464,7 +479,7 @@ func (le *pgpLayerEncryptor) GetKeyIdsFromWrappedKeys(wrappedKeys string) ([]uin
 }
 
 // GetRecipients converts the wrappedKeys to an array of recipients
-func (le *pgpLayerEncryptor) GetRecipients(wrappedKeys string) ([]string, error) {
+func (le *pgpKeyWrapper) GetRecipients(wrappedKeys string) ([]string, error) {
 	keyIds , _, err := le.GetKeyIdsFromWrappedKeys(wrappedKeys)
 	if err != nil {
 		return nil, err
@@ -476,7 +491,7 @@ func (le *pgpLayerEncryptor) GetRecipients(wrappedKeys string) ([]string, error)
 	return array, nil
 }
 
-func (le *pgpLayerEncryptor) GetAnnotationID() string {
+func (le *pgpKeyWrapper) GetAnnotationID() string {
 	return "org.opencontainers.image.pgp.keys"
 }
 
@@ -497,7 +512,7 @@ func GetPrivateKey(layerInfos []LayerInfo, gpgClient GPGClient, gpgVault GPGVaul
 	parameters := make(map[string]string)
 	keyIDPasswordMap := make(map[uint64]PrivateKeyData)
 
-	encryptor := GetEncryptor("pgp")
+	encryptor := GetKeyWrapper("pgp")
 
 	// we need to decrypt one symmetric key per encrypted layer per platform
 	for _, layerInfo := range layerInfos {
@@ -577,7 +592,7 @@ func GetPrivateKey(layerInfos []LayerInfo, gpgClient GPGClient, gpgVault GPGVaul
 	return parameters, nil
 }
 
-func (le *pgpLayerEncryptor) getSymKeyParameters(dcparameters map[string]string, keys [][]byte) ([]byte, packet.CipherFunction, error) {
+func (le *pgpKeyWrapper) getSymKeyParameters(dcparameters map[string]string, keys [][]byte) ([]byte, packet.CipherFunction, error) {
 	var keyid uint64
 
 	_, err := fmt.Sscanf(dcparameters["gpg-privatekey-keyid"], "0x%x", &keyid)
