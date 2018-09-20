@@ -189,10 +189,10 @@ func (l *local) EncryptImage(ctx context.Context, req *imagesapi.EncryptImageReq
 
 	encrypted, err := l.store.EncryptImage(ctx, req.Name, req.NewName, &encryption.CryptoConfig{
 		Ec: &encryption.EncryptConfig{
-			Parameters:     req.Ec.Parameters,
-			Operation:      req.Ec.Operation,
+			Parameters: req.Ec.Parameters,
+			Operation:  req.Ec.Operation,
 			Dc: encryption.DecryptConfig{
-				Parameters    : req.Ec.Dc.Parameters,
+				Parameters: req.Ec.Dc.Parameters,
 			},
 		},
 	}, req.Layers, req.Platforms)
@@ -219,7 +219,7 @@ func (l *local) DecryptImage(ctx context.Context, req *imagesapi.DecryptImageReq
 
 	encrypted, err := l.store.DecryptImage(ctx, req.Name, req.NewName, &encryption.CryptoConfig{
 		Dc: &encryption.DecryptConfig{
-			Parameters    : req.Dc.Parameters,
+			Parameters: req.Dc.Parameters,
 		},
 	}, req.Layers, req.Platforms)
 	if err != nil {
