@@ -146,7 +146,7 @@ var encryptCommand = cli.Command{
 				Parameters: parameters,
 				Operation:  operation,
 				Dc: encryption.DecryptConfig{
-					Parameters    : dcparameters,
+					Parameters: dcparameters,
 				},
 			},
 		}

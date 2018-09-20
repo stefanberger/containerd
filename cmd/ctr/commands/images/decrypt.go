@@ -119,7 +119,7 @@ var decryptCommand = cli.Command{
 
 		cc := &encryption.CryptoConfig{
 			Dc: &encryption.DecryptConfig{
-				Parameters    : dcparameters,
+				Parameters: dcparameters,
 			},
 		}
 		_, err = client.ImageService().DecryptImage(ctx, local, newName, cc, layers32, context.StringSlice("platform"))
