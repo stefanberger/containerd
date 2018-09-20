@@ -61,7 +61,7 @@ type EncryptConfig struct {
 	// map holding 'gpg-recipients' and 'gpg-pubkeyringfile'
 	Parameters map[string]string
 
-	Operation  int32
+	Operation int32
 	// for adding recipients on an already encrypted image we need the
 	// symmetric keys for the layers so we can wrap them with the recpient's
 	// public key
@@ -74,13 +74,6 @@ const (
 	// OperationRemoveRecipients instructs to remove a recipient
 	OperationRemoveRecipients = int32(iota)
 )
-
-// DecryptKeyData stores private key data for decryption and the necessary password
-// for being able to access/decrypt the private key data.
-type DecryptKeyData struct {
-	SymKeyData   []byte
-	SymKeyCipher uint8
-}
 
 // DecryptConfig stores the platform and layer number encoded in a string as a
 // key to the map. The symmetric key needed for decrypting a platform specific
@@ -126,12 +119,9 @@ func GetKeyWrapper(scheme string) KeyWrapper {
 	return keyWrappers[scheme]
 }
 
-type pgpKeyWrapper struct {
-}
-
 // GetWrappedKeysMap returns a map of wrappedKeys as values in a
 // map with the encryption scheme(s) as the key(s)
-func GetWrappedKeysMap(desc ocispec.Descriptor) (map[string]string) {
+func GetWrappedKeysMap(desc ocispec.Descriptor) map[string]string {
 	wrappedKeysMap := make(map[string]string)
 
 	for annotationsID, scheme := range keyWrapperAnnotations {
@@ -173,6 +163,9 @@ func EncryptLayer(ec *EncryptConfig, plainLayer []byte, desc ocispec.Descriptor)
 		}
 		encryptor := GetKeyWrapper(scheme)
 		encLayer, wrappedKeysAfter, err := encryptor.WrapKeys(ec, encLayer, wrappedKeysBefore, optsData)
+		if err != nil {
+			return nil, "", "", err
+		}
 		if wrappedKeysAfter != wrappedKeysBefore {
 			return encLayer, wrappedKeysAfter, encryptor.GetAnnotationID(), err
 		}
@@ -180,6 +173,8 @@ func EncryptLayer(ec *EncryptConfig, plainLayer []byte, desc ocispec.Descriptor)
 	return nil, "", "", errors.Errorf("No encryptor found to handle encryption")
 }
 
+// DecryptLayer decrypts a layer trying one KeyWrapper after the other to see whether it
+// can apply the provided private key
 func DecryptLayer(dc *DecryptConfig, encLayer []byte, desc ocispec.Descriptor) ([]byte, error) {
 	for annotationsID, scheme := range keyWrapperAnnotations {
 		wrappedKeys := desc.Annotations[annotationsID]
@@ -189,7 +184,10 @@ func DecryptLayer(dc *DecryptConfig, encLayer []byte, desc ocispec.Descriptor) (
 			if err != nil {
 				return nil, err
 			}
-			// TODO: check if decryption happened, otherwise loop again
+			if optsData == nil {
+				// try next KeyWrapper
+				continue
+			}
 			return commonDecryptLayer(encLayer, optsData)
 		}
 	}
@@ -200,7 +198,7 @@ func DecryptLayer(dc *DecryptConfig, encLayer []byte, desc ocispec.Descriptor) (
 // symmetric key and return the LayerBlockCipherHandler's JSON in string form for
 // later use during decryption
 func commonEncryptLayer(plainLayer []byte, symKey []byte, typ LayerCipherType) ([]byte, []byte, error) {
-	opts := LayerBlockCipherOptions {
+	opts := LayerBlockCipherOptions{
 		SymmetricKey: symKey,
 	}
 	lbch, err := NewLayerBlockCipherHandler()
@@ -238,7 +236,7 @@ func commonDecryptLayer(encLayer []byte, optsData []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return plainLayer, nil
 }
 

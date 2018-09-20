@@ -1,3 +1,19 @@
+/*
+   Copyright The containerd Authors.
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+*/
+
 package encryption
 
 import (
@@ -11,9 +27,8 @@ type LayerCipherType string
 const (
 	AeadAes128Gcm LayerCipherType = "AEAD_AES_128_GCM"
 	AeadAes256Gcm LayerCipherType = "AEAD_AES_256_GCM"
-	CipherTypeOpt string = "type"
+	CipherTypeOpt string          = "type"
 )
-
 
 // LayerBlockCipherOptions includes the information required to encrypt/decrypt
 // an image
@@ -22,7 +37,7 @@ type LayerBlockCipherOptions struct {
 	CipherOptions map[string]string `json:'cipheroptions'`
 }
 
-// LayerblockCipher returns a provider for encrypt/decrypt functionality
+// LayerBlockCipher returns a provider for encrypt/decrypt functionality
 // for handling the layer data for a specific algorithm
 type LayerBlockCipher interface {
 	// Encrypt takes in layer data and returns the ciphertext and relevant LayerBlockCipherOptions
@@ -43,7 +58,7 @@ func (h *LayerBlockCipherHandler) Encrypt(layerData []byte, typ LayerCipherType,
 		if err == nil {
 			newopt.CipherOptions[CipherTypeOpt] = string(typ)
 		}
-        	return data, newopt, err
+		return data, newopt, err
 	}
 	return nil, LayerBlockCipherOptions{}, errors.New("Not supported Cipher Type")
 }
@@ -51,7 +66,7 @@ func (h *LayerBlockCipherHandler) Encrypt(layerData []byte, typ LayerCipherType,
 // Decrypt is the handler for the layer decrpytion routine
 func (h *LayerBlockCipherHandler) Decrypt(layerData []byte, opt LayerBlockCipherOptions) ([]byte, LayerBlockCipherOptions, error) {
 	typ, ok := opt.CipherOptions[CipherTypeOpt]
-	if ! ok {
+	if !ok {
 		return nil, LayerBlockCipherOptions{}, errors.New("No cipher type provided")
 	}
 	if c, ok := h.cipherMap[LayerCipherType(typ)]; ok {
