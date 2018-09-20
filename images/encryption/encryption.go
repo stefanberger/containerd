@@ -138,6 +138,73 @@ func GetEncryptor(scheme string) LayerEncryptor {
 type pgpLayerEncryptor struct {
 }
 
+// getWrappedKeys gets the wrapped keys from the OCI Descriptor's
+// annotation and returns them as an array of byte arrays.
+func GetWrappedKeys(desc ocispec.Descriptor) (string, error) {
+	// Parse and decode keys
+	encryptor, err := getEncryptor(desc, DefaultEncryptionScheme)
+	if err != nil {
+		return "", err
+	}
+
+	if v, ok := desc.Annotations[encryptor.GetAnnotationID()]; ok {
+		return v, nil
+	}
+	return "", nil
+}
+
+func GetEncryptionScheme(desc ocispec.Descriptor) string {
+	if _, ok := desc.Annotations["org.opencontainers.image.pgp.keys"]; ok {
+		return "pgp"
+	}
+	return ""
+}
+
+// getEncryptor gets the LayerEncryptor for the encryption scheme used for
+// encrypting the layer; if no encryption scheme is found the 'def' scheme
+// will be used to get the encryptor
+func getEncryptor(desc ocispec.Descriptor, def string) (LayerEncryptor, error) {
+	scheme := GetEncryptionScheme(desc)
+	if scheme == "" {
+		scheme = def
+	}
+	encryptor := GetEncryptor(scheme)
+	if encryptor == nil {
+		return nil, errors.Errorf("No encryptor found for encryption scheme '%s'.", scheme)
+	}
+	return encryptor, nil
+}
+
+func EncryptLayer(ec *EncryptConfig, plainLayer []byte, desc ocispec.Descriptor) ([]byte, string, string, error) {
+	wrappedKeys, err := GetWrappedKeys(desc)
+	if err != nil {
+		return nil, "", "", err
+	}
+
+	encryptor, err := getEncryptor(desc, DefaultEncryptionScheme)
+	if err != nil {
+		return nil, "", "", err
+	}
+
+	encLayer, wrappedKeys, err := encryptor.HandleEncrypt(ec, plainLayer, wrappedKeys)
+
+	return encLayer, wrappedKeys, encryptor.GetAnnotationID(), err
+}
+
+func DecryptLayer(dc *DecryptConfig, encLayer []byte, desc ocispec.Descriptor) ([]byte, error) {
+	wrappedKeys, err := GetWrappedKeys(desc)
+	if err != nil {
+		return nil, err
+	}
+
+	encryptor, err := getEncryptor(desc, "")
+	if err != nil {
+		return nil, err
+	}
+
+	return encryptor.Decrypt(dc, encLayer, wrappedKeys)
+}
+
 // commonEncryptLayer is a function to encrypt the plain layer using a new random
 // symmetric key and return the LayerBlockCipherHandler's JSON in string form for
 // later use during decryption

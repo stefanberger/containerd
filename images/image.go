@@ -417,43 +417,6 @@ func IsCompressedDiff(ctx context.Context, mediaType string) (bool, error) {
 	return false, nil
 }
 
-// getWrappedKeys gets the wrapped keys from the OCI Descriptor's
-// annotation and returns them as an array of byte arrays.
-func getWrappedKeys(desc ocispec.Descriptor) (string, error) {
-	// Parse and decode keys
-	encryptor, err := getEncryptor(desc, encryption.DefaultEncryptionScheme)
-	if err != nil {
-		return "", err
-	}
-
-	if v, ok := desc.Annotations[encryptor.GetAnnotationID()]; ok {
-		return v, nil
-	}
-	return "", nil
-}
-
-func getEncryptionScheme(desc ocispec.Descriptor) string {
-	if _, ok := desc.Annotations["org.opencontainers.image.pgp.keys"]; ok {
-		return "pgp"
-	}
-	return ""
-}
-
-// getEncryptor gets the LayerEncryptor for the encryption scheme used for
-// encrypting the layer; if no encryption scheme is found the 'def' scheme
-// will be used to get the encryptor
-func getEncryptor(desc ocispec.Descriptor, def string) (encryption.LayerEncryptor, error) {
-	scheme := getEncryptionScheme(desc)
-	if scheme == "" {
-		scheme = def
-	}
-	encryptor := encryption.GetEncryptor(scheme)
-	if encryptor == nil {
-		return nil, errors.Errorf("No encryptor found for encryption scheme '%s'.", scheme)
-	}
-	return encryptor, nil
-}
-
 // encryptLayer encrypts the layer using the CryptoConfig and creates a new OCI Descriptor.
 // A call to this function may also only manipulate the wrapped keys list.
 // The caller is expected to store the returned encrypted data and OCI Descriptor
@@ -465,17 +428,7 @@ func encryptLayer(cc *encryption.CryptoConfig, data []byte, desc ocispec.Descrip
 		err         error
 	)
 
-	wrappedKeys, err = getWrappedKeys(desc)
-	if err != nil {
-		return ocispec.Descriptor{}, []byte{}, err
-	}
-
-	encryptor, err := getEncryptor(desc, encryption.DefaultEncryptionScheme)
-	if err != nil {
-		return ocispec.Descriptor{}, []byte{}, err
-	}
-
-	p, wrappedKeys, err := encryptor.HandleEncrypt(cc.Ec, data, wrappedKeys)
+	p, wrappedKeys, annotationID, err := encryption.EncryptLayer(cc.Ec, data, desc)
 	if err != nil {
 		return ocispec.Descriptor{}, []byte{}, err
 	}
@@ -495,7 +448,7 @@ func encryptLayer(cc *encryption.CryptoConfig, data []byte, desc ocispec.Descrip
 		Platform: desc.Platform,
 	}
 	newDesc.Annotations = make(map[string]string)
-	newDesc.Annotations[encryptor.GetAnnotationID()] = wrappedKeys
+	newDesc.Annotations[annotationID] = wrappedKeys
 
 	switch desc.MediaType {
 	case MediaTypeDockerSchema2LayerGzip:
@@ -523,17 +476,7 @@ func encryptLayer(cc *encryption.CryptoConfig, data []byte, desc ocispec.Descrip
 // decryptLayer decrypts the layer using the CryptoConfig and creates a new OCI Descriptor.
 // The caller is expected to store the returned plain data and OCI Descriptor
 func decryptLayer(cc *encryption.CryptoConfig, data []byte, desc ocispec.Descriptor) (ocispec.Descriptor, []byte, error) {
-	wrappedKeys, err := getWrappedKeys(desc)
-	if err != nil {
-		return ocispec.Descriptor{}, []byte{}, err
-	}
-
-	encryptor, err := getEncryptor(desc, "")
-	if err != nil {
-		return ocispec.Descriptor{}, []byte{}, err
-	}
-
-	p, err := encryptor.Decrypt(cc.Dc, data, wrappedKeys)
+	p, err := encryption.DecryptLayer(cc.Dc, data, desc)
 	if err != nil {
 		return ocispec.Descriptor{}, []byte{}, err
 	}
@@ -886,14 +829,14 @@ func getImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descr
 		lis = append(lis, li)
 	case MediaTypeDockerSchema2Config, ocispec.MediaTypeImageConfig:
 	case MediaTypeDockerSchema2LayerEnc, MediaTypeDockerSchema2LayerGzipEnc:
-		wrappedKeys, err := getWrappedKeys(desc)
+		wrappedKeys, err := encryption.GetWrappedKeys(desc)
 		if err != nil {
 			return []encryption.LayerInfo{}, err
 		}
 		li := encryption.LayerInfo{
 			WrappedKeys: wrappedKeys,
 			Digest:      desc.Digest.String(),
-			Encryption:  getEncryptionScheme(desc),
+			Encryption:  encryption.GetEncryptionScheme(desc),
 			FileSize:    desc.Size,
 			ID:          uint32(layerNum),
 			Platform:    platform,
@@ -928,9 +871,9 @@ func DecryptLayers(ctx context.Context, cs content.Store, layers []rootfs.Layer,
 		switch layer.Blob.MediaType {
 		case MediaTypeDockerSchema2LayerEnc, MediaTypeDockerSchema2LayerGzipEnc:
 			isEncrypted = true
-			layerInfo.Encryption = getEncryptionScheme(layer.Blob)
+			layerInfo.Encryption = encryption.GetEncryptionScheme(layer.Blob)
 
-			layerInfo.WrappedKeys, err = getWrappedKeys(layer.Blob)
+			layerInfo.WrappedKeys, err = encryption.GetWrappedKeys(layer.Blob)
 			if err != nil {
 				return []rootfs.Layer{}, err
 			}
