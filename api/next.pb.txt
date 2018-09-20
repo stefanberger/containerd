@@ -2487,11 +2487,12 @@ file {
       json_name: "id"
     }
     field {
-      name: "WrappedKeys"
+      name: "WrappedKeysMap"
       number: 2
-      label: LABEL_OPTIONAL
-      type: TYPE_STRING
-      json_name: "WrappedKeys"
+      label: LABEL_REPEATED
+      type: TYPE_MESSAGE
+      type_name: ".containerd.services.images.v1.LayerInfo.WrappedKeysMapEntry"
+      json_name: "WrappedKeysMap"
     }
     field {
       name: "digest"
@@ -2501,25 +2502,38 @@ file {
       json_name: "digest"
     }
     field {
-      name: "encryption"
-      number: 4
-      label: LABEL_OPTIONAL
-      type: TYPE_STRING
-      json_name: "encryption"
-    }
-    field {
       name: "fileSize"
-      number: 5
+      number: 4
       label: LABEL_OPTIONAL
       type: TYPE_INT64
       json_name: "fileSize"
     }
     field {
       name: "platform"
-      number: 6
+      number: 5
       label: LABEL_OPTIONAL
       type: TYPE_STRING
       json_name: "platform"
+    }
+    nested_type {
+      name: "WrappedKeysMapEntry"
+      field {
+        name: "key"
+        number: 1
+        label: LABEL_OPTIONAL
+        type: TYPE_STRING
+        json_name: "key"
+      }
+      field {
+        name: "value"
+        number: 2
+        label: LABEL_OPTIONAL
+        type: TYPE_STRING
+        json_name: "value"
+      }
+      options {
+        map_entry: true
+      }
     }
   }
   message_type {

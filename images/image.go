@@ -819,27 +819,21 @@ func getImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descr
 		}
 	case MediaTypeDockerSchema2Layer, MediaTypeDockerSchema2LayerGzip:
 		li := encryption.LayerInfo{
-			WrappedKeys: "",
-			Digest:      desc.Digest.String(),
-			Encryption:  "",
-			FileSize:    desc.Size,
-			ID:          uint32(layerNum),
-			Platform:    platform,
+			WrappedKeysMap: make(map[string]string),
+			Digest:         desc.Digest.String(),
+			FileSize:       desc.Size,
+			ID:             uint32(layerNum),
+			Platform:       platform,
 		}
 		lis = append(lis, li)
 	case MediaTypeDockerSchema2Config, ocispec.MediaTypeImageConfig:
 	case MediaTypeDockerSchema2LayerEnc, MediaTypeDockerSchema2LayerGzipEnc:
-		wrappedKeys, err := encryption.GetWrappedKeys(desc)
-		if err != nil {
-			return []encryption.LayerInfo{}, err
-		}
 		li := encryption.LayerInfo{
-			WrappedKeys: wrappedKeys,
-			Digest:      desc.Digest.String(),
-			Encryption:  encryption.GetKeyWrapScheme(desc),
-			FileSize:    desc.Size,
-			ID:          uint32(layerNum),
-			Platform:    platform,
+			WrappedKeysMap: encryption.GetWrappedKeysMap(desc),
+			Digest:         desc.Digest.String(),
+			FileSize:       desc.Size,
+			ID:             uint32(layerNum),
+			Platform:       platform,
 		}
 		lis = append(lis, li)
 	default:
@@ -871,12 +865,7 @@ func DecryptLayers(ctx context.Context, cs content.Store, layers []rootfs.Layer,
 		switch layer.Blob.MediaType {
 		case MediaTypeDockerSchema2LayerEnc, MediaTypeDockerSchema2LayerGzipEnc:
 			isEncrypted = true
-			layerInfo.Encryption = encryption.GetKeyWrapScheme(layer.Blob)
-
-			layerInfo.WrappedKeys, err = encryption.GetWrappedKeys(layer.Blob)
-			if err != nil {
-				return []rootfs.Layer{}, err
-			}
+			layerInfo.WrappedKeysMap = encryption.GetWrappedKeysMap(layer.Blob)
 		}
 		layerInfos = append(layerInfos, layerInfo)
 	}
@@ -899,7 +888,7 @@ func DecryptLayers(ctx context.Context, cs content.Store, layers []rootfs.Layer,
 
 	// in the 2nd pass we decrypt the layers
 	for i, layer := range layers {
-		if layerInfos[i].Encryption != "" {
+		if len(layerInfos[i].WrappedKeysMap) > 0 {
 			// need to decrypt this layer
 			newDesc, err := cryptLayer(ctx, cs, layer.Blob, cc, false)
 			if err != nil {
