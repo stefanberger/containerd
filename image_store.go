@@ -132,10 +132,10 @@ func (s *remoteImages) EncryptImage(ctx context.Context, name, newName string, c
 		Name:    name,
 		NewName: newName,
 		Ec: &imagesapi.EncryptConfig{
-			Parameters:    cc.Ec.Parameters,
-			Operation:     cc.Ec.Operation,
+			Parameters: cc.Ec.Parameters,
+			Operation:  cc.Ec.Operation,
 			Dc: &imagesapi.DecryptConfig{
-				Parameters    : cc.Ec.Dc.Parameters,
+				Parameters: cc.Ec.Dc.Parameters,
 			},
 		},
 		Layers:    layers,
@@ -154,7 +154,7 @@ func (s *remoteImages) DecryptImage(ctx context.Context, name, newName string, c
 		Name:    name,
 		NewName: newName,
 		Dc: &imagesapi.DecryptConfig{
-			Parameters:     cc.Dc.Parameters,
+			Parameters: cc.Dc.Parameters,
 		},
 		Layers:    layers,
 		Platforms: platforms,
