@@ -17,23 +17,17 @@
 package encryption
 
 import (
-	"bytes"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
-	"net/mail"
 	"os"
-	"strconv"
 	"strings"
 
 	"github.com/containerd/containerd/errdefs"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
-	"golang.org/x/crypto/openpgp"
-	"golang.org/x/crypto/openpgp/packet"
 	"golang.org/x/crypto/ssh/terminal"
 )
 
@@ -79,10 +73,6 @@ const (
 	OperationAddRecipients = int32(iota)
 	// OperationRemoveRecipients instructs to remove a recipient
 	OperationRemoveRecipients = int32(iota)
-)
-
-const (
-	DefaultEncryptionScheme = "pgp"
 )
 
 // DecryptKeyData stores private key data for decryption and the necessary password
@@ -252,223 +242,6 @@ func commonDecryptLayer(encLayer []byte, optsData []byte) ([]byte, error) {
 	return plainLayer, nil
 }
 
-// createEntityList creates the opengpg EntityList by reading the KeyRing
-// first and then filtering out recipients' keys
-func (le *pgpKeyWrapper) createEntityList(ec *EncryptConfig) (openpgp.EntityList, error) {
-	gpgpubringfile, err := base64.StdEncoding.DecodeString(ec.Parameters["gpg-pubkeyringfile"])
-	if err != nil {
-		return nil, errors.Wrapf(err, "")
-	}
-	r := bytes.NewReader(gpgpubringfile)
-
-	entityList, err := openpgp.ReadKeyRing(r)
-	if err != nil {
-		return nil, err
-	}
-
-	recipients := strings.Split(ec.Parameters["gpg-recipients"], ",") 
-	rSet := make(map[string]int)
-	for _, r := range recipients {
-		rSet[r] = 0
-	}
-
-	var filteredList openpgp.EntityList
-	for _, entity := range entityList {
-		for k := range entity.Identities {
-			addr, err := mail.ParseAddress(k)
-			if err != nil {
-				return nil, err
-			}
-			for _, r := range recipients {
-				if strings.Compare(addr.Name, r) == 0 || strings.Compare(addr.Address, r) == 0 {
-					filteredList = append(filteredList, entity)
-					rSet[r] = rSet[r] + 1
-				}
-			}
-		}
-	}
-
-	// make sure we found keys for all the Recipients...
-	var buffer bytes.Buffer
-	notFound := false
-	buffer.WriteString("No key found for the following recipients: ")
-
-	for k, v := range rSet {
-		if v == 0 {
-			if notFound {
-				buffer.WriteString(", ")
-			}
-			buffer.WriteString(k)
-			notFound = true
-		}
-	}
-
-	if notFound {
-		return nil, errors.Wrapf(errdefs.ErrNotFound, buffer.String())
-	}
-
-	return filteredList, nil
-}
-
-// assembleEncryptedMessage takes in the openpgp encrypted body packets and
-// assembles the openpgp message
-func (le *pgpKeyWrapper) assembleEncryptedMessage(encBody []byte, keys [][]byte) []byte {
-	encMsg := make([]byte, 0)
-
-	for _, k := range keys {
-		encMsg = append(encMsg, k...)
-	}
-	encMsg = append(encMsg, encBody...)
-
-	return encMsg
-}
-
-// HandleEncrypt encrypts a byte array using data from the EncryptConfig. It
-// also manages the list of recipients' keys by enabling removal or addition
-// of recipients.
-func (le *pgpKeyWrapper) WrapKeys(ec *EncryptConfig, encLayer []byte, wrappedKeys string, optsData []byte) ([]byte, string, error) {
-	var (
-		err      error
-	)
-	keys, pgpTail, err := le.decodeWrappedKeys(wrappedKeys)
-	if err != nil {
-		return nil, "", err
-	}
-
-	filteredList, err := le.createEntityList(ec)
-	if err != nil {
-		return nil, "", err
-	}
-	if len(filteredList) == 0 {
-		return nil, "", errors.Wrapf(errdefs.ErrInvalidArgument, "No keys were found to encrypt message to.\n")
-	}
-
-	switch ec.Operation {
-	case OperationAddRecipients:
-		if len(keys) > 0 {
-			symKey, symKeyCipher, err := le.getSymKeyParameters(ec.Dc.Parameters, keys)
-			if err != nil {
-				return nil, "", err
-			}
-			keys, err = pgpAddRecipientsToKeys(keys, filteredList, symKey, symKeyCipher, nil)
-		} else {
-			pgpTail, keys, err = pgpEncryptData(optsData, filteredList, nil)
-		}
-	case OperationRemoveRecipients:
-		keys, err = pgpRemoveRecipientsFromKeys(keys, filteredList)
-		// encBlob stays empty to indicate it wasn't touched
-	}
-
-	if err != nil {
-		return nil, "", err
-	}
-
-	wrappedKeys = le.encodeWrappedKeys(keys, pgpTail)
-
-	return encLayer, wrappedKeys, nil
-}
-
-// Decrypt decrypts a byte array using data from the DecryptConfig
-// The encrypted bulk data is provided in encBody and the wrapped
-// keys were taken from the OCI Descriptor. The OpenPGP message
-// is reassembled from the encBody and wrapped key.
-// The layerNum and platform are used to pick the symmetric key
-// used for decrypting the layer given its number and platform.
-func (le *pgpKeyWrapper) UnwrapKey(dc *DecryptConfig, wrappedKeys string) ([]byte, error) {
-
-	keys, pgpTail, err := le.decodeWrappedKeys(wrappedKeys)
-	if err != nil {
-		return nil, err
-	}
-
-	symKey, symKeyCipher, err := le.getSymKeyParameters(dc.Parameters, keys)
-
-	data := le.assembleEncryptedMessage(pgpTail, keys)
-	r := bytes.NewReader(data)
-	md, err := PGPReadMessage(r, symKey, symKeyCipher)
-	if err != nil {
-		return nil, err
-	}
-	// we get the plain key options back
-	optsData, err := ioutil.ReadAll(md.UnverifiedBody)
-	if err != nil {
-		return nil, errors.Wrapf(err, "Could not read PGP body")
-	}
-	return optsData, nil
-}
-
-// encodeWrappedKeys encodes wrapped openpgp keys to a string readable ','
-// separated base64 strings. The last item is the encrypted body
-func (le *pgpKeyWrapper) encodeWrappedKeys(keys [][]byte, pgpTail []byte) string {
-	var keyArray []string
-
-	for _, k := range keys {
-		keyArray = append(keyArray, base64.StdEncoding.EncodeToString(k))
-	}
-	keyArray = append(keyArray, base64.StdEncoding.EncodeToString(pgpTail))
-
-	return strings.Join(keyArray, ",")
-}
-
-// decodeWrappedKeys decodes wrapped openpgp keys from string readable ','
-// separated base64 strings to their byte values; the last item in the
-// list is the encrypted body
-func (le *pgpKeyWrapper) decodeWrappedKeys(keys string) ([][]byte, []byte, error) {
-	if keys == "" {
-		return nil, nil, nil
-	}
-	keySplit := strings.Split(keys, ",")
-
-	// last item is the encrypted data block; remove it from keySplit
-	pgpTail, err := base64.StdEncoding.DecodeString(keySplit[len(keySplit) - 1])
-	if err != nil {
-		return nil, nil, errors.Wrapf(err, "Could not base64 decode pgpTail")
-	}
-	keySplit = keySplit[:len(keySplit) - 1]
-
-	keyBytes := make([][]byte, 0, len(keySplit))
-
-	for _, v := range keySplit {
-		data, err := base64.StdEncoding.DecodeString(v)
-		if err != nil {
-			return nil, nil, err
-		}
-		keyBytes = append(keyBytes, data)
-	}
-
-	return keyBytes, pgpTail, nil
-}
-
-// GetKeyIdsFromWrappedKeys converts the wrappedKeys to uint64 keyIds
-func (le *pgpKeyWrapper) GetKeyIdsFromWrappedKeys(wrappedKeys string) ([]uint64, [][]byte, error) {
-	keys, _, err := le.decodeWrappedKeys(wrappedKeys)
-	if err != nil {
-		return nil, nil, err
-	}
-	keyIds, err := PGPWrappedKeysToKeyIds(keys)
-	if err != nil {
-		return nil, nil, err
-	}
-	return keyIds, keys, err
-}
-
-// GetRecipients converts the wrappedKeys to an array of recipients
-func (le *pgpKeyWrapper) GetRecipients(wrappedKeys string) ([]string, error) {
-	keyIds , _, err := le.GetKeyIdsFromWrappedKeys(wrappedKeys)
-	if err != nil {
-		return nil, err
-	}
-	var array []string
-	for _, keyid := range keyIds {
-		array = append(array, "0x"+strconv.FormatUint(keyid, 16))
-	}
-	return array, nil
-}
-
-func (le *pgpKeyWrapper) GetAnnotationID() string {
-	return "org.opencontainers.image.pgp.keys"
-}
-
 // GetPrivateKey walks the list of layerInfos and tries to decrypt the
 // wrapped symmetric keys. For this it determines whether a private key is
 // in the GPGVault or on this system and prompts for the passwords for those
@@ -572,22 +345,3 @@ func GetPrivateKey(layerInfos []LayerInfo, gpgClient GPGClient, gpgVault GPGVaul
 
 	return parameters, nil
 }
-
-func (le *pgpKeyWrapper) getSymKeyParameters(dcparameters map[string]string, keys [][]byte) ([]byte, packet.CipherFunction, error) {
-	var keyid uint64
-
-	_, err := fmt.Sscanf(dcparameters["gpg-privatekey-keyid"], "0x%x", &keyid)
-	if err != nil {
-		return nil, packet.CipherFunction(0), errors.Wrapf(err, "Could not Sscan %s as hex number\n", dcparameters["gpg-privatekey-keyid"])
-	}
-	gpgPrivateKey, err := base64.StdEncoding.DecodeString(dcparameters["gpg-privatekey"])
-	if err != nil {
-		return nil, packet.CipherFunction(0), errors.Wrapf(err, "Could not base64 decode gpg-privatekey\n")
-	}
-	gpgPrivateKeyPwd, err := base64.StdEncoding.DecodeString(dcparameters["gpg-privatekey-password"])
-	if err != nil {
-		return nil, packet.CipherFunction(0), errors.Wrapf(err, "Could not base64 decode gpg-privatekey-password\n")
-	}
-	return PGPDecryptSymmetricKey(keys, keyid, gpgPrivateKey, gpgPrivateKeyPwd, nil)
-}
-
