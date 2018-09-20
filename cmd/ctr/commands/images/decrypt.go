@@ -18,6 +18,7 @@ package images
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/containerd/containerd/cmd/ctr/commands"
 	"github.com/containerd/containerd/images/encryption"
@@ -50,7 +51,7 @@ var decryptCommand = cli.Command{
 		Usage: "The GPG version (\"v1\" or \"v2\"), default will make an educated guess",
 	}, cli.StringSliceFlag{
 		Name:  "key",
-		Usage: "A secret key's filename; may be provided multiple times",
+		Usage: "A secret key's filename. The file suffix must be .pem or .der for JWE and anything else for OpenPGP; this option may be provided multiple times",
 	}),
 	Action: func(context *cli.Context) error {
 		local := context.Args().First()
@@ -69,22 +70,6 @@ var decryptCommand = cli.Command{
 			return err
 		}
 		defer cancel()
-
-		// Create gpg client
-		gpgVersion := context.String("gpg-version")
-		v := new(encryption.GPGVersion)
-		switch gpgVersion {
-		case "v1":
-			*v = encryption.GPGv1
-		case "v2":
-			*v = encryption.GPGv2
-		default:
-			v = nil
-		}
-		gpgClient, err := encryption.NewGPGClient(v, context.String("gpg-homedir"))
-		if err != nil {
-			return errors.New("Unable to create GPG Client")
-		}
 
 		layers32 := commands.IntToInt32Array(context.IntSlice("layer"))
 
@@ -105,17 +90,24 @@ var decryptCommand = cli.Command{
 			return nil
 		}
 
-		gpgVault := encryption.NewGPGVault()
-		err = gpgVault.AddSecretKeyRingFiles(context.StringSlice("key"))
+		dcparameters := make(map[string]string)
+
+		gpgSecretKeyRingFiles, privKeys, err := processPrivateKeyFiles(context.StringSlice("key"))
 		if err != nil {
 			return err
 		}
 
-		dcparameters, err := encryption.GetPrivateKey(layerInfos, gpgClient, gpgVault)
-		if err != nil {
-			return err
+		if len(gpgSecretKeyRingFiles) > 0 {
+			// Create gpg client
+			_, _, dcparameters, err = setupGPGClient(context, gpgSecretKeyRingFiles, layerInfos, len(privKeys) == 0)
+			if err != nil {
+				return err
+			}
 		}
-		fmt.Printf("\n")
+
+		if len(privKeys) > 0 {
+			dcparameters["privkeys"] = strings.Join(privKeys, ",")
+		}
 
 		cc := &encryption.CryptoConfig{
 			Dc: &encryption.DecryptConfig{
