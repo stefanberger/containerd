@@ -53,9 +53,6 @@ var encryptCommand = cli.Command{
 	}, cli.StringSliceFlag{
 		Name:  "platform",
 		Usage: "For which platform to encrypt; by default encrytion is done for all platforms",
-	}, cli.BoolFlag{
-		Name:  "remove",
-		Usage: "Remove the given set of recipients",
 	}, cli.StringFlag{
 		Name:  "gpg-homedir",
 		Usage: "The GPG homedir to use; by default gpg uses ~/.gnupg",
@@ -64,7 +61,7 @@ var encryptCommand = cli.Command{
 		Usage: "The GPG version (\"v1\" or \"v2\"), default will make an educated guess",
 	}, cli.StringSliceFlag{
 		Name:  "key",
-		Usage: "A secret key's filename; may be provided multiple times",
+		Usage: "A secret key's filename. The file suffix must be .pem or .der for JWE and anything else for OpenPGP; this option may be provided multiple times",
 	}),
 	Action: func(context *cli.Context) error {
 		local := context.Args().First()
@@ -89,62 +86,56 @@ var encryptCommand = cli.Command{
 			return errors.New("no recipients given -- nothing to do")
 		}
 
-		// Create gpg client
-		gpgVersion := context.String("gpg-version")
-		v := new(encryption.GPGVersion)
-		switch gpgVersion {
-		case "v1":
-			*v = encryption.GPGv1
-		case "v2":
-			*v = encryption.GPGv2
-		default:
-			v = nil
-		}
-		gpgClient, err := encryption.NewGPGClient(v, context.String("gpg-homedir"))
-		if err != nil {
-			return errors.New("Unable to create GPG Client")
-		}
-
-		gpgPubRingFile, err := gpgClient.ReadGPGPubRingFile()
-		if err != nil {
-			return err
-		}
-
-		gpgVault := encryption.NewGPGVault()
-		err = gpgVault.AddSecretKeyRingFiles(context.StringSlice("key"))
-		if err != nil {
-			return err
-		}
-
-		operation := encryption.OperationAddRecipients
-		if context.Bool("remove") {
-			operation = encryption.OperationRemoveRecipients
-		}
-
 		layers32 := commands.IntToInt32Array(context.IntSlice("layer"))
 
-		var dcparameters map[string]string
-		if operation == encryption.OperationAddRecipients {
-			layerInfos, err := client.ImageService().GetImageLayerInfo(ctx, local, layers32, context.StringSlice("platform"))
-			if err != nil {
-				return err
-			}
-			dcparameters, err = encryption.GetPrivateKey(layerInfos, gpgClient, gpgVault)
-			if err != nil {
-				return err
-			}
-		}
-		parameters := make(map[string]string)
-		parameters["gpg-recipients"] = strings.Join(recipients, ",")
-		parameters["gpg-pubkeyringfile"] = base64.StdEncoding.EncodeToString(gpgPubRingFile)
+		gpgSecretKeyRingFiles, privKeys, err := processPrivateKeyFiles(context.StringSlice("key"))
 		if err != nil {
 			return err
+		}
+
+		gpgRecipients, pubKeys, err := processRecipientKeys(recipients)
+		if err != nil {
+			return err
+		}
+
+		var dcparameters map[string]string
+
+		parameters := make(map[string]string)
+		if len(pubKeys) > 0 {
+			parameters["pubkeys"] = strings.Join(pubKeys, ",")
+		}
+
+		layerInfos, err := client.ImageService().GetImageLayerInfo(ctx, local, layers32, context.StringSlice("platform"))
+		if err != nil {
+			return err
+		}
+
+		// Create gpg client
+		var gpgClient encryption.GPGClient
+		gpgClient, _, dcparameters, err = setupGPGClient(context, gpgSecretKeyRingFiles, layerInfos, len(privKeys) == 0)
+		if err != nil {
+			return err
+		}
+
+		if len(gpgRecipients) > 0 {
+			parameters["gpg-recipients"] = strings.Join(gpgRecipients, ",")
+
+			gpgPubRingFile, err := gpgClient.ReadGPGPubRingFile()
+			if err != nil {
+				return err
+			}
+
+			parameters["gpg-pubkeyringfile"] = base64.StdEncoding.EncodeToString(gpgPubRingFile)
+		}
+
+		if len(privKeys) > 0 {
+			dcparameters["privkeys"] = strings.Join(privKeys, ",")
 		}
 
 		cc := &encryption.CryptoConfig{
 			Ec: &encryption.EncryptConfig{
 				Parameters: parameters,
-				Operation:  operation,
+				Operation:  encryption.OperationAddRecipients,
 				Dc: encryption.DecryptConfig{
 					Parameters: dcparameters,
 				},

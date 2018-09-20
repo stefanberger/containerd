@@ -17,7 +17,11 @@
 package encryption
 
 import (
+	"crypto/x509"
+	"encoding/pem"
 	"fmt"
+
+	"github.com/pkg/errors"
 )
 
 // Uint64ToStringArray converts an array of uint64's to an array of strings
@@ -29,4 +33,44 @@ func Uint64ToStringArray(format string, in []uint64) []string {
 		ret = append(ret, fmt.Sprintf(format, v))
 	}
 	return ret
+}
+
+// parsePrivateKey tries to parse a private key in DER format first and
+// PEM format after, returning an error if the parsing failed
+func parsePrivateKey(privKey []byte, prefix string) (interface{}, error) {
+	key, err := x509.ParsePKCS8PrivateKey(privKey)
+	if err != nil {
+		key, err = x509.ParsePKCS1PrivateKey(privKey)
+	}
+	if err != nil {
+		block, _ := pem.Decode(privKey)
+		if block == nil {
+			return nil, fmt.Errorf("%s: Could not PEM decode private key", prefix)
+		}
+		key, err = x509.ParsePKCS8PrivateKey(block.Bytes)
+		if err != nil {
+			key, err = x509.ParsePKCS1PrivateKey(block.Bytes)
+			if err != nil {
+				return nil, errors.Wrapf(err, "%s: Could not parse private key", prefix)
+			}
+		}
+	}
+	return key, err
+}
+
+// parsePublicKey tries to parse a public key in DER format first and
+// PEM format after, returning an error if the parsing failed
+func parsePublicKey(pubKey []byte, prefix string) (interface{}, error) {
+	key, err := x509.ParsePKIXPublicKey(pubKey)
+	if err != nil {
+		block, _ := pem.Decode(pubKey)
+		if block == nil {
+			return nil, fmt.Errorf("%s: Could not PEM decode public key", prefix)
+		}
+		key, err = x509.ParsePKIXPublicKey(block.Bytes)
+		if err != nil {
+			return nil, errors.Wrapf(err, "%s: Could not parse public key", prefix)
+		}
+	}
+	return key, err
 }
