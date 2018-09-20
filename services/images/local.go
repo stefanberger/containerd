@@ -248,12 +248,11 @@ func (l *local) GetImageLayerInfo(ctx context.Context, req *imagesapi.GetImageLa
 	resp.LayerInfo = make([]*imagesapi.LayerInfo, len(lis))
 	for i := 0; i < len(lis); i++ {
 		resp.LayerInfo[i] = &imagesapi.LayerInfo{
-			ID:          lis[i].ID,
-			WrappedKeys: lis[i].WrappedKeys,
-			Digest:      lis[i].Digest,
-			Encryption:  lis[i].Encryption,
-			FileSize:    lis[i].FileSize,
-			Platform:    lis[i].Platform,
+			ID:             lis[i].ID,
+			WrappedKeysMap: lis[i].WrappedKeysMap,
+			Digest:         lis[i].Digest,
+			FileSize:       lis[i].FileSize,
+			Platform:       lis[i].Platform,
 		}
 	}
 
