@@ -422,13 +422,12 @@ func IsCompressedDiff(ctx context.Context, mediaType string) (bool, error) {
 // The caller is expected to store the returned encrypted data and OCI Descriptor
 func encryptLayer(cc *encryption.CryptoConfig, data []byte, desc ocispec.Descriptor) (ocispec.Descriptor, []byte, error) {
 	var (
-		wrappedKeys string
-		size        int64
-		d           digest.Digest
-		err         error
+		size int64
+		d    digest.Digest
+		err  error
 	)
 
-	p, wrappedKeys, annotationID, err := encryption.EncryptLayer(cc.Ec, data, desc)
+	p, annotations, err := encryption.EncryptLayer(cc.Ec, data, desc)
 	if err != nil {
 		return ocispec.Descriptor{}, []byte{}, err
 	}
@@ -448,7 +447,7 @@ func encryptLayer(cc *encryption.CryptoConfig, data []byte, desc ocispec.Descrip
 		Platform: desc.Platform,
 	}
 	newDesc.Annotations = make(map[string]string)
-	newDesc.Annotations[annotationID] = wrappedKeys
+	newDesc.Annotations = annotations
 
 	switch desc.MediaType {
 	case MediaTypeDockerSchema2LayerGzip:
@@ -875,11 +874,17 @@ func DecryptLayers(ctx context.Context, cs content.Store, layers []rootfs.Layer,
 		return layers, nil
 	}
 
-	// in ctr case we may just want to consult gpg/gpg2 for the key(s)
-	dcparameters, err := encryption.GetPrivateKey(layerInfos, gpgClient, gpgVault)
+	/* we have to find a GPG key until we also get other private keys passed */
+	mustFindKey := true
+
+	dcparameters, err := encryption.GPGGetPrivateKey(layerInfos, gpgClient, gpgVault, mustFindKey)
 	if err != nil {
 		return []rootfs.Layer{}, err
 	}
+	// FIXME: we need to set the following
+	//dcparameters["pemkeys"] = strings.Join(pemkeys, ",")
+	//dcparameters["derkeys"] = strings.Join(derkeys, ",")
+
 	cc := &encryption.CryptoConfig{
 		Dc: &encryption.DecryptConfig{
 			Parameters: dcparameters,
