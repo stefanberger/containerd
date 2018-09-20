@@ -95,8 +95,9 @@ var decryptCommand = cli.Command{
 
 		isEncrypted := false
 		for i := 0; i < len(layerInfos); i++ {
-			if len(layerInfos[i].WrappedKeys) > 0 {
+			if len(layerInfos[i].WrappedKeysMap) > 0 {
 				isEncrypted = true
+				break
 			}
 		}
 		if !isEncrypted {
