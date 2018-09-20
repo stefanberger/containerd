@@ -244,7 +244,7 @@ func pgpPrimaryIdentity(e *openpgp.Entity) *openpgp.Identity {
 	return firstIdentity
 }
 
-// WrappedKeysToKeyIds converts an array of wrapped keys into an array of
+// PGPWrappedKeysToKeyIds converts an array of wrapped keys into an array of
 // their key Ids
 func PGPWrappedKeysToKeyIds(keys [][]byte) ([]uint64, error) {
 	var keyids []uint64
@@ -273,7 +273,7 @@ ParsePackets:
 	return keyids, nil
 }
 
-// DecryptSymmetricKey decrypts a symmetric key from an array of wrapped keys. The private
+// PGPDecryptSymmetricKey decrypts a symmetric key from an array of wrapped keys. The private
 // key with the given keyid is retrieved from the keyData byte array and decrypted using
 // the given keyDataPassword; the private key is then used to decrypt the wrapped symmetric
 // key
@@ -338,7 +338,7 @@ ParsePackets:
 	return ek.Key, ek.CipherFunc, nil
 }
 
-// ReadMessage reads an OpenPGP byte stream and decrypts the SymmetricallyEncrypted
+// PGPReadMessage reads an OpenPGP byte stream and decrypts the SymmetricallyEncrypted
 // part with the given symmetric key and cipher
 func PGPReadMessage(r io.Reader, symKey []byte, symKeyCipher packet.CipherFunction) (*openpgp.MessageDetails, error) {
 	var se *packet.SymmetricallyEncrypted
