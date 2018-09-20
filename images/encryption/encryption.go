@@ -20,15 +20,11 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"io"
-	"os"
 	"strings"
 
-	"github.com/containerd/containerd/errdefs"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
-	"golang.org/x/crypto/ssh/terminal"
 )
 
 // LayerInfo holds information about an image layer
@@ -61,11 +57,11 @@ type EncryptConfig struct {
 	// map holding 'gpg-recipients' and 'gpg-pubkeyringfile'
 	Parameters map[string]string
 
-	Operation int32
 	// for adding recipients on an already encrypted image we need the
 	// symmetric keys for the layers so we can wrap them with the recpient's
 	// public key
-	Dc DecryptConfig
+	Operation int32 // currently only OperationAddRecipients is supported, if at all
+	Dc        DecryptConfig
 }
 
 const (
@@ -92,18 +88,19 @@ type CryptoConfig struct {
 // KeyWrapper is the interface used for wrapping keys using
 // a specific encryption technology (pgp, jwe)
 type KeyWrapper interface {
-	WrapKeys(ec *EncryptConfig, encLayer []byte, wrappedKeys string, optsData []byte) ([]byte, string, error)
-	UnwrapKey(dc *DecryptConfig, wrappedKeys string) ([]byte, error)
+	WrapKeys(ec *EncryptConfig, optsData []byte) ([]byte, error)
+	UnwrapKey(dc *DecryptConfig, annotation []byte) ([]byte, error)
 	GetAnnotationID() string
 
-	GetKeyIdsFromWrappedKeys(wrappedKeys string) ([]uint64, [][]byte, error)
-	GetRecipients(wrappedKeys string) ([]string, error)
+	GetKeyIdsFromPacket(packet string) ([]uint64, error)
+	GetRecipients(packet string) ([]string, error)
 }
 
 func init() {
 	keyWrappers = make(map[string]KeyWrapper)
 	keyWrapperAnnotations = make(map[string]string)
-	registerKeyWrapper("pgp", &pgpKeyWrapper{})
+	registerKeyWrapper("pgp", &gpgKeyWrapper{})
+	registerKeyWrapper("jwe", &jweKeyWrapper{})
 }
 
 var keyWrappers map[string]KeyWrapper
@@ -133,65 +130,121 @@ func GetWrappedKeysMap(desc ocispec.Descriptor) map[string]string {
 }
 
 // EncryptLayer encrypts the layer by running one encryptor after the other
-func EncryptLayer(ec *EncryptConfig, plainLayer []byte, desc ocispec.Descriptor) ([]byte, string, string, error) {
+func EncryptLayer(ec *EncryptConfig, encOrPlainLayer []byte, desc ocispec.Descriptor) ([]byte, map[string]string, error) {
 	var (
 		encLayer []byte
 		err      error
 		optsData []byte
 	)
 
-	// TODO: to support multiple encryption schemes at the same time we would need
-	// to find the existing symmetric key first...
-
 	symKey := make([]byte, 256/8)
 	_, err = io.ReadFull(rand.Reader, symKey)
 	if err != nil {
-		return nil, "", "", errors.Wrapf(err, "Could not create symmetric key")
+		return nil, nil, errors.Wrapf(err, "Could not create symmetric key")
 	}
 
-	for annotationsID, scheme := range keyWrapperAnnotations {
-		wrappedKeysBefore := desc.Annotations[annotationsID]
-		if wrappedKeysBefore == "" && len(encLayer) == 0 {
-			encLayer, optsData, err = commonEncryptLayer(plainLayer, symKey, AeadAes256Gcm)
+	for annotationsID := range keyWrapperAnnotations {
+		annotation := desc.Annotations[annotationsID]
+		if annotation != "" {
+			optsData, err = decryptLayerKeyOptsData(&ec.Dc, desc)
 			if err != nil {
-				return nil, "", "", err
+				return nil, nil, err
 			}
-		} else {
-			if len(encLayer) == 0 {
-				encLayer = plainLayer
-			}
-		}
-		encryptor := GetKeyWrapper(scheme)
-		encLayer, wrappedKeysAfter, err := encryptor.WrapKeys(ec, encLayer, wrappedKeysBefore, optsData)
-		if err != nil {
-			return nil, "", "", err
-		}
-		if wrappedKeysAfter != wrappedKeysBefore {
-			return encLayer, wrappedKeysAfter, encryptor.GetAnnotationID(), err
+			// already encrypted!
+			encLayer = encOrPlainLayer
 		}
 	}
-	return nil, "", "", errors.Errorf("No encryptor found to handle encryption")
+
+	newAnnotations := make(map[string]string)
+
+	for annotationsID, scheme := range keyWrapperAnnotations {
+		b64Annotations := desc.Annotations[annotationsID]
+		if b64Annotations == "" && optsData == nil {
+			encLayer, optsData, err = commonEncryptLayer(encOrPlainLayer, symKey, AeadAes256Gcm)
+			if err != nil {
+				return nil, nil, err
+			}
+		}
+		keywrapper := GetKeyWrapper(scheme)
+		b64Annotations, err = preWrapKeys(keywrapper, ec, b64Annotations, optsData)
+		if err != nil {
+			return nil, nil, err
+		}
+		if b64Annotations != "" {
+			newAnnotations[annotationsID] = b64Annotations
+		}
+	}
+	if len(newAnnotations) == 0 {
+		err = errors.Errorf("No encryptor found to handle encryption")
+	}
+	// if nothing was encrypted, we just return encLayer = nil
+	return encLayer, newAnnotations, err
+}
+
+// preWrapKeys calls WrapKeys and handles the base64 encoding and concatenation of the
+// annotation data
+func preWrapKeys(keywrapper KeyWrapper, ec *EncryptConfig, b64Annotations string, optsData []byte) (string, error) {
+	newAnnotation, err := keywrapper.WrapKeys(ec, optsData)
+	if err != nil || len(newAnnotation) == 0 {
+		return b64Annotations, err
+	}
+	b64newAnnotation := base64.StdEncoding.EncodeToString(newAnnotation)
+	if b64Annotations == "" {
+		return b64newAnnotation, nil
+	}
+	return b64Annotations + "," + b64newAnnotation, nil
 }
 
 // DecryptLayer decrypts a layer trying one KeyWrapper after the other to see whether it
 // can apply the provided private key
 func DecryptLayer(dc *DecryptConfig, encLayer []byte, desc ocispec.Descriptor) ([]byte, error) {
+	optsData, err := decryptLayerKeyOptsData(dc, desc)
+	if err != nil {
+		return nil, err
+	}
+
+	return commonDecryptLayer(encLayer, optsData)
+}
+
+func decryptLayerKeyOptsData(dc *DecryptConfig, desc ocispec.Descriptor) ([]byte, error) {
 	for annotationsID, scheme := range keyWrapperAnnotations {
-		wrappedKeys := desc.Annotations[annotationsID]
-		if wrappedKeys != "" {
-			encryptor := GetKeyWrapper(scheme)
-			optsData, err := encryptor.UnwrapKey(dc, wrappedKeys)
+		b64Annotation := desc.Annotations[annotationsID]
+		if b64Annotation != "" {
+			keywrapper := GetKeyWrapper(scheme)
+			optsData, err := preUnwrapKey(keywrapper, dc, b64Annotation)
 			if err != nil {
-				return nil, err
+				// try next KeyWrapper
+				continue
 			}
 			if optsData == nil {
 				// try next KeyWrapper
 				continue
 			}
-			return commonDecryptLayer(encLayer, optsData)
+			return optsData, nil
 		}
 	}
-	return nil, errors.Errorf("No decryptor found")
+	return nil, errors.Errorf("No suitable key unwrapper found")
+}
+
+// preUnwrapKey decodes the comma separated base64 strings and calls the Unwrap function
+// of the given keywrapper with it and returns the result in case the Unwrap functions
+// does not return an error. If all attempts fail, an error is returned.
+func preUnwrapKey(keywrapper KeyWrapper, dc *DecryptConfig, b64Annotations string) ([]byte, error) {
+	if b64Annotations == "" {
+		return nil, nil
+	}
+	for _, b64Annotation := range strings.Split(b64Annotations, ",") {
+		annotation, err := base64.StdEncoding.DecodeString(b64Annotation)
+		if err != nil {
+			return nil, errors.New("Could not base64 decode the annotation")
+		}
+		optsData, err := keywrapper.UnwrapKey(dc, annotation)
+		if err != nil {
+			continue
+		}
+		return optsData, nil
+	}
+	return nil, errors.New("No suitable key found for decrypting layer key")
 }
 
 // commonEncryptLayer is a function to encrypt the plain layer using a new random
@@ -238,108 +291,4 @@ func commonDecryptLayer(encLayer []byte, optsData []byte) ([]byte, error) {
 	}
 
 	return plainLayer, nil
-}
-
-// GetPrivateKey walks the list of layerInfos and tries to decrypt the
-// wrapped symmetric keys. For this it determines whether a private key is
-// in the GPGVault or on this system and prompts for the passwords for those
-// that are available. If we do not find a private key on the system for
-// getting to the symmetric key of a layer then an error is generated.
-// Otherwise the wrapped symmetric key is test-decrypted using the private key.
-func GetPrivateKey(layerInfos []LayerInfo, gpgClient GPGClient, gpgVault GPGVault) (map[string]string, error) {
-	// PrivateKeyData describes a private key
-	type PrivateKeyData struct {
-		KeyData         []byte
-		KeyDataPassword []byte
-		KeyID           uint64
-	}
-	var pkd PrivateKeyData
-	parameters := make(map[string]string)
-	keyIDPasswordMap := make(map[uint64]PrivateKeyData)
-
-	// we need to decrypt one symmetric key per encrypted layer per platform
-	for _, layerInfo := range layerInfos {
-		for scheme, wrappedKeys := range layerInfo.WrappedKeysMap {
-			if scheme != "pgp" {
-				continue
-			}
-			encryptor := GetKeyWrapper(scheme)
-			if encryptor == nil {
-				return parameters, errors.Errorf("Could not get KeyWrapper for %s\n", scheme)
-			}
-			keyIds, keys, err := encryptor.GetKeyIdsFromWrappedKeys(wrappedKeys)
-			if err != nil {
-				return parameters, err
-			}
-
-			found := false
-			for _, keyid := range keyIds {
-				// do we have this key? -- first check the vault
-				if gpgVault != nil {
-					_, keydata := gpgVault.GetGPGPrivateKey(keyid)
-					if len(keydata) > 0 {
-						pkd = PrivateKeyData{
-							KeyData:         keydata,
-							KeyDataPassword: nil, // password not supported in this case
-							KeyID:           keyid,
-						}
-						keyIDPasswordMap[keyid] = pkd
-					}
-				} else if gpgClient != nil {
-					// check the local system's gpg installation
-					keyinfo, haveKey, _ := gpgClient.GetSecretKeyDetails(keyid)
-					// this may fail if the key is not here; we ignore the error
-					if !haveKey {
-						// key not on this system
-						continue
-					}
-
-					var ok bool
-					if pkd, ok = keyIDPasswordMap[keyid]; !ok {
-						fmt.Printf("Passphrase required for Key id 0x%x: \n%v", keyid, string(keyinfo))
-						fmt.Printf("Enter passphrase for key with Id 0x%x: ", keyid)
-
-						password, err := terminal.ReadPassword(int(os.Stdin.Fd()))
-						fmt.Printf("\n")
-						if err != nil {
-							return parameters, err
-						}
-						keydata, err := gpgClient.GetGPGPrivateKey(keyid, string(password))
-						if err != nil {
-							return parameters, err
-						}
-						pkd = PrivateKeyData{
-							KeyData:         keydata,
-							KeyDataPassword: password,
-							KeyID:           keyid,
-						}
-						keyIDPasswordMap[keyid] = pkd
-					}
-				} else {
-					return parameters, errors.Wrapf(errdefs.ErrInvalidArgument, "No GPGVault or GPGClient passed.")
-				}
-
-				// test the password by trying a decryption
-				_, _, err := PGPDecryptSymmetricKey(keys, keyid, pkd.KeyData, pkd.KeyDataPassword, nil)
-				if err != nil {
-					return parameters, err
-				}
-
-				found = true
-				break
-			}
-			if !found && len(wrappedKeys) > 0 {
-				keyIds, _ := PGPWrappedKeysToKeyIds(keys)
-				ids := Uint64ToStringArray("0x%x", keyIds)
-
-				return parameters, errors.Wrapf(errdefs.ErrNotFound, "Missing key for decryption of layer %d of %s. Need one of the following keys: %s", layerInfo.ID, layerInfo.Platform, strings.Join(ids, ", "))
-			}
-		}
-	}
-
-	parameters["gpg-privatekey"] = base64.StdEncoding.EncodeToString(pkd.KeyData)
-	parameters["gpg-privatekey-password"] = base64.StdEncoding.EncodeToString(pkd.KeyDataPassword)
-	parameters["gpg-privatekey-keyid"] = fmt.Sprintf("0x%x", pkd.KeyID)
-
-	return parameters, nil
 }

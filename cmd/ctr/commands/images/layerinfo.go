@@ -19,6 +19,7 @@ package images
 import (
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"text/tabwriter"
 
@@ -70,22 +71,25 @@ var layerinfoCommand = cli.Command{
 		}
 
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', tabwriter.AlignRight)
-		fmt.Fprintf(w, "#\tDIGEST\tPLATFORM\tSIZE\tENCRYPTION\tKEY IDS\t\n")
+		fmt.Fprintf(w, "#\tDIGEST\tPLATFORM\tSIZE\tENCRYPTION\tRECIPIENTS\t\n")
 		for _, layer := range LayerInfos {
 			var recipients []string
 			var schemes []string
 			for scheme, wrappedKeys := range layer.WrappedKeysMap {
 				schemes = append(schemes, scheme)
-				encryptor := encryption.GetKeyWrapper(scheme)
-				if encryptor != nil {
-					recipients, err = encryptor.GetRecipients(wrappedKeys)
+				keywrapper := encryption.GetKeyWrapper(scheme)
+				if keywrapper != nil {
+					addRecipients, err := keywrapper.GetRecipients(wrappedKeys)
 					if err != nil {
 						return err
 					}
+					recipients = append(recipients, addRecipients...)
 				} else {
 					recipients = append(recipients, fmt.Sprintf("No %s KeyWrapper", scheme))
 				}
 			}
+			sort.Strings(schemes)
+			sort.Strings(recipients)
 			fmt.Fprintf(w, "%d\t%s\t%s\t%d\t%s\t%s\t\n", layer.ID, layer.Digest, layer.Platform, layer.FileSize, strings.Join(schemes, ","), strings.Join(recipients, ", "))
 		}
 		w.Flush()
