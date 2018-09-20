@@ -849,9 +849,9 @@ func getImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descr
 // for them using the gpg client
 func DecryptLayers(ctx context.Context, cs content.Store, layers []rootfs.Layer, gpgClient encryption.GPGClient, gpgVault encryption.GPGVault) ([]rootfs.Layer, error) {
 	var (
-		newLayers      []rootfs.Layer
-		layerInfos     []encryption.LayerInfo
-		err            error
+		newLayers  []rootfs.Layer
+		layerInfos []encryption.LayerInfo
+		err        error
 	)
 
 	// in the 1st pass through the layers we gather required keys
@@ -882,7 +882,7 @@ func DecryptLayers(ctx context.Context, cs content.Store, layers []rootfs.Layer,
 	}
 	cc := &encryption.CryptoConfig{
 		Dc: &encryption.DecryptConfig{
-			Parameters    : dcparameters,
+			Parameters: dcparameters,
 		},
 	}
 
