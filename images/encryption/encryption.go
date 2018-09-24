@@ -101,6 +101,7 @@ func init() {
 	keyWrapperAnnotations = make(map[string]string)
 	registerKeyWrapper("pgp", &gpgKeyWrapper{})
 	registerKeyWrapper("jwe", &jweKeyWrapper{})
+	registerKeyWrapper("pkcs7", &pkcs7KeyWrapper{})
 }
 
 var keyWrappers map[string]KeyWrapper
