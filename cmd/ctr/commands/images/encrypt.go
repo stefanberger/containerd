@@ -62,6 +62,9 @@ var encryptCommand = cli.Command{
 	}, cli.StringSliceFlag{
 		Name:  "key",
 		Usage: "A secret key's filename. The file suffix must be .pem or .der for JWE and anything else for OpenPGP; this option may be provided multiple times",
+	}, cli.StringSliceFlag{
+		Name:  "dec-recipient",
+		Usage: "Recipient of the image; needed for adding recpient; used only for PKCs7 and must be an x509 certificate",
 	}),
 	Action: func(context *cli.Context) error {
 		local := context.Args().First()
@@ -93,7 +96,12 @@ var encryptCommand = cli.Command{
 			return err
 		}
 
-		gpgRecipients, pubKeys, err := processRecipientKeys(recipients)
+		gpgRecipients, pubKeys, x509s, err := processRecipientKeys(recipients)
+		if err != nil {
+			return err
+		}
+
+		_, _, decX509s, err := processRecipientKeys(context.StringSlice("dec-recipient"))
 		if err != nil {
 			return err
 		}
@@ -103,6 +111,9 @@ var encryptCommand = cli.Command{
 		parameters := make(map[string]string)
 		if len(pubKeys) > 0 {
 			parameters["pubkeys"] = strings.Join(pubKeys, ",")
+		}
+		if len(x509s) > 0 {
+			parameters["x509s"] = strings.Join(x509s, ",")
 		}
 
 		layerInfos, err := client.ImageService().GetImageLayerInfo(ctx, local, layers32, context.StringSlice("platform"))
@@ -130,6 +141,9 @@ var encryptCommand = cli.Command{
 
 		if len(privKeys) > 0 {
 			dcparameters["privkeys"] = strings.Join(privKeys, ",")
+		}
+		if len(decX509s) > 0 {
+			dcparameters["x509s"] = strings.Join(decX509s, ",")
 		}
 
 		cc := &encryption.CryptoConfig{

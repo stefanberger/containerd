@@ -52,6 +52,9 @@ var decryptCommand = cli.Command{
 	}, cli.StringSliceFlag{
 		Name:  "key",
 		Usage: "A secret key's filename. The file suffix must be .pem or .der for JWE and anything else for OpenPGP; this option may be provided multiple times",
+	}, cli.StringSliceFlag{
+		Name:  "recipient",
+		Usage: "Recipient of the image; used only for PKCs7 and must be an x509 certificate",
 	}),
 	Action: func(context *cli.Context) error {
 		local := context.Args().First()
@@ -92,6 +95,12 @@ var decryptCommand = cli.Command{
 
 		dcparameters := make(map[string]string)
 
+		// x509 cert is needed for PCS7 decryption
+		_, _, x509s, err := processRecipientKeys(context.StringSlice("recipient"))
+		if err != nil {
+			return err
+		}
+
 		gpgSecretKeyRingFiles, privKeys, err := processPrivateKeyFiles(context.StringSlice("key"))
 		if err != nil {
 			return err
@@ -107,6 +116,9 @@ var decryptCommand = cli.Command{
 
 		if len(privKeys) > 0 {
 			dcparameters["privkeys"] = strings.Join(privKeys, ",")
+		}
+		if len(x509s) > 0 {
+			dcparameters["x509s"] = strings.Join(x509s, ",")
 		}
 
 		cc := &encryption.CryptoConfig{

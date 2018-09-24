@@ -26,23 +26,33 @@ import (
 	"github.com/urfave/cli"
 )
 
-func processRecipientKeys(recipients []string) ([]string, []string, error) {
+func isCertificate(data []byte) bool {
+	_, err := encryption.ParseCertificate(data, "")
+	return err == nil
+}
+
+func processRecipientKeys(recipients []string) ([]string, []string, []string, error) {
 	var (
 		gpgRecipients []string
 		pubkeys       []string
+		x509s         []string
 	)
 	for _, recipient := range recipients {
 		if strings.HasSuffix(recipient, ".pem") || strings.HasSuffix(recipient, ".der") {
 			tmp, err := ioutil.ReadFile(recipient)
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, nil, err
 			}
-			pubkeys = append(pubkeys, base64.StdEncoding.EncodeToString(tmp))
+			if isCertificate(tmp) {
+				x509s = append(x509s, base64.StdEncoding.EncodeToString(tmp))
+			} else {
+				pubkeys = append(pubkeys, base64.StdEncoding.EncodeToString(tmp))
+			}
 		} else {
 			gpgRecipients = append(gpgRecipients, recipient)
 		}
 	}
-	return gpgRecipients, pubkeys, nil
+	return gpgRecipients, pubkeys, x509s, nil
 }
 
 func processPrivateKeyFiles(keyFiles []string) ([]string, []string, error) {

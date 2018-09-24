@@ -74,3 +74,20 @@ func parsePublicKey(pubKey []byte, prefix string) (interface{}, error) {
 	}
 	return key, err
 }
+
+// ParseCertificate tries to parse a public key in DER format first and
+// PEM format after, returning an error if the parsing failed
+func ParseCertificate(certBytes []byte, prefix string) (*x509.Certificate, error) {
+	x509Cert, err := x509.ParseCertificate(certBytes)
+	if err != nil {
+		block, _ := pem.Decode(certBytes)
+		if block == nil {
+			return nil, fmt.Errorf("%s: Could not PEM decode x509 certificate", prefix)
+		}
+		x509Cert, err = x509.ParseCertificate(block.Bytes)
+		if err != nil {
+			return nil, errors.Wrapf(err, "%s: Could not parse x509 certificate", prefix)
+		}
+	}
+	return x509Cert, err
+}
