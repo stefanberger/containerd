@@ -91,6 +91,7 @@ type KeyWrapper interface {
 	WrapKeys(ec *EncryptConfig, optsData []byte) ([]byte, error)
 	UnwrapKey(dc *DecryptConfig, annotation []byte) ([]byte, error)
 	GetAnnotationID() string
+	GetPrivateKeys(dcparameters map[string]string) string
 
 	GetKeyIdsFromPacket(packet string) ([]uint64, error)
 	GetRecipients(packet string) ([]string, error)
@@ -208,10 +209,17 @@ func DecryptLayer(dc *DecryptConfig, encLayer []byte, desc ocispec.Descriptor) (
 }
 
 func decryptLayerKeyOptsData(dc *DecryptConfig, desc ocispec.Descriptor) ([]byte, error) {
+	privKeyGiven := false
 	for annotationsID, scheme := range keyWrapperAnnotations {
 		b64Annotation := desc.Annotations[annotationsID]
 		if b64Annotation != "" {
 			keywrapper := GetKeyWrapper(scheme)
+
+			if keywrapper.GetPrivateKeys(dc.Parameters) == "" {
+				continue
+			}
+			privKeyGiven = true
+
 			optsData, err := preUnwrapKey(keywrapper, dc, b64Annotation)
 			if err != nil {
 				// try next KeyWrapper
@@ -224,7 +232,10 @@ func decryptLayerKeyOptsData(dc *DecryptConfig, desc ocispec.Descriptor) ([]byte
 			return optsData, nil
 		}
 	}
-	return nil, errors.Errorf("No suitable key unwrapper found")
+	if !privKeyGiven {
+		return nil, errors.New("Missing private key needed for decryption")
+	}
+	return nil, errors.Errorf("No suitable key unwrapper found or none of the private keys could be used for decryption")
 }
 
 // preUnwrapKey decodes the comma separated base64 strings and calls the Unwrap function

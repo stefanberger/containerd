@@ -183,13 +183,18 @@ func (kw *gpgKeyWrapper) GetRecipients(b64pgpPackets string) ([]string, error) {
 	return array, nil
 }
 
+func (kw *gpgKeyWrapper) GetPrivateKeys(dcparameters map[string]string) string {
+	return dcparameters["gpg-privatekeys"]
+}
+
 func (kw *gpgKeyWrapper) getKeyParameters(dcparameters map[string]string) (string, string, error) {
 
-	if dcparameters["gpg-privatekeys"] == "" {
+	privKeys := kw.GetPrivateKeys(dcparameters)
+	if privKeys == "" {
 		return "", "", errors.New("GPG: Missing private key parameter")
 	}
 
-	return dcparameters["gpg-privatekeys"], dcparameters["gpg-privatekeys-password"], nil
+	return privKeys, dcparameters["gpg-privatekeys-password"], nil
 }
 
 // createEntityList creates the opengpg EntityList by reading the KeyRing
