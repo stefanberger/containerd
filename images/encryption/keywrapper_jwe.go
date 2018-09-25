@@ -63,7 +63,7 @@ func (kw *jweKeyWrapper) UnwrapKey(dc *DecryptConfig, jweString []byte) ([]byte,
 		return nil, errors.New("jose.ParseEncrypted failed")
 	}
 
-	privKeys := dc.Parameters["privkeys"]
+	privKeys := kw.GetPrivateKeys(dc.Parameters)
 	if privKeys == "" {
 		return nil, errors.New("No private keys found for JWE decryption")
 	}
@@ -84,6 +84,10 @@ func (kw *jweKeyWrapper) UnwrapKey(dc *DecryptConfig, jweString []byte) ([]byte,
 		}
 	}
 	return nil, errors.New("JWE: No suitable private key found for decryption")
+}
+
+func (kw *jweKeyWrapper) GetPrivateKeys(dcparameters map[string]string) string {
+	return dcparameters["privkeys"]
 }
 
 func (kw *jweKeyWrapper) GetKeyIdsFromPacket(b64jwes string) ([]uint64, error) {

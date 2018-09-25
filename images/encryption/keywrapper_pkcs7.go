@@ -68,6 +68,10 @@ func collectX509s(b64X509s string) ([]*x509.Certificate, error) {
 	return x509Certs, nil
 }
 
+func (kw *pkcs7KeyWrapper) GetPrivateKeys(dcparameters map[string]string) string {
+	return dcparameters["privkeys"]
+}
+
 // UnwrapKey unwraps the symmetric key with which the layer is encrypted
 // This symmetric key is encrypted in the PGP payload.
 func (kw *pkcs7KeyWrapper) UnwrapKey(dc *DecryptConfig, pkcs7Packet []byte) ([]byte, error) {
