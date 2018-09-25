@@ -45,6 +45,10 @@ failExit $? "Image layerinfo on plain image failed"
 setupPGP() {
 	GPGHOMEDIR=${WORKDIR}/gpg2
 
+	if [ -z "$(type -P gpg2)" ]; then
+		failExit 1 "Missing gpg2 executable."
+	fi
+
 	pushd ${WORKDIR} &>/dev/null
 	echo ${GPG_DIR_AS_TGZ} | base64 -d | tar -xz
 	popd &>/dev/null
@@ -53,8 +57,11 @@ setupPGP() {
 testPGP() {
 	setupPGP
 	echo "Testing PGP type of encryption"
-	$CTR images encrypt --gpg-homedir ${GPGHOMEDIR} \
-		--recipient testkey1@key.org ${ALPINE} ${ALPINE_ENC}
+	$CTR images encrypt \
+		--gpg-homedir ${GPGHOMEDIR} \
+		--gpg-version 2 \
+		--recipient testkey1@key.org \
+		${ALPINE} ${ALPINE_ENC}
 	failExit $? "Image encryption with PGP failed"
 
 	LAYER_INFO_ENC="$($CTR images layerinfo ${ALPINE_ENC})"
@@ -68,7 +75,11 @@ testPGP() {
 	     <(echo -n "ENCRYPTIONpgp" )
 	failExit $? "Image layerinfo on PGP encrypted image shows unexpected encryption"
 
-	$CTR images decrypt --gpg-homedir ${GPGHOMEDIR} --key <(echo "${GPGTESTKEY1}" | base64 -d) ${ALPINE_ENC} ${ALPINE_DEC}
+	$CTR images decrypt \
+		--gpg-homedir ${GPGHOMEDIR} \
+		--gpg-version 2 \
+		--key <(echo "${GPGTESTKEY1}" | base64 -d) \
+		${ALPINE_ENC} ${ALPINE_DEC}
 	failExit $? "Image decryption with PGP failed"
 
 	LAYER_INFO_DEC="$($CTR images layerinfo ${ALPINE_DEC})"
@@ -86,6 +97,7 @@ testPGP() {
 	echo "Testing adding a PGP recipient"
 	$CTR images encrypt \
 		--gpg-homedir ${GPGHOMEDIR} \
+		--gpg-version 2 \
 		--key <(echo "${GPGTESTKEY1}" | base64 -d) \
 		--recipient testkey2@key.org ${ALPINE_ENC}
 	failExit $? "Adding recipient to PGP encrypted image failed"
@@ -105,6 +117,7 @@ testPGP() {
 	for privkey in ${GPGTESTKEY1} ${GPGTESTKEY2}; do
 		$CTR images decrypt \
 			--gpg-homedir ${GPGHOMEDIR} \
+			--gpg-version 2 \
 			--key <(echo "${privkey}" | base64 -d) \
 			${ALPINE_ENC} ${ALPINE_DEC}
 		failExit $? "Image decryption with PGP failed"
@@ -397,6 +410,7 @@ testPGPandJWEandPKCS7() {
 	echo "Testing large recipient list"
 	$CTR images encrypt \
 		--gpg-homedir ${GPGHOMEDIR} \
+		--gpg-version 2 \
 		--recipient testkey1@key.org \
 		--recipient testkey2@key.org \
 		--recipient ${PUBKEYPEM} \
@@ -423,6 +437,7 @@ testPGPandJWEandPKCS7() {
 	echo "Testing adding first PGP and then JWE and PKCS7 recipients"
 	$CTR images encrypt \
 		--gpg-homedir ${GPGHOMEDIR} \
+		--gpg-version 2 \
 		--recipient testkey1@key.org \
 		${ALPINE} ${ALPINE_ENC}
 	failExit $? "Image encryption with PGP failed; recipient: testkey1@key.org"
@@ -432,6 +447,7 @@ testPGPandJWEandPKCS7() {
 	for recipient in ${PUBKEYPEM} testkey2@key.org ${PUBKEY2PEM} ${CLIENTCERT} ${CLIENT2CERT}; do
 		$CTR images encrypt \
 			--gpg-homedir ${GPGHOMEDIR} \
+			--gpg-version 2 \
 			--recipient ${recipient} \
 			--key <(echo "${GPGTESTKEY1}" | base64 -d) \
 			${ALPINE_ENC}
@@ -479,6 +495,7 @@ testPGPandJWEandPKCS7() {
 	for privkey in ${GPGTESTKEY1} ${GPGTESTKEY2}; do
 		$CTR images decrypt \
 			--gpg-homedir ${GPGHOMEDIR} \
+			--gpg-version 2 \
 			--key <(echo "${privkey}" | base64 -d) \
 			${ALPINE_ENC} ${ALPINE_DEC}
 		failExit $? "Image decryption with PGP failed"
@@ -531,6 +548,7 @@ testPGPandJWEandPKCS7() {
 	for recipient in testkey1@key.org testkey2@key.org ${PUBKEY2PEM} ${CLIENTCERT} ${CLIENT2CERT}; do
 		$CTR images encrypt \
 			--gpg-homedir ${GPGHOMEDIR} \
+			--gpg-version 2 \
 			--recipient ${recipient} \
 			--key ${PRIVKEYPEM} \
 			${ALPINE_ENC}
