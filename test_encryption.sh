@@ -28,7 +28,7 @@ failExit() {
 	local msg="$2"
 
 	if [ $rc -ne 0 ]; then
-		echo "Error: $msg" >&2
+		echo -e "Error: $msg" >&2
 		echo >&2
 		exit 1
 	fi
@@ -157,29 +157,29 @@ createJWEKeys() {
 	PRIVKEY2PEM=${WORKDIR}/mykey2.pem
 	PUBKEY2PEM=${WORKDIR}/mypubkey2.pem
 
-	openssl genrsa -out ${PRIVKEYPEM} &>/dev/null
-	failExit $? "Could not generate private key"
+	MSG="$(openssl genrsa -out ${PRIVKEYPEM} 2>&1)"
+	failExit $? "Could not generate private key\n$MSG"
 
-	openssl rsa -inform pem -outform der -in ${PRIVKEYPEM} -out ${PRIVKEYDER} &>/dev/null
-	failExit $? "Could not convert private key to DER format"
+	MSG="$(openssl rsa -inform pem -outform der -in ${PRIVKEYPEM} -out ${PRIVKEYDER} 2>&1)"
+	failExit $? "Could not convert private key to DER format\n$MSG"
 
-	openssl pkcs8 -topk8 -nocrypt -inform pem -outform pem -in ${PRIVKEYPEM} -out ${PRIVKEYPK8PEM} &>/dev/null
-	failExit $? "Could not convert private key to PKCS8 PEM format"
+	MSG="$(openssl pkcs8 -topk8 -nocrypt -inform pem -outform pem -in ${PRIVKEYPEM} -out ${PRIVKEYPK8PEM} 2>&1)"
+	failExit $? "Could not convert private key to PKCS8 PEM format\n$MSG"
 
-	openssl pkcs8 -topk8 -nocrypt -inform pem -outform der -in ${PRIVKEYPEM} -out ${PRIVKEYPK8DER} #&>/dev/null
-	failExit $? "Could not convert private key to PKCS8 DER format"
+	MSG="$(openssl pkcs8 -topk8 -nocrypt -inform pem -outform der -in ${PRIVKEYPEM} -out ${PRIVKEYPK8DER} 2>&1)"
+	failExit $? "Could not convert private key to PKCS8 DER format\n$MSG"
 
-	openssl rsa -inform pem -outform pem -pubout -in ${PRIVKEYPEM} -out ${PUBKEYPEM} &>/dev/null
-	failExit $? "Could not write public key in PEM format"
+	MSG="$(openssl rsa -inform pem -outform pem -pubout -in ${PRIVKEYPEM} -out ${PUBKEYPEM} 2>&1)"
+	failExit $? "Could not write public key in PEM format\n$MSG"
 
-	openssl rsa -inform pem -outform der -pubout -in ${PRIVKEYPEM} -out ${PUBKEYDER} &>/dev/null
-	failExit $? "Could not write public key in PEM format"
+	MSG="$(openssl rsa -inform pem -outform der -pubout -in ${PRIVKEYPEM} -out ${PUBKEYDER} 2>&1)"
+	failExit $? "Could not write public key in PEM format\n$MSG"
 
-	openssl genrsa -out ${PRIVKEY2PEM} &>/dev/null
-	failExit $? "Could not generate 2nd private key"
+	MSG="$(openssl genrsa -out ${PRIVKEY2PEM} 2>&1)"
+	failExit $? "Could not generate 2nd private key\n$MSG"
 
-	openssl rsa -inform pem -outform pem -pubout -in ${PRIVKEY2PEM} -out ${PUBKEY2PEM} &>/dev/null
-	failExit $? "Could not write 2nd public key in PEM format"
+	MSG="$(openssl rsa -inform pem -outform pem -pubout -in ${PRIVKEY2PEM} -out ${PUBKEY2PEM} 2>&1)"
+	failExit $? "Could not write 2nd public key in PEM format\n$MSG"
 }
 
 testJWE() {
@@ -290,26 +290,26 @@ subjectKeyIdentifier=hash
 authorityKeyIdentifier=keyid,issuer
 basicConstraints=CA:TRUE
 "
-	openssl req -config <(echo "${CFG}") -newkey rsa:2048 \
+	MSG="$(openssl req -config <(echo "${CFG}") -newkey rsa:2048 \
 		-x509 -extensions ext -days 365 -nodes -keyout ${CAKEY} -out ${CACERT} \
-		-subj '/CN=foo/' &>/dev/null
-	failExit $? "Could not create root CA's certificate"
+		-subj '/CN=foo/' 2>&1)"
+	failExit $? "Could not create root CA's certificate\n${MSG}"
 
-	openssl genrsa -out ${CLIENTCERTKEY} 2048 &>/dev/null
-	failExit $? "Could not create client key"
-	openssl req -new -key ${CLIENTCERTKEY} -out ${CLIENTCERTCSR} -subj '/CN=bar/'
-	failExit $? "Could not create client ertificate signing request"
-	openssl x509 -req -in ${CLIENTCERTCSR} -CA ${CACERT} -CAkey ${CAKEY} -CAcreateserial \
-		-out ${CLIENTCERT} -days 10 -sha256 &>/dev/null
-	failExit $? "Could not create client certificate"
+	MSG="$(openssl genrsa -out ${CLIENTCERTKEY} 2048 2>&1)"
+	failExit $? "Could not create client key\n$MSG"
+	MSG="$(openssl req -new -key ${CLIENTCERTKEY} -out ${CLIENTCERTCSR} -subj '/CN=bar/' 2>&1)"
+	failExit $? "Could not create client ertificate signing request\n$MSG"
+	MSG="$(openssl x509 -req -in ${CLIENTCERTCSR} -CA ${CACERT} -CAkey ${CAKEY} -CAcreateserial \
+		-out ${CLIENTCERT} -days 10 -sha256 2>&1)"
+	failExit $? "Could not create client certificate\n$MSG"
 
-	openssl genrsa -out ${CLIENT2CERTKEY} 2048 &>/dev/null
-	failExit $? "Could not create client2 key"
-	openssl req -new -key ${CLIENT2CERTKEY} -out ${CLIENT2CERTCSR} -subj '/CN=bar/'
-	failExit $? "Could not create client2 certificate signing request"
-	openssl x509 -req -in ${CLIENT2CERTCSR} -CA ${CACERT} -CAkey ${CAKEY} -CAcreateserial \
-		-out ${CLIENT2CERT} -days 10 -sha256 &>/dev/null
-	failExit $? "Could not create client2 certificate"
+	MSG="$(openssl genrsa -out ${CLIENT2CERTKEY} 2048 2>&1)"
+	failExit $? "Could not create client2 key\n$MSG"
+	MSG="$(openssl req -new -key ${CLIENT2CERTKEY} -out ${CLIENT2CERTCSR} -subj '/CN=bar/' 2>&1)"
+	failExit $? "Could not create client2 certificate signing request\n$MSG"
+	MSG="$(openssl x509 -req -in ${CLIENT2CERTCSR} -CA ${CACERT} -CAkey ${CAKEY} -CAcreateserial \
+		-out ${CLIENT2CERT} -days 10 -sha256 2>&1)"
+	failExit $? "Could not create client2 certificate\n$MSG"
 }
 
 testPKCS7() {
