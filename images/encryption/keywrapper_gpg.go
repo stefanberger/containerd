@@ -266,14 +266,13 @@ func (kw *gpgKeyWrapper) createEntityList(ec *EncryptConfig) (openpgp.EntityList
 // that are available. If we do not find a private key on the system for
 // getting to the symmetric key of a layer then an error is generated.
 // Otherwise the wrapped symmetric key is test-decrypted using the private key.
-func GPGGetPrivateKey(layerInfos []LayerInfo, gpgClient GPGClient, gpgVault GPGVault, mustFindKey bool) (map[string]string, error) {
+func GPGGetPrivateKey(layerInfos []LayerInfo, gpgClient GPGClient, gpgVault GPGVault, mustFindKey bool, dcparameters map[string]string) error {
 	// PrivateKeyData describes a private key
 	type PrivateKeyData struct {
 		KeyData         []byte
 		KeyDataPassword []byte
 	}
 	var pkd PrivateKeyData
-	parameters := make(map[string]string)
 	keyIDPasswordMap := make(map[uint64]PrivateKeyData)
 
 	for _, layerInfo := range layerInfos {
@@ -283,11 +282,11 @@ func GPGGetPrivateKey(layerInfos []LayerInfo, gpgClient GPGClient, gpgVault GPGV
 			}
 			encryptor := GetKeyWrapper(scheme)
 			if encryptor == nil {
-				return parameters, errors.Errorf("Could not get KeyWrapper for %s\n", scheme)
+				return errors.Errorf("Could not get KeyWrapper for %s\n", scheme)
 			}
 			keyIds, err := encryptor.GetKeyIdsFromPacket(b64pgpPackets)
 			if err != nil {
-				return parameters, err
+				return err
 			}
 
 			found := false
@@ -313,19 +312,19 @@ func GPGGetPrivateKey(layerInfos []LayerInfo, gpgClient GPGClient, gpgVault GPGV
 						continue
 					}
 
-					var ok bool
-					if _, ok = keyIDPasswordMap[keyid]; !ok {
+					_, found = keyIDPasswordMap[keyid]
+					if !found {
 						fmt.Printf("Passphrase required for Key id 0x%x: \n%v", keyid, string(keyinfo))
 						fmt.Printf("Enter passphrase for key with Id 0x%x: ", keyid)
 
 						password, err := terminal.ReadPassword(int(os.Stdin.Fd()))
 						fmt.Printf("\n")
 						if err != nil {
-							return parameters, err
+							return err
 						}
 						keydata, err := gpgClient.GetGPGPrivateKey(keyid, string(password))
 						if err != nil {
-							return parameters, err
+							return err
 						}
 						pkd = PrivateKeyData{
 							KeyData:         keydata,
@@ -333,10 +332,10 @@ func GPGGetPrivateKey(layerInfos []LayerInfo, gpgClient GPGClient, gpgVault GPGV
 						}
 						keyIDPasswordMap[keyid] = pkd
 						found = true
-						break
 					}
+					break
 				} else {
-					return parameters, errors.Wrapf(errdefs.ErrInvalidArgument, "No GPGVault or GPGClient passed.")
+					return errors.Wrapf(errdefs.ErrInvalidArgument, "No GPGVault or GPGClient passed.")
 				}
 
 				// FIXME: test the password by trying a decryption
@@ -348,7 +347,7 @@ func GPGGetPrivateKey(layerInfos []LayerInfo, gpgClient GPGClient, gpgVault GPGV
 			if !found && len(b64pgpPackets) > 0 && mustFindKey {
 				ids := Uint64ToStringArray("0x%x", keyIds)
 
-				return parameters, errors.Wrapf(errdefs.ErrNotFound, "Missing key for decryption of layer %d of %s. Need one of the following keys: %s", layerInfo.ID, layerInfo.Platform, strings.Join(ids, ", "))
+				return errors.Wrapf(errdefs.ErrNotFound, "Missing key for decryption of layer %d of %s. Need one of the following keys: %s", layerInfo.ID, layerInfo.Platform, strings.Join(ids, ", "))
 			}
 		}
 	}
@@ -361,8 +360,8 @@ func GPGGetPrivateKey(layerInfos []LayerInfo, gpgClient GPGClient, gpgVault GPGV
 		privKeys = append(privKeys, base64.StdEncoding.EncodeToString(pkd.KeyData))
 		privKeysPwd = append(privKeysPwd, base64.StdEncoding.EncodeToString(pkd.KeyDataPassword))
 	}
-	parameters["gpg-privatekeys"] = strings.Join(privKeys, ",")
-	parameters["gpg-privatekeys-password"] = strings.Join(privKeysPwd, ",")
+	dcparameters["gpg-privatekeys"] = strings.Join(privKeys, ",")
+	dcparameters["gpg-privatekeys-password"] = strings.Join(privKeysPwd, ",")
 
-	return parameters, nil
+	return nil
 }
