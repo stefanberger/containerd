@@ -106,9 +106,9 @@ var decryptCommand = cli.Command{
 			return err
 		}
 
-		if len(gpgSecretKeyRingFiles) > 0 {
-			// Create gpg client
-			_, _, dcparameters, err = setupGPGClient(context, gpgSecretKeyRingFiles, layerInfos, len(privKeys) == 0)
+		if len(privKeys) == 0 {
+			// Get pgp private keys from keyring only if no private key was passed
+			err = getGPGPrivateKeys(context, gpgSecretKeyRingFiles, layerInfos, true, dcparameters)
 			if err != nil {
 				return err
 			}
