@@ -22,7 +22,6 @@ import (
 	"strings"
 
 	"github.com/containerd/containerd/images/encryption"
-	"github.com/pkg/errors"
 	"github.com/urfave/cli"
 )
 
@@ -75,7 +74,7 @@ func processPrivateKeyFiles(keyFiles []string) ([]string, []string, error) {
 	return gpgSecretKeyRingFiles, privkeys, nil
 }
 
-func setupGPGClient(context *cli.Context, gpgSecretKeyRingFiles []string, layerInfos []encryption.LayerInfo, mustFindKey bool) (encryption.GPGClient, encryption.GPGVault, map[string]string, error) {
+func createGPGClient(context *cli.Context) (encryption.GPGClient, error) {
 	gpgVersion := context.String("gpg-version")
 	v := new(encryption.GPGVersion)
 	switch gpgVersion {
@@ -86,19 +85,22 @@ func setupGPGClient(context *cli.Context, gpgSecretKeyRingFiles []string, layerI
 	default:
 		v = nil
 	}
-	gpgClient, err := encryption.NewGPGClient(v, context.String("gpg-homedir"))
+	return encryption.NewGPGClient(v, context.String("gpg-homedir"))
+}
+
+func getGPGPrivateKeys(context *cli.Context, gpgSecretKeyRingFiles []string, layerInfos []encryption.LayerInfo, mustFindKey bool, dcparameters map[string]string) error {
+	gpgClient, err := createGPGClient(context)
 	if err != nil {
-		return nil, nil, nil, errors.New("Unable to create GPG Client")
+		return err
 	}
 
-	gpgVault := encryption.NewGPGVault()
-	err = gpgVault.AddSecretKeyRingFiles(gpgSecretKeyRingFiles)
-	if err != nil {
-		return nil, nil, nil, err
+	var gpgVault encryption.GPGVault
+	if len(gpgSecretKeyRingFiles) > 0 {
+		gpgVault = encryption.NewGPGVault()
+		err = gpgVault.AddSecretKeyRingFiles(gpgSecretKeyRingFiles)
+		if err != nil {
+			return err
+		}
 	}
-	dcparameters, err := encryption.GPGGetPrivateKey(layerInfos, gpgClient, gpgVault, mustFindKey)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	return gpgClient, gpgVault, dcparameters, nil
+	return encryption.GPGGetPrivateKey(layerInfos, gpgClient, gpgVault, mustFindKey, dcparameters)
 }
