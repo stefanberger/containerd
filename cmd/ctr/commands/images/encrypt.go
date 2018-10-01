@@ -106,9 +106,9 @@ var encryptCommand = cli.Command{
 			return err
 		}
 
-		var dcparameters map[string]string
-
+		dcparameters := make(map[string]string)
 		parameters := make(map[string]string)
+
 		if len(pubKeys) > 0 {
 			parameters["pubkeys"] = strings.Join(pubKeys, ",")
 		}
@@ -121,15 +121,21 @@ var encryptCommand = cli.Command{
 			return err
 		}
 
-		// Create gpg client
-		var gpgClient encryption.GPGClient
-		gpgClient, _, dcparameters, err = setupGPGClient(context, gpgSecretKeyRingFiles, layerInfos, len(privKeys) == 0)
-		if err != nil {
-			return err
+		if len(privKeys) == 0 {
+			// Get pgp private keys from keyring only if no private key was passed
+			err = getGPGPrivateKeys(context, gpgSecretKeyRingFiles, layerInfos, true, dcparameters)
+			if err != nil {
+				return err
+			}
 		}
 
 		if len(gpgRecipients) > 0 {
 			parameters["gpg-recipients"] = strings.Join(gpgRecipients, ",")
+
+			gpgClient, err := createGPGClient(context)
+			if err != nil {
+				return err
+			}
 
 			gpgPubRingFile, err := gpgClient.ReadGPGPubRingFile()
 			if err != nil {
