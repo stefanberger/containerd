@@ -116,7 +116,7 @@ var encryptCommand = cli.Command{
 			parameters["x509s"] = strings.Join(x509s, ",")
 		}
 
-		layerInfos, err := client.ImageService().GetImageLayerInfo(ctx, local, layers32, context.StringSlice("platform"))
+		layerInfos, err := getImageLayerInfo(client, ctx, local, layers32, context.StringSlice("platform"))
 		if err != nil {
 			return err
 		}
