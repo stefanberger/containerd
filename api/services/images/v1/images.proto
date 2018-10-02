@@ -40,10 +40,6 @@ service Images {
 	// Delete deletes the image by name.
 	rpc Delete(DeleteImageRequest) returns (google.protobuf.Empty);
 
-	// Encyrpt an image given its name
-	rpc EncryptImage(EncryptImageRequest) returns (EncryptImageResponse);
-	// Decyrpt an image given its name
-	rpc DecryptImage(DecryptImageRequest) returns (DecryptImageResponse);
 	// Get the KeyIds of keys the image is encrypted with
 	rpc GetImageLayerInfo(GetImageLayerInfoRequest) returns (GetImageLayerInfoResponse);
 }
@@ -128,52 +124,6 @@ message DeleteImageRequest {
 	//
 	// Default is false
 	bool sync = 2;
-}
-
-// EncryptConfig holds recipients' identifiers and the gpg public key ring
-message EncryptConfig {
-	map<string, string> parameters = 1;
-	int32 operation = 2;
-
-	DecryptConfig dc = 3;
-}
-
-// DecryptKeyData holds the private key data and the password for the private key
-message DecryptKeyData {
-	bytes symKeyData = 1;
-	uint32 symKeyCipher = 2;
-}
-
-// DecrypConfig holds the Ids of public keys and their corresponding private keys
-// needed for decrypting data
-message DecryptConfig {
-	map<string, string> parameters = 1;
-}
-
-message EncryptImageRequest {
-	string name = 1;
-	string newName = 2;
-
-	EncryptConfig ec = 3;
-	repeated int32 layers = 4;
-	repeated string platforms = 5;
-}
-
-message EncryptImageResponse {
-	Image image = 1 [(gogoproto.nullable) = false];
-}
-
-message DecryptImageRequest {
-	string name = 1;
-	string newName = 2;
-
-	DecryptConfig dc = 3;
-	repeated int32 layers = 4;
-	repeated string platforms = 5;
-}
-
-message DecryptImageResponse {
-	Image image = 1 [(gogoproto.nullable) = false];
 }
 
 message GetImageLayerInfoRequest {

@@ -90,8 +90,6 @@ type Store interface {
 
 	Delete(ctx context.Context, name string, opts ...DeleteOpt) error
 
-	EncryptImage(ctx context.Context, name, newName string, ec *encryption.CryptoConfig, layers []int32, platforms []string) (Image, error)
-	DecryptImage(ctx context.Context, name, newName string, ec *encryption.CryptoConfig, layers []int32, platforms []string) (Image, error)
 	GetImageLayerInfo(ctx context.Context, name string, layers []int32, platforms []string) ([]encryption.LayerInfo, error)
 }
 
