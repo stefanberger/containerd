@@ -89,8 +89,6 @@ type Store interface {
 	Update(ctx context.Context, image Image, fieldpaths ...string) (Image, error)
 
 	Delete(ctx context.Context, name string, opts ...DeleteOpt) error
-
-	GetImageLayerInfo(ctx context.Context, name string, layers []int32, platforms []string) ([]encryption.LayerInfo, error)
 }
 
 // TODO(stevvooe): Many of these functions make strong platform assumptions,

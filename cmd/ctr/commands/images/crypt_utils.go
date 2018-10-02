@@ -113,8 +113,6 @@ func getGPGPrivateKeys(context *cli.Context, gpgSecretKeyRingFiles []string, lay
 // cryptImage encrypts or decrypts an image with the given name and stores it either under the newName
 // or updates the existing one
 func cryptImage(client *containerd.Client, ctx gocontext.Context, name, newName string, cc *encryption.CryptoConfig, layers []int32, platformList []string, encrypt bool) (images.Image, error) {
-	var image images.Image
-
 	s := client.ImageService()
 
 	image, err := s.Get(ctx, name)
@@ -163,4 +161,23 @@ func encryptImage(client *containerd.Client, ctx gocontext.Context, name, newNam
 
 func decryptImage(client *containerd.Client, ctx gocontext.Context, name, newName string, cc *encryption.CryptoConfig, layers []int32, platformList []string) (images.Image, error) {
 	return cryptImage(client, ctx, name, newName, cc, layers, platformList, false)
+}
+func getImageLayerInfo(client *containerd.Client, ctx gocontext.Context, name string, layers []int32, platformList []string) ([]encryption.LayerInfo, error) {
+	s := client.ImageService()
+
+	image, err := s.Get(ctx, name)
+	if err != nil {
+		return []encryption.LayerInfo{}, err
+	}
+
+	pl, err := platforms.ParseArray(platformList)
+	if err != nil {
+		return []encryption.LayerInfo{}, err
+	}
+	lf := &encryption.LayerFilter{
+		Layers:    layers,
+		Platforms: pl,
+	}
+
+	return images.GetImageLayerInfo(ctx, client.ContentStore(), image.Target, lf, -1)
 }

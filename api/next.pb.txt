@@ -2253,100 +2253,6 @@ file {
       json_name: "sync"
     }
   }
-  message_type {
-    name: "GetImageLayerInfoRequest"
-    field {
-      name: "name"
-      number: 1
-      label: LABEL_OPTIONAL
-      type: TYPE_STRING
-      json_name: "name"
-    }
-    field {
-      name: "layers"
-      number: 2
-      label: LABEL_REPEATED
-      type: TYPE_INT32
-      json_name: "layers"
-    }
-    field {
-      name: "platforms"
-      number: 3
-      label: LABEL_REPEATED
-      type: TYPE_STRING
-      json_name: "platforms"
-    }
-  }
-  message_type {
-    name: "LayerInfo"
-    field {
-      name: "id"
-      number: 1
-      label: LABEL_OPTIONAL
-      type: TYPE_UINT32
-      json_name: "id"
-    }
-    field {
-      name: "WrappedKeysMap"
-      number: 2
-      label: LABEL_REPEATED
-      type: TYPE_MESSAGE
-      type_name: ".containerd.services.images.v1.LayerInfo.WrappedKeysMapEntry"
-      json_name: "WrappedKeysMap"
-    }
-    field {
-      name: "digest"
-      number: 3
-      label: LABEL_OPTIONAL
-      type: TYPE_STRING
-      json_name: "digest"
-    }
-    field {
-      name: "fileSize"
-      number: 4
-      label: LABEL_OPTIONAL
-      type: TYPE_INT64
-      json_name: "fileSize"
-    }
-    field {
-      name: "platform"
-      number: 5
-      label: LABEL_OPTIONAL
-      type: TYPE_STRING
-      json_name: "platform"
-    }
-    nested_type {
-      name: "WrappedKeysMapEntry"
-      field {
-        name: "key"
-        number: 1
-        label: LABEL_OPTIONAL
-        type: TYPE_STRING
-        json_name: "key"
-      }
-      field {
-        name: "value"
-        number: 2
-        label: LABEL_OPTIONAL
-        type: TYPE_STRING
-        json_name: "value"
-      }
-      options {
-        map_entry: true
-      }
-    }
-  }
-  message_type {
-    name: "GetImageLayerInfoResponse"
-    field {
-      name: "layerInfo"
-      number: 1
-      label: LABEL_REPEATED
-      type: TYPE_MESSAGE
-      type_name: ".containerd.services.images.v1.LayerInfo"
-      json_name: "layerInfo"
-    }
-  }
   service {
     name: "Images"
     method {
@@ -2373,11 +2279,6 @@ file {
       name: "Delete"
       input_type: ".containerd.services.images.v1.DeleteImageRequest"
       output_type: ".google.protobuf.Empty"
-    }
-    method {
-      name: "GetImageLayerInfo"
-      input_type: ".containerd.services.images.v1.GetImageLayerInfoRequest"
-      output_type: ".containerd.services.images.v1.GetImageLayerInfoResponse"
     }
   }
   options {
