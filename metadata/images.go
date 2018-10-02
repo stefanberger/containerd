@@ -258,59 +258,6 @@ func (s *imageStore) Delete(ctx context.Context, name string, opts ...images.Del
 	})
 }
 
-// cryptImage encrypts or decrypts an image with the given name and stores it either under the newName
-// or updates the existing one
-func (s *imageStore) cryptImage(ctx context.Context, name, newName string, cc *encryption.CryptoConfig, layers []int32, platformList []string, encrypt bool) (images.Image, error) {
-	var image images.Image
-
-	image, err := s.Get(ctx, name)
-	if err != nil {
-		return images.Image{}, err
-	}
-
-	pl, err := platforms.ParseArray(platformList)
-	if err != nil {
-		return images.Image{}, err
-	}
-
-	lf := &encryption.LayerFilter{
-		Layers:    layers,
-		Platforms: pl,
-	}
-
-	newSpec, modified, err := images.CryptImage(ctx, s.db.ContentStore(), image.Target, cc, lf, encrypt)
-	if err != nil {
-		return image, err
-	}
-	if !modified {
-		return image, nil
-	}
-
-	image.Target = newSpec
-
-	// if newName is either empty or equal to the existing name, it's an update
-	if newName == "" || strings.Compare(image.Name, newName) == 0 {
-		// first Delete the existing and then Create a new one
-		// We have to do it this way since we have a newSpec!
-		err = s.Delete(ctx, image.Name)
-		if err != nil {
-			return images.Image{}, err
-		}
-		newName = image.Name
-	}
-
-	image.Name = newName
-	return s.Create(ctx, image)
-}
-
-func (s *imageStore) EncryptImage(ctx context.Context, name, newName string, cc *encryption.CryptoConfig, layers []int32, platformList []string) (images.Image, error) {
-	return s.cryptImage(ctx, name, newName, cc, layers, platformList, true)
-}
-
-func (s *imageStore) DecryptImage(ctx context.Context, name, newName string, cc *encryption.CryptoConfig, layers []int32, platformList []string) (images.Image, error) {
-	return s.cryptImage(ctx, name, newName, cc, layers, platformList, false)
-}
-
 func (s *imageStore) GetImageLayerInfo(ctx context.Context, name string, layers []int32, platformList []string) ([]encryption.LayerInfo, error) {
 	var image images.Image
 
