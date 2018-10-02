@@ -286,48 +286,17 @@ func (s *imageStore) cryptImage(ctx context.Context, name, newName string, cc *e
 		return image, nil
 	}
 
-
-	namespace, err := namespaces.NamespaceRequired(ctx)
-	if err != nil {
-		return images.Image{}, err
-	}
-
 	image.Target = newSpec
 
 	// if newName is either empty or equal to the existing name, it's an update
 	if newName == "" || strings.Compare(image.Name, newName) == 0 {
-		if err := update(ctx, s.db, func(tx *bolt.Tx) error {
-			bkt, err := createImagesBucket(tx, namespace)
-			if err != nil {
-				return err
-			}
-
-			ibkt := bkt.Bucket([]byte(image.Name))
-			if ibkt == nil {
-				return errors.Wrapf(errdefs.ErrNotFound, "image %q", image.Name)
-			}
-
-			if err := validateImage(&image); err != nil {
-				return err
-			}
-
-			image.UpdatedAt = time.Now().UTC()
-			image.Target = newSpec
-			if err := writeImage(ibkt, &image); err != nil {
-				return err
-			}
-			// A reference to a piece of content has been removed,
-			// mark content store as dirty for triggering garbage
-			// collection
-			s.db.dirtyL.Lock()
-			s.db.dirtyCS = true
-			s.db.dirtyL.Unlock()
-
-			return nil
-		}); err != nil {
-			return image, err
+		// first Delete the existing and then Create a new one
+		// We have to do it this way since we have a newSpec!
+		err = s.Delete(ctx, image.Name)
+		if err != nil {
+			return images.Image{}, err
 		}
-		return image, nil
+		newName = image.Name
 	}
 
 	image.Name = newName
