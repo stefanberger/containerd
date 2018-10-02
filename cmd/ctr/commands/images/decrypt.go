@@ -126,7 +126,7 @@ var decryptCommand = cli.Command{
 				Parameters: dcparameters,
 			},
 		}
-		_, err = client.ImageService().DecryptImage(ctx, local, newName, cc, layers32, context.StringSlice("platform"))
+		_, err = decryptImage(client, ctx, local, newName, cc, layers32, context.StringSlice("platform"))
 
 		return err
 	},

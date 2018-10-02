@@ -161,7 +161,7 @@ var encryptCommand = cli.Command{
 				},
 			},
 		}
-		_, err = client.ImageService().EncryptImage(ctx, local, newName, cc, layers32, context.StringSlice("platform"))
+		_, err = encryptImage(client, ctx, local, newName, cc, layers32, context.StringSlice("platform"))
 
 		return err
 	},

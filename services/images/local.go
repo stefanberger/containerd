@@ -25,7 +25,6 @@ import (
 	"github.com/containerd/containerd/events"
 	"github.com/containerd/containerd/gc"
 	"github.com/containerd/containerd/images"
-	"github.com/containerd/containerd/images/encryption"
 	"github.com/containerd/containerd/log"
 	"github.com/containerd/containerd/metadata"
 	"github.com/containerd/containerd/plugin"
@@ -180,61 +179,6 @@ func (l *local) Delete(ctx context.Context, req *imagesapi.DeleteImageRequest, _
 	}
 
 	return &ptypes.Empty{}, nil
-}
-
-func (l *local) EncryptImage(ctx context.Context, req *imagesapi.EncryptImageRequest, _ ...grpc.CallOption) (*imagesapi.EncryptImageResponse, error) {
-	log.G(ctx).WithField("name", req.Name).Debugf("encrypt image")
-
-	var resp imagesapi.EncryptImageResponse
-
-	encrypted, err := l.store.EncryptImage(ctx, req.Name, req.NewName, &encryption.CryptoConfig{
-		Ec: &encryption.EncryptConfig{
-			Parameters: req.Ec.Parameters,
-			Operation:  req.Ec.Operation,
-			Dc: encryption.DecryptConfig{
-				Parameters: req.Ec.Dc.Parameters,
-			},
-		},
-	}, req.Layers, req.Platforms)
-	if err != nil {
-		return nil, errdefs.ToGRPC(err)
-	}
-
-	resp.Image = imageToProto(&encrypted)
-
-	if err := l.publisher.Publish(ctx, "/images/update", &eventstypes.ImageUpdate{
-		Name:   resp.Image.Name,
-		Labels: resp.Image.Labels,
-	}); err != nil {
-		return nil, err
-	}
-
-	return &resp, nil
-}
-
-func (l *local) DecryptImage(ctx context.Context, req *imagesapi.DecryptImageRequest, _ ...grpc.CallOption) (*imagesapi.DecryptImageResponse, error) {
-	log.G(ctx).WithField("name", req.Name).Debugf("decrypt image")
-
-	var resp imagesapi.DecryptImageResponse
-
-	encrypted, err := l.store.DecryptImage(ctx, req.Name, req.NewName, &encryption.CryptoConfig{
-		Dc: &encryption.DecryptConfig{
-			Parameters: req.Dc.Parameters,
-		},
-	}, req.Layers, req.Platforms)
-	if err != nil {
-		return nil, errdefs.ToGRPC(err)
-	}
-	resp.Image = imageToProto(&encrypted)
-
-	if err := l.publisher.Publish(ctx, "/images/update", &eventstypes.ImageUpdate{
-		Name:   resp.Image.Name,
-		Labels: resp.Image.Labels,
-	}); err != nil {
-		return nil, err
-	}
-
-	return &resp, nil
 }
 
 func (l *local) GetImageLayerInfo(ctx context.Context, req *imagesapi.GetImageLayerInfoRequest, _ ...grpc.CallOption) (*imagesapi.GetImageLayerInfoResponse, error) {
