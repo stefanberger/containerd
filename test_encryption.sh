@@ -34,7 +34,7 @@ failExit() {
 	fi
 }
 
-$CTR images rm ${ALPINE_ENC} ${ALPINE_DEC} &>/dev/null
+$CTR images rm --sync ${ALPINE_ENC} ${ALPINE_DEC} &>/dev/null
 $CTR images pull --all-platforms ${ALPINE} &>/dev/null
 failExit $? "Image pull failed"
 
@@ -90,7 +90,7 @@ testPGP() {
 	diff <(echo "${LAYER_INFO}") <(echo "${LAYER_INFO_DEC}")
 	failExit $? "Image layerinfos are different (PGP)"
 
-	$CTR images rm ${ALPINE_DEC} &>/dev/null
+	$CTR images rm --sync ${ALPINE_DEC} &>/dev/null
 	sleep ${SLEEP_TIME}
 
 	echo "PASS: PGP Type of encryption"
@@ -131,7 +131,7 @@ testPGP() {
 		diff <(echo "${LAYER_INFO}") <(echo "${LAYER_INFO_DEC}")
 		failExit $? "Image layerinfos are different (PGP)"
 
-		$CTR images rm ${ALPINE_DEC} &>/dev/null
+		$CTR images rm --sync ${ALPINE_DEC} &>/dev/null
 		echo "PGP Decryption worked."
 		sleep ${SLEEP_TIME}
 	done
@@ -139,7 +139,7 @@ testPGP() {
 	echo "PASS: PGP Type of decryption after adding recipients"
 	echo
 
-	$CTR images rm ${ALPINE_ENC} ${ALPINE_DEC} &>/dev/null
+	$CTR images rm --sync ${ALPINE_ENC} ${ALPINE_DEC} &>/dev/null
 	sleep ${SLEEP_TIME}
 }
 
@@ -216,16 +216,16 @@ testJWE() {
 			diff <(echo "${LAYER_INFO}") <(echo "${LAYER_INFO_DEC}")
 			failExit $? "Image layerinfos are different (JWE)"
 
-			$CTR images rm ${ALPINE_DEC} &>/dev/null
+			$CTR images rm --sync ${ALPINE_DEC} &>/dev/null
 			echo "Decryption with ${privkey} worked."
 			sleep ${SLEEP_TIME}
 		done
-		$CTR images rm ${ALPINE_ENC} &>/dev/null
+		$CTR images rm --sync ${ALPINE_ENC} &>/dev/null
 		echo "Encryption with ${recipient} worked"
 		sleep ${SLEEP_TIME}
 	done
 
-	$CTR images rm ${ALPINE_DEC} &>/dev/null
+	$CTR images rm --sync ${ALPINE_DEC} &>/dev/null
 	sleep ${SLEEP_TIME}
 
 	echo "PASS: JWE Type of encryption"
@@ -256,7 +256,7 @@ testJWE() {
 		diff <(echo "${LAYER_INFO}") <(echo "${LAYER_INFO_DEC}")
 		failExit $? "Image layerinfos are different (JWE)"
 
-		$CTR images rm ${ALPINE_DEC} &>/dev/null
+		$CTR images rm --sync ${ALPINE_DEC} &>/dev/null
 		echo "Decryption with ${privkey} worked."
 		sleep ${SLEEP_TIME}
 	done
@@ -264,7 +264,7 @@ testJWE() {
 	echo "PASS: JWE Type of decryption after adding recipients"
 	echo
 
-	$CTR images rm ${ALPINE_DEC} ${ALPINE_ENC} &>/dev/null
+	$CTR images rm --sync ${ALPINE_DEC} ${ALPINE_ENC} &>/dev/null
 	sleep ${SLEEP_TIME}
 }
 
@@ -349,11 +349,11 @@ testPKCS7() {
 			diff <(echo "${LAYER_INFO}") <(echo "${LAYER_INFO_DEC}")
 			failExit $? "Image layerinfos are different (PKCS7)"
 
-			$CTR images rm ${ALPINE_DEC} &>/dev/null
+			$CTR images rm --sync ${ALPINE_DEC} &>/dev/null
 			echo "Decryption with ${privkey} worked."
 			sleep ${SLEEP_TIME}
 		done
-		$CTR images rm ${ALPINE_ENC} &>/dev/null
+		$CTR images rm --sync ${ALPINE_ENC} &>/dev/null
 		echo "Encryption with ${recipient} worked"
 		sleep ${SLEEP_TIME}
 	done
@@ -390,7 +390,7 @@ testPKCS7() {
 		diff <(echo "${LAYER_INFO}") <(echo "${LAYER_INFO_DEC}")
 		failExit $? "Image layerinfos are different (PKCS7)"
 
-		$CTR images rm ${ALPINE_DEC} &>/dev/null
+		$CTR images rm --sync ${ALPINE_DEC} &>/dev/null
 		echo "Decryption with ${privkey} worked."
 		sleep ${SLEEP_TIME}
 	done
@@ -398,7 +398,7 @@ testPKCS7() {
 	echo "PASS: PKCS7 Type of decryption after adding recipients"
 	echo
 
-	$CTR images rm ${ALPINE_DEC} ${ALPINE_ENC} &>/dev/null
+	$CTR images rm --sync ${ALPINE_DEC} ${ALPINE_ENC} &>/dev/null
 	sleep ${SLEEP_TIME}
 }
 
@@ -431,7 +431,7 @@ testPGPandJWEandPKCS7() {
 	diff <(echo "${LAYER_INFO_ENC}" | gawk '{print $5}' | sort | uniq | tr -d '\n') \
 	     <(echo -n "ENCRYPTIONjwe,pgp,pkcs7" )
 
-	$CTR images rm ${ALPINE_ENC} &>/dev/null
+	$CTR images rm --sync ${ALPINE_ENC} &>/dev/null
 	echo "Encryption to multiple different types of recipients worked."
 	sleep ${SLEEP_TIME}
 
@@ -488,7 +488,7 @@ testPGPandJWEandPKCS7() {
 		diff <(echo "${LAYER_INFO}") <(echo "${LAYER_INFO_DEC}")
 		failExit $? "Image layerinfos are different (JWE)"
 
-		$CTR images rm ${ALPINE_DEC} &>/dev/null
+		$CTR images rm --sync ${ALPINE_DEC} &>/dev/null
 		echo "JWE Decryption with ${privkey} worked."
 		sleep ${SLEEP_TIME}
 	done
@@ -509,7 +509,7 @@ testPGPandJWEandPKCS7() {
 		diff <(echo "${LAYER_INFO}") <(echo "${LAYER_INFO_DEC}")
 		failExit $? "Image layerinfos are different (PGP)"
 
-		$CTR images rm ${ALPINE_DEC} &>/dev/null
+		$CTR images rm --sync ${ALPINE_DEC} &>/dev/null
 		echo "PGP Decryption worked."
 		sleep ${SLEEP_TIME}
 	done
@@ -530,12 +530,12 @@ testPGPandJWEandPKCS7() {
 		diff <(echo "${LAYER_INFO}") <(echo "${LAYER_INFO_DEC}")
 		failExit $? "Image layerinfos are different (PKCS7)"
 
-		$CTR images rm ${ALPINE_DEC} &>/dev/null
+		$CTR images rm --sync ${ALPINE_DEC} &>/dev/null
 		echo "PKCS7 decryption with ${privkey} worked."
 		sleep ${SLEEP_TIME}
 	done
 
-	$CTR images rm ${ALPINE_DEC} ${ALPINE_ENC} &>/dev/null
+	$CTR images rm --sync ${ALPINE_DEC} ${ALPINE_ENC} &>/dev/null
 	sleep ${SLEEP_TIME}
 
 
@@ -577,7 +577,7 @@ testPGPandJWEandPKCS7() {
 
 	echo "PASS: Test with JWE, PGP, and PKCS7 recipients"
 
-	$CTR images rm ${ALPINE_DEC} ${ALPINE_ENC} &>/dev/null
+	$CTR images rm --sync ${ALPINE_DEC} ${ALPINE_ENC} &>/dev/null
 	sleep ${SLEEP_TIME}
 }
 
