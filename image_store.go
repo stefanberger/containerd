@@ -126,46 +126,6 @@ func imageFromProto(imagepb *imagesapi.Image) images.Image {
 	}
 }
 
-func (s *remoteImages) EncryptImage(ctx context.Context, name, newName string, cc *encryption.CryptoConfig, layers []int32, platforms []string) (images.Image, error) {
-
-	resp, err := s.client.EncryptImage(ctx, &imagesapi.EncryptImageRequest{
-		Name:    name,
-		NewName: newName,
-		Ec: &imagesapi.EncryptConfig{
-			Parameters: cc.Ec.Parameters,
-			Operation:  cc.Ec.Operation,
-			Dc: &imagesapi.DecryptConfig{
-				Parameters: cc.Ec.Dc.Parameters,
-			},
-		},
-		Layers:    layers,
-		Platforms: platforms,
-	})
-	if err != nil {
-		return images.Image{}, errdefs.FromGRPC(err)
-	}
-
-	return imageFromProto(&resp.Image), nil
-}
-
-func (s *remoteImages) DecryptImage(ctx context.Context, name, newName string, cc *encryption.CryptoConfig, layers []int32, platforms []string) (images.Image, error) {
-
-	resp, err := s.client.DecryptImage(ctx, &imagesapi.DecryptImageRequest{
-		Name:    name,
-		NewName: newName,
-		Dc: &imagesapi.DecryptConfig{
-			Parameters: cc.Dc.Parameters,
-		},
-		Layers:    layers,
-		Platforms: platforms,
-	})
-	if err != nil {
-		return images.Image{}, errdefs.FromGRPC(err)
-	}
-
-	return imageFromProto(&resp.Image), nil
-}
-
 func (s *remoteImages) GetImageLayerInfo(ctx context.Context, name string, layers []int32, platforms []string) ([]encryption.LayerInfo, error) {
 	resp, err := s.client.GetImageLayerInfo(ctx, &imagesapi.GetImageLayerInfoRequest{
 		Name:      name,
