@@ -273,35 +273,14 @@ func (s *imageStore) Delete(ctx context.Context, name string, opts ...images.Del
 func (s *imageStore) cryptImage(ctx context.Context, name, newName string, cc *encryption.CryptoConfig, layers []int32, platformList []string, encrypt bool) (images.Image, error) {
 	var image images.Image
 
-	namespace, err := namespaces.NamespaceRequired(ctx)
+	image, err := s.Get(ctx, name)
 	if err != nil {
 		return images.Image{}, err
 	}
 
-	if err := view(ctx, s.db, func(tx *bolt.Tx) error {
-		bkt := getImagesBucket(tx, namespace)
-		if bkt == nil {
-			return errors.Wrapf(errdefs.ErrNotFound, "image %q", name)
-		}
-
-		ibkt := bkt.Bucket([]byte(name))
-		if ibkt == nil {
-			return errors.Wrapf(errdefs.ErrNotFound, "image %q", name)
-		}
-
-		image.Name = name
-		if err := readImage(&image, ibkt); err != nil {
-			return errors.Wrapf(err, "image %q", name)
-		}
-
-		return nil
-	}); err != nil {
-		return image, err
-	}
-
 	pl, err := platforms.ParseArray(platformList)
 	if err != nil {
-		return image, err
+		return images.Image{}, err
 	}
 
 	lf := &encryption.LayerFilter{
@@ -316,6 +295,14 @@ func (s *imageStore) cryptImage(ctx context.Context, name, newName string, cc *e
 	if !modified {
 		return image, nil
 	}
+
+
+	namespace, err := namespaces.NamespaceRequired(ctx)
+	if err != nil {
+		return images.Image{}, err
+	}
+
+	image.Target = newSpec
 
 	// if newName is either empty or equal to the existing name, it's an update
 	if newName == "" || strings.Compare(image.Name, newName) == 0 {
@@ -353,35 +340,8 @@ func (s *imageStore) cryptImage(ctx context.Context, name, newName string, cc *e
 		return image, nil
 	}
 
-	if err := update(ctx, s.db, func(tx *bolt.Tx) error {
-		image.Target = newSpec
-		image.Name = newName
-		image.UpdatedAt = time.Now().UTC()
-
-		if err := validateImage(&image); err != nil {
-			return err
-		}
-
-		bkt, err := createImagesBucket(tx, namespace)
-		if err != nil {
-			return err
-		}
-
-		ibkt, err := bkt.CreateBucket([]byte(image.Name))
-		if err != nil {
-			if err != bolt.ErrBucketExists {
-				return err
-			}
-
-			return errors.Wrapf(errdefs.ErrAlreadyExists, "image %q", image.Name)
-		}
-
-		return writeImage(ibkt, &image)
-	}); err != nil {
-		return image, err
-	}
-
-	return image, nil
+	image.Name = newName
+	return s.Create(ctx, image)
 }
 
 func (s *imageStore) EncryptImage(ctx context.Context, name, newName string, cc *encryption.CryptoConfig, layers []int32, platformList []string) (images.Image, error) {
