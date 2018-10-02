@@ -23,7 +23,6 @@ import (
 	"github.com/containerd/containerd/api/types"
 	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/images"
-	"github.com/containerd/containerd/images/encryption"
 	ptypes "github.com/gogo/protobuf/types"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )
@@ -124,28 +123,6 @@ func imageFromProto(imagepb *imagesapi.Image) images.Image {
 		CreatedAt: imagepb.CreatedAt,
 		UpdatedAt: imagepb.UpdatedAt,
 	}
-}
-
-func (s *remoteImages) GetImageLayerInfo(ctx context.Context, name string, layers []int32, platforms []string) ([]encryption.LayerInfo, error) {
-	resp, err := s.client.GetImageLayerInfo(ctx, &imagesapi.GetImageLayerInfoRequest{
-		Name:      name,
-		Layers:    layers,
-		Platforms: platforms,
-	})
-	if err != nil {
-		return []encryption.LayerInfo{}, errdefs.FromGRPC(err)
-	}
-
-	li := make([]encryption.LayerInfo, len(resp.LayerInfo))
-	for i := 0; i < len(resp.LayerInfo); i++ {
-		li[i].ID = resp.LayerInfo[i].ID
-		li[i].WrappedKeysMap = resp.LayerInfo[i].WrappedKeysMap
-		li[i].Digest = resp.LayerInfo[i].Digest
-		li[i].FileSize = resp.LayerInfo[i].FileSize
-		li[i].Platform = resp.LayerInfo[i].Platform
-	}
-
-	return li, nil
 }
 
 func imagesFromProto(imagespb []imagesapi.Image) []images.Image {

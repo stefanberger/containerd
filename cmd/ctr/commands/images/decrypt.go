@@ -76,7 +76,7 @@ var decryptCommand = cli.Command{
 
 		layers32 := commands.IntToInt32Array(context.IntSlice("layer"))
 
-		layerInfos, err := client.ImageService().GetImageLayerInfo(ctx, local, layers32, context.StringSlice("platform"))
+		layerInfos, err := getImageLayerInfo(client, ctx, local, layers32, context.StringSlice("platform"))
 		if err != nil {
 			return err
 		}
