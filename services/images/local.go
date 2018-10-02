@@ -180,27 +180,3 @@ func (l *local) Delete(ctx context.Context, req *imagesapi.DeleteImageRequest, _
 
 	return &ptypes.Empty{}, nil
 }
-
-func (l *local) GetImageLayerInfo(ctx context.Context, req *imagesapi.GetImageLayerInfoRequest, _ ...grpc.CallOption) (*imagesapi.GetImageLayerInfoResponse, error) {
-	log.G(ctx).WithField("name", req.Name).Debugf("GetImageLayerInfo")
-
-	var resp imagesapi.GetImageLayerInfoResponse
-
-	lis, err := l.store.GetImageLayerInfo(ctx, req.Name, req.Layers, req.Platforms)
-	if err != nil {
-		return nil, errdefs.ToGRPC(err)
-	}
-
-	resp.LayerInfo = make([]*imagesapi.LayerInfo, len(lis))
-	for i := 0; i < len(lis); i++ {
-		resp.LayerInfo[i] = &imagesapi.LayerInfo{
-			ID:             lis[i].ID,
-			WrappedKeysMap: lis[i].WrappedKeysMap,
-			Digest:         lis[i].Digest,
-			FileSize:       lis[i].FileSize,
-			Platform:       lis[i].Platform,
-		}
-	}
-
-	return &resp, nil
-}

@@ -26,11 +26,9 @@ import (
 	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/filters"
 	"github.com/containerd/containerd/images"
-	"github.com/containerd/containerd/images/encryption"
 	"github.com/containerd/containerd/labels"
 	"github.com/containerd/containerd/metadata/boltutil"
 	"github.com/containerd/containerd/namespaces"
-	"github.com/containerd/containerd/platforms"
 	digest "github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
@@ -256,47 +254,6 @@ func (s *imageStore) Delete(ctx context.Context, name string, opts ...images.Del
 
 		return err
 	})
-}
-
-func (s *imageStore) GetImageLayerInfo(ctx context.Context, name string, layers []int32, platformList []string) ([]encryption.LayerInfo, error) {
-	var image images.Image
-
-	namespace, err := namespaces.NamespaceRequired(ctx)
-	if err != nil {
-		return []encryption.LayerInfo{}, err
-	}
-
-	if err := view(ctx, s.db, func(tx *bolt.Tx) error {
-		bkt := getImagesBucket(tx, namespace)
-		if bkt == nil {
-			return errors.Wrapf(errdefs.ErrNotFound, "image %q", name)
-		}
-
-		ibkt := bkt.Bucket([]byte(name))
-		if ibkt == nil {
-			return errors.Wrapf(errdefs.ErrNotFound, "image %q", name)
-		}
-
-		image.Name = name
-		if err := readImage(&image, ibkt); err != nil {
-			return errors.Wrapf(err, "image %q", name)
-		}
-
-		return nil
-	}); err != nil {
-		return []encryption.LayerInfo{}, err
-	}
-
-	pl, err := platforms.ParseArray(platformList)
-	if err != nil {
-		return []encryption.LayerInfo{}, err
-	}
-	lf := &encryption.LayerFilter{
-		Layers:    layers,
-		Platforms: pl,
-	}
-
-	return images.GetImageLayerInfo(ctx, s.db.ContentStore(), image.Target, lf, -1)
 }
 
 func validateImage(image *images.Image) error {
