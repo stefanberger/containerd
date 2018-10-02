@@ -39,9 +39,6 @@ service Images {
 
 	// Delete deletes the image by name.
 	rpc Delete(DeleteImageRequest) returns (google.protobuf.Empty);
-
-	// Get the KeyIds of keys the image is encrypted with
-	rpc GetImageLayerInfo(GetImageLayerInfoRequest) returns (GetImageLayerInfoResponse);
 }
 
 message Image {
@@ -124,22 +121,4 @@ message DeleteImageRequest {
 	//
 	// Default is false
 	bool sync = 2;
-}
-
-message GetImageLayerInfoRequest {
-	string name = 1;
-	repeated int32 layers = 2;
-	repeated string platforms = 3;
-}
-
-message LayerInfo {
-	uint32 id = 1;
-	map<string, string> WrappedKeysMap = 2;
-	string digest = 3;
-	int64 fileSize = 4;
-	string platform = 5;
-}
-
-message GetImageLayerInfoResponse {
-	repeated LayerInfo layerInfo = 1;
 }
