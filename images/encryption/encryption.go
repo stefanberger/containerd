@@ -23,6 +23,8 @@ import (
 	"io"
 	"strings"
 
+	"github.com/containerd/containerd/errdefs"
+
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 )
@@ -132,6 +134,10 @@ func EncryptLayer(ec *EncryptConfig, encOrPlainLayer []byte, desc ocispec.Descri
 		optsData []byte
 	)
 
+	if ec == nil {
+		return nil, nil, errors.Wrapf(errdefs.ErrInvalidArgument, "EncryptConfig must not be nil")
+	}
+
 	symKey := make([]byte, 256/8)
 	_, err = io.ReadFull(rand.Reader, symKey)
 	if err != nil {
@@ -193,6 +199,9 @@ func preWrapKeys(keywrapper KeyWrapper, ec *EncryptConfig, b64Annotations string
 // DecryptLayer decrypts a layer trying one KeyWrapper after the other to see whether it
 // can apply the provided private key
 func DecryptLayer(dc *DecryptConfig, encLayer []byte, desc ocispec.Descriptor) ([]byte, error) {
+	if dc == nil {
+		return nil, errors.Wrapf(errdefs.ErrInvalidArgument, "DecryptConfig must not be nil")
+	}
 	optsData, err := decryptLayerKeyOptsData(dc, desc)
 	if err != nil {
 		return nil, err
