@@ -45,7 +45,6 @@ func NewImageStore(db *DB) images.Store {
 }
 
 func (s *imageStore) Get(ctx context.Context, name string) (images.Image, error) {
-	fmt.Printf("metadata/images.go: Get() name=%s\n", name)
 	var image images.Image
 
 	namespace, err := namespaces.NamespaceRequired(ctx)
