@@ -764,12 +764,13 @@ func CryptImage(ctx context.Context, cs content.Store, desc ocispec.Descriptor, 
 // We determine the KeyIds starting with  the given OCI Decriptor, recursing to lower-level descriptors
 // until we get them from the layer descriptors
 func GetImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descriptor, lf *encryption.LayerFilter, layerNum int32) ([]encryption.LayerInfo, error) {
-	return getImageLayerInfo(ctx, cs, desc, lf, layerNum, platforms.DefaultString())
+	ds := platforms.DefaultSpec()
+	return getImageLayerInfo(ctx, cs, desc, lf, layerNum, &ds)
 }
 
 // getImageLayerInfo is the recursive version of GetImageLayerInfo that takes the platform
 // as additional parameter
-func getImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descriptor, lf *encryption.LayerFilter, layerNum int32, platform string) ([]encryption.LayerInfo, error) {
+func getImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descriptor, lf *encryption.LayerFilter, layerNum int32, platform *ocispec.Platform) ([]encryption.LayerInfo, error) {
 	var (
 		lis []encryption.LayerInfo
 		tmp []encryption.LayerInfo
@@ -783,7 +784,7 @@ func getImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descr
 			if !isUserSelectedPlatform(desc.Platform, lf.Platforms) {
 				return []encryption.LayerInfo{}, nil
 			}
-			platform = platforms.Format(*desc.Platform)
+			platform = desc.Platform
 		}
 		if err != nil {
 			if errdefs.IsNotFound(err) {
@@ -814,21 +815,26 @@ func getImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descr
 		}
 	case MediaTypeDockerSchema2Layer, MediaTypeDockerSchema2LayerGzip:
 		li := encryption.LayerInfo{
-			WrappedKeysMap: make(map[string]string),
-			Digest:         desc.Digest.String(),
-			FileSize:       desc.Size,
-			ID:             uint32(layerNum),
-			Platform:       platform,
+			ID: uint32(layerNum),
+			Descriptor: ocispec.Descriptor{
+				Annotations: make(map[string]string),
+
+				Digest:   desc.Digest,
+				Size:     desc.Size,
+				Platform: platform,
+			},
 		}
 		lis = append(lis, li)
 	case MediaTypeDockerSchema2Config, ocispec.MediaTypeImageConfig:
 	case MediaTypeDockerSchema2LayerEnc, MediaTypeDockerSchema2LayerGzipEnc:
 		li := encryption.LayerInfo{
-			WrappedKeysMap: encryption.GetWrappedKeysMap(desc),
-			Digest:         desc.Digest.String(),
-			FileSize:       desc.Size,
-			ID:             uint32(layerNum),
-			Platform:       platform,
+			ID: uint32(layerNum),
+			Descriptor: ocispec.Descriptor{
+				Annotations: desc.Annotations,
+				Digest:      desc.Digest,
+				Size:        desc.Size,
+				Platform:    platform,
+			},
 		}
 		lis = append(lis, li)
 	default:
@@ -851,16 +857,20 @@ func DecryptLayers(ctx context.Context, cs content.Store, layers []rootfs.Layer,
 
 	// in the 1st pass through the layers we gather required keys
 	isEncrypted := false
+	ds := platforms.DefaultSpec()
+
 	for id, layer := range layers {
 		layerInfo := encryption.LayerInfo{
-			ID:       uint32(id),
-			Digest:   layer.Blob.Digest.String(),
-			Platform: platforms.DefaultString(),
+			ID: uint32(id),
+			Descriptor: ocispec.Descriptor{
+				Digest:   layer.Blob.Digest,
+				Platform: &ds,
+			},
 		}
 		switch layer.Blob.MediaType {
 		case MediaTypeDockerSchema2LayerEnc, MediaTypeDockerSchema2LayerGzipEnc:
 			isEncrypted = true
-			layerInfo.WrappedKeysMap = encryption.GetWrappedKeysMap(layer.Blob)
+			layerInfo.Descriptor.Annotations = layer.Blob.Annotations
 		}
 		layerInfos = append(layerInfos, layerInfo)
 	}
@@ -890,7 +900,7 @@ func DecryptLayers(ctx context.Context, cs content.Store, layers []rootfs.Layer,
 
 	// in the 2nd pass we decrypt the layers
 	for i, layer := range layers {
-		if len(layerInfos[i].WrappedKeysMap) > 0 {
+		if len(layerInfos[i].Descriptor.Annotations) > 0 {
 			// need to decrypt this layer
 			newDesc, err := cryptLayer(ctx, cs, layer.Blob, cc, false)
 			if err != nil {
