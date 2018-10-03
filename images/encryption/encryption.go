@@ -30,15 +30,8 @@ import (
 // LayerInfo holds information about an image layer
 type LayerInfo struct {
 	// The Id of the layer starting at 0
-	ID uint32
-	// Map of wrapped keys from which KeyIds can be derived with scheme as keys
-	WrappedKeysMap map[string]string
-	// The Digest of the layer
-	Digest string
-	// The size of the layer file
-	FileSize int64
-	// The platform for which this layer is
-	Platform string
+	ID         uint32
+	Descriptor ocispec.Descriptor
 }
 
 // LayerFilter holds criteria for which layer to select
