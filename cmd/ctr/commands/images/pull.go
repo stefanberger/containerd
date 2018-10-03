@@ -118,24 +118,18 @@ command. As part of this process, we do the following:
 		}
 
 		// Create gpg client
-		gpgVersion := context.String("gpg-version")
-		v := new(encryption.GPGVersion)
-		switch gpgVersion {
-		case "v1":
-			*v = encryption.GPGv1
-		case "v2":
-			*v = encryption.GPGv2
-		default:
-			v = nil
-		}
-		gpgClient, err := encryption.NewGPGClient(v, context.String("gpg-homedir"))
+		gpgClient, err := createGPGClient(context)
 		if err != nil {
 			return errors.New("Unable to create GPG Client")
 		}
-		gpgVault := encryption.NewGPGVault()
-		err = gpgVault.AddSecretKeyRingFiles(context.StringSlice("key"))
-		if err != nil {
-			return err
+		var gpgVault encryption.GPGVault
+		key := context.StringSlice("key")
+		if len(key) > 0 {
+			gpgVault := encryption.NewGPGVault()
+			err = gpgVault.AddSecretKeyRingFiles(context.StringSlice("key"))
+			if err != nil {
+				return err
+			}
 		}
 
 		for _, platform := range p {
