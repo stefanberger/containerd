@@ -280,11 +280,11 @@ func GPGGetPrivateKey(layerInfos []LayerInfo, gpgClient GPGClient, gpgVault GPGV
 			if scheme != "pgp" {
 				continue
 			}
-			encryptor := GetKeyWrapper(scheme)
-			if encryptor == nil {
+			keywrapper := GetKeyWrapper(scheme)
+			if keywrapper == nil {
 				return errors.Errorf("Could not get KeyWrapper for %s\n", scheme)
 			}
-			keyIds, err := encryptor.GetKeyIdsFromPacket(b64pgpPackets)
+			keyIds, err := keywrapper.GetKeyIdsFromPacket(b64pgpPackets)
 			if err != nil {
 				return err
 			}
