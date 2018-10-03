@@ -76,7 +76,7 @@ func setupBusyboxImage(t *testing.T) {
 		t.Skip()
 	}
 
-	const imageName = "docker.io/library/alpine:latest"
+	const imageName = "docker.io/library/busybox:latest"
 	ctx, cancel := testContext()
 	defer cancel()
 
@@ -107,7 +107,7 @@ func setupBusyboxImage(t *testing.T) {
 func TestImageEncryption(t *testing.T) {
 	setupBusyboxImage(t)
 
-	const imageName = "docker.io/library/alpine:latest"
+	const imageName = "docker.io/library/busybox:latest"
 	ctx, cancel := testContext()
 	defer cancel()
 
