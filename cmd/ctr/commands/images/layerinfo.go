@@ -25,6 +25,8 @@ import (
 
 	"github.com/containerd/containerd/cmd/ctr/commands"
 	"github.com/containerd/containerd/images/encryption"
+	"github.com/containerd/containerd/platforms"
+
 	"github.com/pkg/errors"
 	"github.com/urfave/cli"
 )
@@ -75,7 +77,7 @@ var layerinfoCommand = cli.Command{
 		for _, layer := range LayerInfos {
 			var recipients []string
 			var schemes []string
-			for scheme, wrappedKeys := range layer.WrappedKeysMap {
+			for scheme, wrappedKeys := range encryption.GetWrappedKeysMap(layer.Descriptor) {
 				schemes = append(schemes, scheme)
 				keywrapper := encryption.GetKeyWrapper(scheme)
 				if keywrapper != nil {
@@ -90,7 +92,7 @@ var layerinfoCommand = cli.Command{
 			}
 			sort.Strings(schemes)
 			sort.Strings(recipients)
-			fmt.Fprintf(w, "%d\t%s\t%s\t%d\t%s\t%s\t\n", layer.ID, layer.Digest, layer.Platform, layer.FileSize, strings.Join(schemes, ","), strings.Join(recipients, ", "))
+			fmt.Fprintf(w, "%d\t%s\t%s\t%d\t%s\t%s\t\n", layer.ID, layer.Descriptor.Digest.String(), platforms.Format(*layer.Descriptor.Platform), layer.Descriptor.Size, strings.Join(schemes, ","), strings.Join(recipients, ", "))
 		}
 		w.Flush()
 		return nil
