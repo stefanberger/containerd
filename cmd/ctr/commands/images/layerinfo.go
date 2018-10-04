@@ -50,6 +50,15 @@ var layerinfoCommand = cli.Command{
 	}, cli.StringSliceFlag{
 		Name:  "platform",
 		Usage: "For which platform to get the layer info; by default info for all platforms is retrieved",
+	}, cli.StringFlag{
+		Name:  "gpg-homedir",
+		Usage: "The GPG homedir to use; by default gpg uses ~/.gnupg",
+	}, cli.StringFlag{
+		Name:  "gpg-version",
+		Usage: "The GPG version (\"v1\" or \"v2\"), default will make an educated guess",
+	}, cli.BoolFlag{
+		Name:  "n",
+		Usage: "Do not resolve PGP key IDs to email addresses",
 	}),
 	Action: func(context *cli.Context) error {
 		local := context.Args().First()
@@ -72,6 +81,12 @@ var layerinfoCommand = cli.Command{
 			return nil
 		}
 
+		var gpgClient encryption.GPGClient
+		if !context.Bool("n") {
+			// create a GPG client to resolve keyIds to names
+			gpgClient, _ = createGPGClient(context)
+		}
+
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', tabwriter.AlignRight)
 		fmt.Fprintf(w, "#\tDIGEST\tPLATFORM\tSIZE\tENCRYPTION\tRECIPIENTS\t\n")
 		for _, layer := range LayerInfos {
@@ -84,6 +99,9 @@ var layerinfoCommand = cli.Command{
 					addRecipients, err := keywrapper.GetRecipients(wrappedKeys)
 					if err != nil {
 						return err
+					}
+					if scheme == "pgp" && gpgClient != nil {
+						addRecipients = gpgClient.ResolveRecipients(addRecipients)
 					}
 					recipients = append(recipients, addRecipients...)
 				} else {

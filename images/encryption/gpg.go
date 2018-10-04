@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os/exec"
+	"regexp"
+	"strconv"
 )
 
 // GPGVersion enum representing the versino of GPG client to use.
@@ -42,6 +44,10 @@ type GPGClient interface {
 	GetGPGPrivateKey(keyid uint64, passphrase string) ([]byte, error)
 	// GetSecretKeyDetails gets the details of a secret key
 	GetSecretKeyDetails(keyid uint64) ([]byte, bool, error)
+	// GetKeyDetails gets the details of a public key
+	GetKeyDetails(keyid uint64) ([]byte, bool, error)
+	// ResolveRecipients resolves PGP key ids to user names
+	ResolveRecipients([] string) []string
 }
 
 // gpgClient contains generic gpg client information
@@ -126,20 +132,35 @@ func (gc *gpgv2Client) ReadGPGPubRingFile() ([]byte, error) {
 	return runGPGGetOutput(cmd)
 }
 
-// GetSecretKeyDetails retrives the secret key details of key with keyid.
-// returns a byte array of the details and a bool if the key exists
-func (gc *gpgv2Client) GetSecretKeyDetails(keyid uint64) ([]byte, bool, error) {
+func (gc *gpgv2Client) getKeyDetails(option string, keyid uint64) ([]byte, bool, error) {
 	var args []string
 
 	if gc.gpgHomeDir != "" {
 		args = append([]string{"--homedir", gc.gpgHomeDir})
 	}
-	args = append(args, "-K", fmt.Sprintf("0x%x", keyid))
+	args = append(args, option, fmt.Sprintf("0x%x", keyid))
 
 	cmd := exec.Command("gpg2", args...)
 
 	keydata, err := runGPGGetOutput(cmd)
 	return keydata, err == nil, err
+}
+
+// GetSecretKeyDetails retrives the secret key details of key with keyid.
+// returns a byte array of the details and a bool if the key exists
+func (gc *gpgv2Client) GetSecretKeyDetails(keyid uint64) ([]byte, bool, error) {
+	return gc.getKeyDetails("-K", keyid)
+}
+
+// GetKeyDetails retrives the public key details of key with keyid.
+// returns a byte array of the details and a bool if the key exists
+func (gc *gpgv2Client) GetKeyDetails(keyid uint64) ([]byte, bool, error) {
+	return gc.getKeyDetails("-k", keyid)
+}
+
+// ResolveRecipients converts PGP keyids to email addresses, if possible
+func (gc *gpgv2Client) ResolveRecipients(recipients []string) []string {
+	return resolveRecipients(gc, recipients)
 }
 
 // GetGPGPrivateKey gets the bytes of a specified keyid, supplying a passphrase
@@ -170,21 +191,36 @@ func (gc *gpgv1Client) ReadGPGPubRingFile() ([]byte, error) {
 	return runGPGGetOutput(cmd)
 }
 
-// GetSecretKeyDetails retrives the secret key details of key with keyid.
-// returns a byte array of the details and a bool if the key exists
-func (gc *gpgv1Client) GetSecretKeyDetails(keyid uint64) ([]byte, bool, error) {
+func (gc *gpgv1Client) getKeyDetails(option string, keyid uint64) ([]byte, bool, error) {
 	var args []string
 
 	if gc.gpgHomeDir != "" {
 		args = append([]string{"--homedir", gc.gpgHomeDir})
 	}
-	args = append(args, "-K", fmt.Sprintf("0x%x", keyid))
+	args = append(args, option, fmt.Sprintf("0x%x", keyid))
 
 	cmd := exec.Command("gpg", args...)
 
 	keydata, err := runGPGGetOutput(cmd)
 
 	return keydata, err == nil, err
+}
+
+// GetSecretKeyDetails retrives the secret key details of key with keyid.
+// returns a byte array of the details and a bool if the key exists
+func (gc *gpgv1Client) GetSecretKeyDetails(keyid uint64) ([]byte, bool, error) {
+	return gc.getKeyDetails("-K", keyid)
+}
+
+// GetKeyDetails retrives the public key details of key with keyid.
+// returns a byte array of the details and a bool if the key exists
+func (gc *gpgv1Client) GetKeyDetails(keyid uint64) ([]byte, bool, error) {
+	return gc.getKeyDetails("-k", keyid)
+}
+
+// ResolveRecipients converts PGP keyids to email addresses, if possible
+func (gc *gpgv1Client) ResolveRecipients(recipients []string) []string {
+	return resolveRecipients(gc, recipients)
 }
 
 // runGPGGetOutput runs the GPG commandline and returns stdout as byte array
@@ -210,4 +246,42 @@ func runGPGGetOutput(cmd *exec.Cmd) ([]byte, error) {
 	}
 
 	return stdoutstr, err2
+}
+
+// resolveRecipients walks the list of recipients and attempts to convert
+// all keyIds to email addresses; if something goes wrong during the
+// conversion of a recipient, the original string is returned for that
+// recpient
+func resolveRecipients(gc GPGClient, recipients []string) []string {
+	var result []string
+
+	for _, recipient := range recipients {
+		keyID, err := strconv.ParseUint(recipient, 0, 64)
+		if err != nil {
+			result = append(result, recipient)
+		} else {
+			details, found, _ := gc.GetKeyDetails(keyID)
+			if !found {
+				result = append(result, recipient)
+			} else {
+				email := extractEmailFromDetails(details)
+				if email == "" {
+					result = append(result, recipient)
+				} else {
+					result = append(result, email)
+				}
+			}
+		}
+	}
+	return result
+}
+
+var emailPattern = regexp.MustCompile(`uid\s+\[.*\]\s.*\s<(?P<email>.+)>`)
+
+func extractEmailFromDetails(details []byte) string  {
+	loc := emailPattern.FindSubmatchIndex(details)
+	if len(loc) == 0 {
+		return ""
+	}
+	return string(emailPattern.Expand(nil, []byte("$email"), details, loc))
 }
