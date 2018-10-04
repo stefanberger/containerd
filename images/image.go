@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"sort"
 	"strings"
 	"time"
@@ -89,6 +90,14 @@ type Store interface {
 	Update(ctx context.Context, image Image, fieldpaths ...string) (Image, error)
 
 	Delete(ctx context.Context, name string, opts ...DeleteOpt) error
+}
+
+type containedReader struct {
+    rd io.Reader
+}
+
+func (cr containedReader) Read(p []byte) (n int, err error) {
+    return cr.rd.Read(p)
 }
 
 // TODO(stevvooe): Many of these functions make strong platform assumptions,
@@ -516,7 +525,7 @@ func cryptLayer(ctx context.Context, cs content.Store, desc ocispec.Descriptor, 
 	// some operations, such as changing recipients, may not touch the layer at all
 	if len(p) > 0 {
 		ref := fmt.Sprintf("layer-%s", newDesc.Digest.String())
-		err = content.WriteBlob(ctx, cs, ref, bytes.NewReader(p), newDesc)
+		err = content.WriteBlob(ctx, cs, ref, containedReader{bytes.NewReader(p)}, newDesc)
 	}
 	return newDesc, err
 }
