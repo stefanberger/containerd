@@ -120,7 +120,7 @@ testPGP() {
 	failExit $? "Adding recipient to PGP encrypted image failed"
 	sleep ${SLEEP_TIME}
 
-	LAYER_INFO_ENC="$($CTR images layerinfo ${ALPINE_ENC})"
+	LAYER_INFO_ENC="$($CTR images layerinfo -n ${ALPINE_ENC})"
 	failExit $? "Image layerinfo on PGP encrypted image failed"
 
 	diff <(echo "${LAYER_INFO}"     | gawk '{print $3}') \
@@ -129,6 +129,13 @@ testPGP() {
 
 	diff <(echo "${LAYER_INFO_ENC}" | gawk '{print $6 $7}' | sort | uniq | tr -d '\n') \
 	     <(echo -n "0x6d6d5017a3752cbd,0xb0310f009d3abc2fRECIPIENTS" )
+	failExit $? "Image layerinfo on PGP encrypted image shows unexpected recipients"
+
+	LAYER_INFO_ENC="$($CTR images layerinfo --gpg-homedir ${GPGHOMEDIR} --gpg-version 2 ${ALPINE_ENC})"
+	failExit $? "Image layerinfo on PGP encrypted image failed"
+
+	diff <(echo "${LAYER_INFO_ENC}" | gawk '{print $6 $7}' | sort | uniq | tr -d '\n') \
+	     <(echo -n "RECIPIENTStestkey1@key.org,testkey2@key.org" )
 	failExit $? "Image layerinfo on PGP encrypted image shows unexpected recipients"
 
 	for privkey in ${GPGTESTKEY1} ${GPGTESTKEY2}; do
