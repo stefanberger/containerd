@@ -93,11 +93,11 @@ type Store interface {
 }
 
 type containedReader struct {
-    rd io.Reader
+	rd io.Reader
 }
 
 func (cr containedReader) Read(p []byte) (n int, err error) {
-    return cr.rd.Read(p)
+	return cr.rd.Read(p)
 }
 
 // TODO(stevvooe): Many of these functions make strong platform assumptions,
