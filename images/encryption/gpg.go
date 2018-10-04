@@ -47,7 +47,7 @@ type GPGClient interface {
 	// GetKeyDetails gets the details of a public key
 	GetKeyDetails(keyid uint64) ([]byte, bool, error)
 	// ResolveRecipients resolves PGP key ids to user names
-	ResolveRecipients([] string) []string
+	ResolveRecipients([]string) []string
 }
 
 // gpgClient contains generic gpg client information
@@ -278,7 +278,7 @@ func resolveRecipients(gc GPGClient, recipients []string) []string {
 
 var emailPattern = regexp.MustCompile(`uid\s+\[.*\]\s.*\s<(?P<email>.+)>`)
 
-func extractEmailFromDetails(details []byte) string  {
+func extractEmailFromDetails(details []byte) string {
 	loc := emailPattern.FindSubmatchIndex(details)
 	if len(loc) == 0 {
 		return ""
