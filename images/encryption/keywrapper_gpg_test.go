@@ -20,24 +20,25 @@ import (
 	"testing"
 )
 
-var validJweCcs = []*CryptoConfig{
+var validGpgCcs = []*CryptoConfig{
 	// Key 1
 	&CryptoConfig{
 		Ec: &EncryptConfig{
 			Parameters: map[string]string{
-				"pubkeys": jwePubKeyPem,
+				"gpg-pubkeyringfile": gpgPubKeyRing,
+				"gpg-recipients":     gpgRecipient1,
 			},
 			Operation: OperationAddRecipients,
 			Dc: DecryptConfig{
 				Parameters: map[string]string{
-					"privkeys": jwePrivKeyPem,
+					"gpg-privatekeys": gpgPrivKey1,
 				},
 			},
 		},
 
 		Dc: &DecryptConfig{
 			Parameters: map[string]string{
-				"privkeys": jwePrivKeyPem,
+				"gpg-privatekeys": gpgPrivKey1,
 			},
 		},
 	},
@@ -46,19 +47,20 @@ var validJweCcs = []*CryptoConfig{
 	&CryptoConfig{
 		Ec: &EncryptConfig{
 			Parameters: map[string]string{
-				"pubkeys": jwePubKey2Pem,
+				"gpg-pubkeyringfile": gpgPubKeyRing,
+				"gpg-recipients":     gpgRecipient2,
 			},
 			Operation: OperationAddRecipients,
 			Dc: DecryptConfig{
 				Parameters: map[string]string{
-					"privkeys": jwePrivKey2Pem,
+					"gpg-privatekeys": gpgPrivKey2,
 				},
 			},
 		},
 
 		Dc: &DecryptConfig{
 			Parameters: map[string]string{
-				"privkeys": jwePrivKey2Pem,
+				"gpg-privatekeys": gpgPrivKey2,
 			},
 		},
 	},
@@ -67,14 +69,15 @@ var validJweCcs = []*CryptoConfig{
 	&CryptoConfig{
 		Ec: &EncryptConfig{
 			Parameters: map[string]string{
-				"pubkeys": jwePubKeyPem,
+				"gpg-pubkeyringfile": gpgPubKeyRing,
+				"gpg-recipients":     gpgRecipient1,
 			},
 			Operation: OperationAddRecipients,
 		},
 
 		Dc: &DecryptConfig{
 			Parameters: map[string]string{
-				"privkeys": jwePrivKeyPem,
+				"gpg-privatekeys": gpgPrivKey1,
 			},
 		},
 	},
@@ -83,31 +86,33 @@ var validJweCcs = []*CryptoConfig{
 	&CryptoConfig{
 		Ec: &EncryptConfig{
 			Parameters: map[string]string{
-				"pubkeys": jwePubKey2Pem,
+				"gpg-pubkeyringfile": gpgPubKeyRing,
+				"gpg-recipients":     gpgRecipient2,
 			},
 			Operation: OperationAddRecipients,
 		},
 
 		Dc: &DecryptConfig{
 			Parameters: map[string]string{
-				"privkeys": jwePrivKey2Pem,
+				"gpg-privatekeys": gpgPrivKey2,
 			},
 		},
 	},
 }
 
-var invalidJweCcs = []*CryptoConfig{
+var invalidGpgCcs = []*CryptoConfig{
 	// Client key 1 public with client 2 private decrypt
 	&CryptoConfig{
 		Ec: &EncryptConfig{
 			Parameters: map[string]string{
-				"pubkeys": jwePubKeyPem,
+				"gpg-pubkeyringfile": gpgPubKeyRing,
+				"gpg-recipients":     gpgRecipient1,
 			},
 			Operation: OperationAddRecipients,
 		},
 		Dc: &DecryptConfig{
 			Parameters: map[string]string{
-				"privkeys": jwePubKey2Pem,
+				"gpg-privatekeys": gpgPrivKey2,
 			},
 		},
 	},
@@ -116,7 +121,8 @@ var invalidJweCcs = []*CryptoConfig{
 	&CryptoConfig{
 		Ec: &EncryptConfig{
 			Parameters: map[string]string{
-				"pubkeys": jwePubKeyPem,
+				"gpg-pubkeyringfile": gpgPubKeyRing,
+				"gpg-recipients":     gpgRecipient1,
 			},
 			Operation: OperationAddRecipients,
 		},
@@ -129,21 +135,22 @@ var invalidJweCcs = []*CryptoConfig{
 	&CryptoConfig{
 		Ec: &EncryptConfig{
 			Parameters: map[string]string{
-				"pubkeys": jwePubKeyPem,
+				"gpg-pubkeyringfile": gpgPrivKey1,
+				"gpg-recipients":     gpgRecipient1,
 			},
 			Operation: OperationAddRecipients,
 		},
 		Dc: &DecryptConfig{
 			Parameters: map[string]string{
-				"privkeys": jwePubKeyPem,
+				"gpg-privatekeys": gpgPrivKey1,
 			},
 		},
 	},
 }
 
-func TestKeyWrapJweSuccess(t *testing.T) {
-	for _, cc := range validJweCcs {
-		kw, ok := keyWrappers["jwe"]
+func TestKeyWrapGpgSuccess(t *testing.T) {
+	for _, cc := range validGpgCcs {
+		kw, ok := keyWrappers["pgp"]
 		if !ok {
 			t.Fatal("Unable to find key wrap service")
 		}
@@ -166,9 +173,9 @@ func TestKeyWrapJweSuccess(t *testing.T) {
 	}
 }
 
-func TestKeyWrapJweInvalid(t *testing.T) {
-	for _, cc := range invalidJweCcs {
-		kw, ok := keyWrappers["jwe"]
+func TestKeyWrapGpgInvalid(t *testing.T) {
+	for _, cc := range invalidGpgCcs {
+		kw, ok := keyWrappers["pgp"]
 		if !ok {
 			t.Fatal("Unable to find key wrap service")
 		}
