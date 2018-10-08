@@ -17,9 +17,12 @@
 package encryption
 
 import (
+	"bytes"
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
+
+	"golang.org/x/crypto/openpgp"
 
 	"github.com/pkg/errors"
 )
@@ -107,5 +110,12 @@ func parseCertificate(certBytes []byte, prefix string) (*x509.Certificate, error
 // IsCertificate returns true in case the given byte array represents an x.509 certificate
 func IsCertificate(data []byte) bool {
 	_, err := parseCertificate(data, "")
+	return err == nil
+}
+
+/// IsGPGPrivateKeyRing returns true in case the given byte array represents a GPG private key ring file
+func IsGPGPrivateKeyRing(data []byte) bool {
+	r := bytes.NewBuffer(data)
+	_, err := openpgp.ReadKeyRing(r)
 	return err == nil
 }
