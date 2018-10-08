@@ -555,15 +555,15 @@ func countLayers(desc []ocispec.Descriptor) int32 {
 // isUserSelectedLayer checks whether the a layer is user selected given its number
 // A layer can be described with its (positive) index number or its negative number, which
 // is counted relative to the topmost one (-1)
-func isUserSelectedLayer(layerNum, layersTotal int32, layers []int32) bool {
+func isUserSelectedLayer(layerIndex, layersTotal int32, layers []int32) bool {
 	if len(layers) == 0 {
 		// convenience for the user; none given means 'all'
 		return true
 	}
-	negNumber := layerNum - layersTotal
+	negNumber := layerIndex - layersTotal
 
 	for _, l := range layers {
-		if l == negNumber || l == layerNum {
+		if l == negNumber || l == layerIndex {
 			return true
 		}
 	}
@@ -589,7 +589,7 @@ func isUserSelectedPlatform(platform *ocispec.Platform, platformList []ocispec.P
 
 // Encrypt all the Children of a given descriptor
 func cryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descriptor, cc *encryption.CryptoConfig, lf *encryption.LayerFilter, encrypt bool, thisPlatform *ocispec.Platform) (ocispec.Descriptor, bool, error) {
-	layerNum := int32(0)
+	layerIndex := int32(0)
 
 	children, err := Children(ctx, cs, desc)
 	if err != nil {
@@ -612,7 +612,7 @@ func cryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descripto
 			config = child
 		case MediaTypeDockerSchema2LayerGzip, MediaTypeDockerSchema2Layer,
 			ocispec.MediaTypeImageLayerGzip, ocispec.MediaTypeImageLayer:
-			if encrypt && isUserSelectedLayer(layerNum, layersTotal, lf.Layers) && isUserSelectedPlatform(thisPlatform, lf.Platforms) {
+			if encrypt && isUserSelectedLayer(layerIndex, layersTotal, lf.Layers) && isUserSelectedPlatform(thisPlatform, lf.Platforms) {
 				nl, err := cryptLayer(ctx, cs, child, cc, true)
 				if err != nil {
 					return ocispec.Descriptor{}, false, err
@@ -622,10 +622,10 @@ func cryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descripto
 			} else {
 				newLayers = append(newLayers, child)
 			}
-			layerNum = layerNum + 1
+			layerIndex = layerIndex + 1
 		case MediaTypeDockerSchema2LayerGzipEnc, MediaTypeDockerSchema2LayerEnc:
 			// this one can be decrypted but also its recpients list changed
-			if isUserSelectedLayer(layerNum, layersTotal, lf.Layers) && isUserSelectedPlatform(thisPlatform, lf.Platforms) {
+			if isUserSelectedLayer(layerIndex, layersTotal, lf.Layers) && isUserSelectedPlatform(thisPlatform, lf.Platforms) {
 				nl, err := cryptLayer(ctx, cs, child, cc, encrypt)
 				if err != nil {
 					return ocispec.Descriptor{}, false, err
@@ -635,7 +635,7 @@ func cryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descripto
 			} else {
 				newLayers = append(newLayers, child)
 			}
-			layerNum = layerNum + 1
+			layerIndex = layerIndex + 1
 		default:
 			return ocispec.Descriptor{}, false, errors.Errorf("Bad/unhandled MediaType %s in encryptChildren\n", child.MediaType)
 		}
@@ -772,14 +772,14 @@ func CryptImage(ctx context.Context, cs content.Store, desc ocispec.Descriptor, 
 // GetImageLayerInfo gets the image key Ids necessary for decrypting an image
 // We determine the KeyIds starting with  the given OCI Decriptor, recursing to lower-level descriptors
 // until we get them from the layer descriptors
-func GetImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descriptor, lf *encryption.LayerFilter, layerNum int32) ([]encryption.LayerInfo, error) {
+func GetImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descriptor, lf *encryption.LayerFilter, layerIndex int32) ([]encryption.LayerInfo, error) {
 	ds := platforms.DefaultSpec()
-	return getImageLayerInfo(ctx, cs, desc, lf, layerNum, &ds)
+	return getImageLayerInfo(ctx, cs, desc, lf, layerIndex, &ds)
 }
 
 // getImageLayerInfo is the recursive version of GetImageLayerInfo that takes the platform
 // as additional parameter
-func getImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descriptor, lf *encryption.LayerFilter, layerNum int32, platform *ocispec.Platform) ([]encryption.LayerInfo, error) {
+func getImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descriptor, lf *encryption.LayerFilter, layerIndex int32, platform *ocispec.Platform) ([]encryption.LayerInfo, error) {
 	var (
 		lis []encryption.LayerInfo
 		tmp []encryption.LayerInfo
@@ -803,13 +803,13 @@ func getImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descr
 		}
 
 		layersTotal := countLayers(children)
-		layerNum := int32(-1)
+		layerIndex := int32(-1)
 
 		for _, child := range children {
 			if isDescriptorALayer(child) {
-				layerNum = layerNum + 1
-				if isUserSelectedLayer(layerNum, layersTotal, lf.Layers) {
-					tmp, err = getImageLayerInfo(ctx, cs, child, lf, layerNum, platform)
+				layerIndex = layerIndex + 1
+				if isUserSelectedLayer(layerIndex, layersTotal, lf.Layers) {
+					tmp, err = getImageLayerInfo(ctx, cs, child, lf, layerIndex, platform)
 				} else {
 					continue
 				}
@@ -824,7 +824,7 @@ func getImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descr
 		}
 	case MediaTypeDockerSchema2Layer, MediaTypeDockerSchema2LayerGzip:
 		li := encryption.LayerInfo{
-			ID: uint32(layerNum),
+			Index: uint32(layerIndex),
 			Descriptor: ocispec.Descriptor{
 				Annotations: make(map[string]string),
 
@@ -837,7 +837,7 @@ func getImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descr
 	case MediaTypeDockerSchema2Config, ocispec.MediaTypeImageConfig:
 	case MediaTypeDockerSchema2LayerEnc, MediaTypeDockerSchema2LayerGzipEnc:
 		li := encryption.LayerInfo{
-			ID: uint32(layerNum),
+			Index: uint32(layerIndex),
 			Descriptor: ocispec.Descriptor{
 				Annotations: desc.Annotations,
 				Digest:      desc.Digest,
@@ -868,9 +868,9 @@ func DecryptLayers(ctx context.Context, cs content.Store, layers []rootfs.Layer,
 	isEncrypted := false
 	ds := platforms.DefaultSpec()
 
-	for id, layer := range layers {
+	for index, layer := range layers {
 		layerInfo := encryption.LayerInfo{
-			ID: uint32(id),
+			Index: uint32(index),
 			Descriptor: ocispec.Descriptor{
 				Digest:   layer.Blob.Digest,
 				Platform: &ds,
