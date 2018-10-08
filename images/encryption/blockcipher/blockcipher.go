@@ -14,7 +14,7 @@
    limitations under the License.
 */
 
-package encryption
+package blockcipher
 
 import (
 	"github.com/pkg/errors"
@@ -25,9 +25,9 @@ type LayerCipherType string
 
 // TODO: Should be obtained from OCI spec once included
 const (
-	AeadAes128Gcm LayerCipherType = "AEAD_AES_128_GCM"
-	AeadAes256Gcm LayerCipherType = "AEAD_AES_256_GCM"
-	CipherTypeOpt string          = "type"
+	AEAD_AES_128_GCM LayerCipherType = "AEAD_AES_128_GCM"
+	AEAD_AES_256_GCM LayerCipherType = "AEAD_AES_256_GCM"
+	CipherTypeOpt    string          = "type"
 )
 
 // LayerBlockCipherOptions includes the information required to encrypt/decrypt
@@ -82,12 +82,12 @@ func NewLayerBlockCipherHandler() (*LayerBlockCipherHandler, error) {
 	}
 
 	var err error
-	h.cipherMap[AeadAes128Gcm], err = NewGCMLayerBlockCipher(128)
+	h.cipherMap[AEAD_AES_128_GCM], err = NewGCMLayerBlockCipher(128)
 	if err != nil {
 		return nil, errors.Wrap(err, "Unable to set up Cipher GCM 128")
 	}
 
-	h.cipherMap[AeadAes256Gcm], err = NewGCMLayerBlockCipher(256)
+	h.cipherMap[AEAD_AES_256_GCM], err = NewGCMLayerBlockCipher(256)
 	if err != nil {
 		return nil, errors.Wrap(err, "Unable to set up Cipher GCM 256")
 	}
