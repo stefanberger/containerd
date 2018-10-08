@@ -24,6 +24,13 @@ import (
 	"strings"
 
 	"github.com/containerd/containerd/errdefs"
+	"github.com/containerd/containerd/images/encryption/blockcipher"
+	"github.com/containerd/containerd/images/encryption/config"
+	"github.com/containerd/containerd/images/encryption/keywrap"
+
+	"github.com/containerd/containerd/images/encryption/keywrap/jwe"
+	"github.com/containerd/containerd/images/encryption/keywrap/pgp"
+	"github.com/containerd/containerd/images/encryption/keywrap/pkcs7"
 
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
@@ -45,43 +52,42 @@ type LayerFilter struct {
 	Platforms []ocispec.Platform
 }
 
-// EncryptConfig is the container image PGP encryption configuration holding
-// the identifiers of those that will be able to decrypt the container and
-// the PGP public keyring file data that contains their public keys.
-type EncryptConfig struct {
-	// map holding 'gpg-recipients' and 'gpg-pubkeyringfile'
-	Parameters map[string]string
-
-	// for adding recipients on an already encrypted image we need the
-	// symmetric keys for the layers so we can wrap them with the recpient's
-	// public key
-	Operation int32 // currently only OperationAddRecipients is supported, if at all
-	Dc        DecryptConfig
+func init() {
+	keyWrappers = make(map[string]keywrap.KeyWrapper)
+	keyWrapperAnnotations = make(map[string]string)
+	RegisterKeyWrapper("pgp", pgp.NewKeyWrapper())
+	RegisterKeyWrapper("jwe", jwe.NewKeyWrapper())
+	RegisterKeyWrapper("pkcs7", pkcs7.NewKeyWrapper())
 }
 
-const (
-	// OperationAddRecipients instructs to add a recipient
-	OperationAddRecipients = int32(iota)
-	// OperationRemoveRecipients instructs to remove a recipient
-	OperationRemoveRecipients = int32(iota)
-)
+var keyWrappers map[string]keywrap.KeyWrapper
+var keyWrapperAnnotations map[string]string
 
-// DecryptConfig stores the platform and layer number encoded in a string as a
-// key to the map. The symmetric key needed for decrypting a platform specific
-// layer is stored as value.
-type DecryptConfig struct {
-	Parameters map[string]string
+func RegisterKeyWrapper(scheme string, iface keywrap.KeyWrapper) {
+	keyWrappers[scheme] = iface
+	keyWrapperAnnotations[iface.GetAnnotationID()] = scheme
 }
 
-// CryptoConfig is a common wrapper for EncryptConfig and DecrypConfig that can
-// be passed through functions that share much code for encryption and decryption
-type CryptoConfig struct {
-	Ec *EncryptConfig
-	Dc *DecryptConfig
+// GetKeyWrapper looks up the encryptor interface given an encryption scheme (gpg, jwe)
+func GetKeyWrapper(scheme string) keywrap.KeyWrapper {
+	return keyWrappers[scheme]
+}
+
+// GetWrappedKeysMap returns a map of wrappedKeys as values in a
+// map with the encryption scheme(s) as the key(s)
+func GetWrappedKeysMap(desc ocispec.Descriptor) map[string]string {
+	wrappedKeysMap := make(map[string]string)
+
+	for annotationsID, scheme := range keyWrapperAnnotations {
+		if annotation, ok := desc.Annotations[annotationsID]; ok {
+			wrappedKeysMap[scheme] = annotation
+		}
+	}
+	return wrappedKeysMap
 }
 
 // EncryptLayer encrypts the layer by running one encryptor after the other
-func EncryptLayer(ec *EncryptConfig, encOrPlainLayer []byte, desc ocispec.Descriptor) ([]byte, map[string]string, error) {
+func EncryptLayer(ec *config.EncryptConfig, encOrPlainLayer []byte, desc ocispec.Descriptor) ([]byte, map[string]string, error) {
 	var (
 		encLayer []byte
 		err      error
@@ -115,7 +121,7 @@ func EncryptLayer(ec *EncryptConfig, encOrPlainLayer []byte, desc ocispec.Descri
 	for annotationsID, scheme := range keyWrapperAnnotations {
 		b64Annotations := desc.Annotations[annotationsID]
 		if b64Annotations == "" && optsData == nil {
-			encLayer, optsData, err = commonEncryptLayer(encOrPlainLayer, symKey, AeadAes256Gcm)
+			encLayer, optsData, err = commonEncryptLayer(encOrPlainLayer, symKey, blockcipher.AEAD_AES_256_GCM)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -138,7 +144,7 @@ func EncryptLayer(ec *EncryptConfig, encOrPlainLayer []byte, desc ocispec.Descri
 
 // preWrapKeys calls WrapKeys and handles the base64 encoding and concatenation of the
 // annotation data
-func preWrapKeys(keywrapper KeyWrapper, ec *EncryptConfig, b64Annotations string, optsData []byte) (string, error) {
+func preWrapKeys(keywrapper keywrap.KeyWrapper, ec *config.EncryptConfig, b64Annotations string, optsData []byte) (string, error) {
 	newAnnotation, err := keywrapper.WrapKeys(ec, optsData)
 	if err != nil || len(newAnnotation) == 0 {
 		return b64Annotations, err
@@ -150,9 +156,9 @@ func preWrapKeys(keywrapper KeyWrapper, ec *EncryptConfig, b64Annotations string
 	return b64Annotations + "," + b64newAnnotation, nil
 }
 
-// DecryptLayer decrypts a layer trying one KeyWrapper after the other to see whether it
+// DecryptLayer decrypts a layer trying one keywrap.KeyWrapper after the other to see whether it
 // can apply the provided private key
-func DecryptLayer(dc *DecryptConfig, encLayer []byte, desc ocispec.Descriptor) ([]byte, error) {
+func DecryptLayer(dc *config.DecryptConfig, encLayer []byte, desc ocispec.Descriptor) ([]byte, error) {
 	if dc == nil {
 		return nil, errors.Wrapf(errdefs.ErrInvalidArgument, "DecryptConfig must not be nil")
 	}
@@ -164,7 +170,7 @@ func DecryptLayer(dc *DecryptConfig, encLayer []byte, desc ocispec.Descriptor) (
 	return commonDecryptLayer(encLayer, optsData)
 }
 
-func decryptLayerKeyOptsData(dc *DecryptConfig, desc ocispec.Descriptor) ([]byte, error) {
+func decryptLayerKeyOptsData(dc *config.DecryptConfig, desc ocispec.Descriptor) ([]byte, error) {
 	privKeyGiven := false
 	for annotationsID, scheme := range keyWrapperAnnotations {
 		b64Annotation := desc.Annotations[annotationsID]
@@ -178,11 +184,11 @@ func decryptLayerKeyOptsData(dc *DecryptConfig, desc ocispec.Descriptor) ([]byte
 
 			optsData, err := preUnwrapKey(keywrapper, dc, b64Annotation)
 			if err != nil {
-				// try next KeyWrapper
+				// try next keywrap.KeyWrapper
 				continue
 			}
 			if optsData == nil {
-				// try next KeyWrapper
+				// try next keywrap.KeyWrapper
 				continue
 			}
 			return optsData, nil
@@ -197,7 +203,7 @@ func decryptLayerKeyOptsData(dc *DecryptConfig, desc ocispec.Descriptor) ([]byte
 // preUnwrapKey decodes the comma separated base64 strings and calls the Unwrap function
 // of the given keywrapper with it and returns the result in case the Unwrap functions
 // does not return an error. If all attempts fail, an error is returned.
-func preUnwrapKey(keywrapper KeyWrapper, dc *DecryptConfig, b64Annotations string) ([]byte, error) {
+func preUnwrapKey(keywrapper keywrap.KeyWrapper, dc *config.DecryptConfig, b64Annotations string) ([]byte, error) {
 	if b64Annotations == "" {
 		return nil, nil
 	}
@@ -218,11 +224,11 @@ func preUnwrapKey(keywrapper KeyWrapper, dc *DecryptConfig, b64Annotations strin
 // commonEncryptLayer is a function to encrypt the plain layer using a new random
 // symmetric key and return the LayerBlockCipherHandler's JSON in string form for
 // later use during decryption
-func commonEncryptLayer(plainLayer []byte, symKey []byte, typ LayerCipherType) ([]byte, []byte, error) {
-	opts := LayerBlockCipherOptions{
+func commonEncryptLayer(plainLayer []byte, symKey []byte, typ blockcipher.LayerCipherType) ([]byte, []byte, error) {
+	opts := blockcipher.LayerBlockCipherOptions{
 		SymmetricKey: symKey,
 	}
-	lbch, err := NewLayerBlockCipherHandler()
+	lbch, err := blockcipher.NewLayerBlockCipherHandler()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -242,13 +248,13 @@ func commonEncryptLayer(plainLayer []byte, symKey []byte, typ LayerCipherType) (
 // commonDecryptLayer decrypts an encrypted layer previously encrypted with commonEncryptLayer
 // by passing along the optsData
 func commonDecryptLayer(encLayer []byte, optsData []byte) ([]byte, error) {
-	opts := LayerBlockCipherOptions{}
+	opts := blockcipher.LayerBlockCipherOptions{}
 	err := json.Unmarshal(optsData, &opts)
 	if err != nil {
 		return nil, errors.Wrapf(err, "Could not JSON unmarshal optsData")
 	}
 
-	lbch, err := NewLayerBlockCipherHandler()
+	lbch, err := blockcipher.NewLayerBlockCipherHandler()
 	if err != nil {
 		return nil, err
 	}

@@ -14,7 +14,7 @@
    limitations under the License.
 */
 
-package encryption
+package pgp
 
 import (
 	"testing"

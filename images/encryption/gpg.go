@@ -17,11 +17,17 @@
 package encryption
 
 import (
+	"encoding/base64"
 	"fmt"
+	"github.com/containerd/containerd/errdefs"
+	"github.com/pkg/errors"
+	"golang.org/x/crypto/ssh/terminal"
 	"io/ioutil"
+	"os"
 	"os/exec"
 	"regexp"
 	"strconv"
+	"strings"
 )
 
 // GPGVersion enum representing the versino of GPG client to use.
@@ -284,4 +290,110 @@ func extractEmailFromDetails(details []byte) string {
 		return ""
 	}
 	return string(emailPattern.Expand(nil, []byte("$email"), details, loc))
+}
+
+// GPGGetPrivateKey walks the list of layerInfos and tries to decrypt the
+// wrapped symmetric keys. For this it determines whether a private key is
+// in the GPGVault or on this system and prompts for the passwords for those
+// that are available. If we do not find a private key on the system for
+// getting to the symmetric key of a layer then an error is generated.
+// Otherwise the wrapped symmetric key is test-decrypted using the private key.
+func GPGGetPrivateKey(layerInfos []LayerInfo, gpgClient GPGClient, gpgVault GPGVault, mustFindKey bool, dcparameters map[string]string) error {
+	// PrivateKeyData describes a private key
+	type PrivateKeyData struct {
+		KeyData         []byte
+		KeyDataPassword []byte
+	}
+	var pkd PrivateKeyData
+	keyIDPasswordMap := make(map[uint64]PrivateKeyData)
+
+	for _, layerInfo := range layerInfos {
+		for scheme, b64pgpPackets := range GetWrappedKeysMap(layerInfo.Descriptor) {
+			if scheme != "pgp" {
+				continue
+			}
+			keywrapper := GetKeyWrapper(scheme)
+			if keywrapper == nil {
+				return errors.Errorf("Could not get KeyWrapper for %s\n", scheme)
+			}
+			keyIds, err := keywrapper.GetKeyIdsFromPacket(b64pgpPackets)
+			if err != nil {
+				return err
+			}
+
+			found := false
+			for _, keyid := range keyIds {
+				// do we have this key? -- first check the vault
+				if gpgVault != nil {
+					_, keydata := gpgVault.GetGPGPrivateKey(keyid)
+					if len(keydata) > 0 {
+						pkd = PrivateKeyData{
+							KeyData:         keydata,
+							KeyDataPassword: nil, // password not supported in this case
+						}
+						keyIDPasswordMap[keyid] = pkd
+						found = true
+						break
+					}
+				} else if gpgClient != nil {
+					// check the local system's gpg installation
+					keyinfo, haveKey, _ := gpgClient.GetSecretKeyDetails(keyid)
+					// this may fail if the key is not here; we ignore the error
+					if !haveKey {
+						// key not on this system
+						continue
+					}
+
+					_, found = keyIDPasswordMap[keyid]
+					if !found {
+						fmt.Printf("Passphrase required for Key id 0x%x: \n%v", keyid, string(keyinfo))
+						fmt.Printf("Enter passphrase for key with Id 0x%x: ", keyid)
+
+						password, err := terminal.ReadPassword(int(os.Stdin.Fd()))
+						fmt.Printf("\n")
+						if err != nil {
+							return err
+						}
+						keydata, err := gpgClient.GetGPGPrivateKey(keyid, string(password))
+						if err != nil {
+							return err
+						}
+						pkd = PrivateKeyData{
+							KeyData:         keydata,
+							KeyDataPassword: password,
+						}
+						keyIDPasswordMap[keyid] = pkd
+						found = true
+					}
+					break
+				} else {
+					return errors.Wrapf(errdefs.ErrInvalidArgument, "No GPGVault or GPGClient passed.")
+				}
+
+				// FIXME: test the password by trying a decryption
+				//_, _, err := PGPDecryptSymmetricKey(keys, keyid, pkd.KeyData, pkd.KeyDataPassword, nil)
+				//if err != nil {
+				//	return parameters, err
+				//}
+			}
+			if !found && len(b64pgpPackets) > 0 && mustFindKey {
+				ids := Uint64ToStringArray("0x%x", keyIds)
+
+				return errors.Wrapf(errdefs.ErrNotFound, "Missing key for decryption of layer %d of %s. Need one of the following keys: %s", layerInfo.Index, layerInfo.Descriptor.Platform, strings.Join(ids, ", "))
+			}
+		}
+	}
+
+	var (
+		privKeys    []string
+		privKeysPwd []string
+	)
+	for _, pkd := range keyIDPasswordMap {
+		privKeys = append(privKeys, base64.StdEncoding.EncodeToString(pkd.KeyData))
+		privKeysPwd = append(privKeysPwd, base64.StdEncoding.EncodeToString(pkd.KeyDataPassword))
+	}
+	dcparameters["gpg-privatekeys"] = strings.Join(privKeys, ",")
+	dcparameters["gpg-privatekeys-password"] = strings.Join(privKeysPwd, ",")
+
+	return nil
 }
