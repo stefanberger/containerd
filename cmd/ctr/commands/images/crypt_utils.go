@@ -20,6 +20,7 @@ import (
 	gocontext "context"
 
 	"encoding/base64"
+	"fmt"
 	"io/ioutil"
 	"strings"
 
@@ -66,8 +67,10 @@ func processPrivateKeyFiles(keyFiles []string) ([][]byte, []string, error) {
 		}
 		if encryption.IsPrivateKey(tmp) {
 			privkeys = append(privkeys, base64.StdEncoding.EncodeToString(tmp))
-		} else {
+		} else if encryption.IsGPGPrivateKeyRing(tmp) {
 			gpgSecretKeyRingFiles = append(gpgSecretKeyRingFiles, tmp)
+		} else {
+			return nil, nil, fmt.Errorf("Unidentified private key in file %s", keyfile)
 		}
 	}
 	return gpgSecretKeyRingFiles, privkeys, nil
