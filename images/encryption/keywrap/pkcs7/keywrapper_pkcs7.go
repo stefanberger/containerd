@@ -14,7 +14,7 @@
    limitations under the License.
 */
 
-package encryption
+package pkcs7
 
 import (
 	"crypto"
@@ -22,6 +22,9 @@ import (
 	"encoding/base64"
 	"strings"
 
+	"github.com/containerd/containerd/images/encryption/config"
+	"github.com/containerd/containerd/images/encryption/keywrap"
+	"github.com/containerd/containerd/images/encryption/utils"
 	"github.com/fullsailor/pkcs7"
 
 	"github.com/pkg/errors"
@@ -30,13 +33,18 @@ import (
 type pkcs7KeyWrapper struct {
 }
 
+// NewPgpKeyWrapper returns a new key wrapping interface using jwe
+func NewKeyWrapper() keywrap.KeyWrapper {
+	return &pkcs7KeyWrapper{}
+}
+
 func (kw *pkcs7KeyWrapper) GetAnnotationID() string {
 	return "org.opencontainers.image.enc.keys.pkcs7"
 }
 
 // WrapKeys wraps the session key for recpients and encrypts the optsData, which
 // describe the symmetric key used for encrypting the layer
-func (kw *pkcs7KeyWrapper) WrapKeys(ec *EncryptConfig, optsData []byte) ([]byte, error) {
+func (kw *pkcs7KeyWrapper) WrapKeys(ec *config.EncryptConfig, optsData []byte) ([]byte, error) {
 	x509Certs, err := collectX509s(ec.Parameters["x509s"])
 	if err != nil {
 		return nil, err
@@ -59,7 +67,7 @@ func collectX509s(b64X509s string) ([]*x509.Certificate, error) {
 		if err != nil {
 			return nil, errors.New("Could not base64 decode x509 certificate")
 		}
-		x509Cert, err := parseCertificate(x509Str, "PKCS7")
+		x509Cert, err := utils.ParseCertificate(x509Str, "PKCS7")
 		if err != nil {
 			return nil, err
 		}
@@ -74,7 +82,7 @@ func (kw *pkcs7KeyWrapper) GetPrivateKeys(dcparameters map[string]string) string
 
 // UnwrapKey unwraps the symmetric key with which the layer is encrypted
 // This symmetric key is encrypted in the PGP payload.
-func (kw *pkcs7KeyWrapper) UnwrapKey(dc *DecryptConfig, pkcs7Packet []byte) ([]byte, error) {
+func (kw *pkcs7KeyWrapper) UnwrapKey(dc *config.DecryptConfig, pkcs7Packet []byte) ([]byte, error) {
 	privKeys := dc.Parameters["privkeys"]
 	if privKeys == "" {
 		return nil, errors.New("No private keys found for PKCS7 decryption")
@@ -99,7 +107,7 @@ func (kw *pkcs7KeyWrapper) UnwrapKey(dc *DecryptConfig, pkcs7Packet []byte) ([]b
 			return nil, errors.Wrapf(err, "PKCS7: Could not base64 decode privat key")
 		}
 
-		key, err := parsePrivateKey(privKey, "PKCS7")
+		key, err := utils.ParsePrivateKey(privKey, "PKCS7")
 		if err != nil {
 			return nil, err
 		}
