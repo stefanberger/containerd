@@ -27,6 +27,8 @@ import (
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/images"
 	"github.com/containerd/containerd/images/encryption"
+	encconfig "github.com/containerd/containerd/images/encryption/config"
+	encutils "github.com/containerd/containerd/images/encryption/utils"
 	"github.com/containerd/containerd/platforms"
 	"github.com/urfave/cli"
 )
@@ -43,9 +45,9 @@ func processRecipientKeys(recipients []string) ([]string, []string, []string, er
 			gpgRecipients = append(gpgRecipients, recipient)
 			continue
 		}
-		if encryption.IsCertificate(tmp) {
+		if encutils.IsCertificate(tmp) {
 			x509s = append(x509s, base64.StdEncoding.EncodeToString(tmp))
-		} else if encryption.IsPublicKey(tmp) {
+		} else if encutils.IsPublicKey(tmp) {
 			pubkeys = append(pubkeys, base64.StdEncoding.EncodeToString(tmp))
 		} else {
 			gpgRecipients = append(gpgRecipients, recipient)
@@ -65,9 +67,9 @@ func processPrivateKeyFiles(keyFiles []string) ([][]byte, []string, error) {
 		if err != nil {
 			return nil, nil, err
 		}
-		if encryption.IsPrivateKey(tmp) {
+		if encutils.IsPrivateKey(tmp) {
 			privkeys = append(privkeys, base64.StdEncoding.EncodeToString(tmp))
-		} else if encryption.IsGPGPrivateKeyRing(tmp) {
+		} else if encutils.IsGPGPrivateKeyRing(tmp) {
 			gpgSecretKeyRingFiles = append(gpgSecretKeyRingFiles, tmp)
 		} else {
 			return nil, nil, fmt.Errorf("Unidentified private key in file %s", keyfile)
@@ -109,7 +111,7 @@ func getGPGPrivateKeys(context *cli.Context, gpgSecretKeyRingFiles [][]byte, lay
 
 // cryptImage encrypts or decrypts an image with the given name and stores it either under the newName
 // or updates the existing one
-func cryptImage(client *containerd.Client, ctx gocontext.Context, name, newName string, cc *encryption.CryptoConfig, layers []int32, platformList []string, encrypt bool) (images.Image, error) {
+func cryptImage(client *containerd.Client, ctx gocontext.Context, name, newName string, cc *encconfig.CryptoConfig, layers []int32, platformList []string, encrypt bool) (images.Image, error) {
 	s := client.ImageService()
 
 	image, err := s.Get(ctx, name)
@@ -152,11 +154,11 @@ func cryptImage(client *containerd.Client, ctx gocontext.Context, name, newName 
 	return s.Create(ctx, image)
 }
 
-func encryptImage(client *containerd.Client, ctx gocontext.Context, name, newName string, cc *encryption.CryptoConfig, layers []int32, platformList []string) (images.Image, error) {
+func encryptImage(client *containerd.Client, ctx gocontext.Context, name, newName string, cc *encconfig.CryptoConfig, layers []int32, platformList []string) (images.Image, error) {
 	return cryptImage(client, ctx, name, newName, cc, layers, platformList, true)
 }
 
-func decryptImage(client *containerd.Client, ctx gocontext.Context, name, newName string, cc *encryption.CryptoConfig, layers []int32, platformList []string) (images.Image, error) {
+func decryptImage(client *containerd.Client, ctx gocontext.Context, name, newName string, cc *encconfig.CryptoConfig, layers []int32, platformList []string) (images.Image, error) {
 	return cryptImage(client, ctx, name, newName, cc, layers, platformList, false)
 }
 func getImageLayerInfo(client *containerd.Client, ctx gocontext.Context, name string, layers []int32, platformList []string) ([]encryption.LayerInfo, error) {
