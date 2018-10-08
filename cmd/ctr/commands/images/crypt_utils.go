@@ -30,11 +30,6 @@ import (
 	"github.com/urfave/cli"
 )
 
-func isCertificate(data []byte) bool {
-	_, err := encryption.ParseCertificate(data, "")
-	return err == nil
-}
-
 func processRecipientKeys(recipients []string) ([]string, []string, []string, error) {
 	var (
 		gpgRecipients []string
@@ -42,16 +37,15 @@ func processRecipientKeys(recipients []string) ([]string, []string, []string, er
 		x509s         []string
 	)
 	for _, recipient := range recipients {
-		if strings.HasSuffix(recipient, ".pem") || strings.HasSuffix(recipient, ".der") {
-			tmp, err := ioutil.ReadFile(recipient)
-			if err != nil {
-				return nil, nil, nil, err
-			}
-			if isCertificate(tmp) {
-				x509s = append(x509s, base64.StdEncoding.EncodeToString(tmp))
-			} else {
-				pubkeys = append(pubkeys, base64.StdEncoding.EncodeToString(tmp))
-			}
+		tmp, err := ioutil.ReadFile(recipient)
+		if err != nil {
+			gpgRecipients = append(gpgRecipients, recipient)
+			continue
+		}
+		if encryption.IsCertificate(tmp) {
+			x509s = append(x509s, base64.StdEncoding.EncodeToString(tmp))
+		} else if encryption.IsPublicKey(tmp) {
+			pubkeys = append(pubkeys, base64.StdEncoding.EncodeToString(tmp))
 		} else {
 			gpgRecipients = append(gpgRecipients, recipient)
 		}
@@ -59,21 +53,21 @@ func processRecipientKeys(recipients []string) ([]string, []string, []string, er
 	return gpgRecipients, pubkeys, x509s, nil
 }
 
-func processPrivateKeyFiles(keyFiles []string) ([]string, []string, error) {
+func processPrivateKeyFiles(keyFiles []string) ([][]byte, []string, error) {
 	var (
-		gpgSecretKeyRingFiles []string
+		gpgSecretKeyRingFiles [][]byte
 		privkeys              []string
 	)
 	// keys needed for decryption in case of adding a recipient
 	for _, keyfile := range keyFiles {
-		if strings.HasSuffix(keyfile, ".pem") || strings.HasSuffix(keyfile, ".der") {
-			tmp, err := ioutil.ReadFile(keyfile)
-			if err != nil {
-				return nil, nil, err
-			}
+		tmp, err := ioutil.ReadFile(keyfile)
+		if err != nil {
+			return nil, nil, err
+		}
+		if encryption.IsPrivateKey(tmp) {
 			privkeys = append(privkeys, base64.StdEncoding.EncodeToString(tmp))
 		} else {
-			gpgSecretKeyRingFiles = append(gpgSecretKeyRingFiles, keyfile)
+			gpgSecretKeyRingFiles = append(gpgSecretKeyRingFiles, tmp)
 		}
 	}
 	return gpgSecretKeyRingFiles, privkeys, nil
@@ -93,7 +87,7 @@ func createGPGClient(context *cli.Context) (encryption.GPGClient, error) {
 	return encryption.NewGPGClient(v, context.String("gpg-homedir"))
 }
 
-func getGPGPrivateKeys(context *cli.Context, gpgSecretKeyRingFiles []string, layerInfos []encryption.LayerInfo, mustFindKey bool, dcparameters map[string]string) error {
+func getGPGPrivateKeys(context *cli.Context, gpgSecretKeyRingFiles [][]byte, layerInfos []encryption.LayerInfo, mustFindKey bool, dcparameters map[string]string) error {
 	gpgClient, err := createGPGClient(context)
 	if err != nil {
 		return err
@@ -102,7 +96,7 @@ func getGPGPrivateKeys(context *cli.Context, gpgSecretKeyRingFiles []string, lay
 	var gpgVault encryption.GPGVault
 	if len(gpgSecretKeyRingFiles) > 0 {
 		gpgVault = encryption.NewGPGVault()
-		err = gpgVault.AddSecretKeyRingFiles(gpgSecretKeyRingFiles)
+		err = gpgVault.AddSecretKeyRingDataArray(gpgSecretKeyRingFiles)
 		if err != nil {
 			return err
 		}

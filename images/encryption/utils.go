@@ -58,6 +58,12 @@ func parsePrivateKey(privKey []byte, prefix string) (interface{}, error) {
 	return key, err
 }
 
+// IsPrivateKey returns true in case the given byte array represents a private key
+func IsPrivateKey(data []byte) bool {
+	_, err := parsePrivateKey(data, "")
+	return err == nil
+}
+
 // parsePublicKey tries to parse a public key in DER format first and
 // PEM format after, returning an error if the parsing failed
 func parsePublicKey(pubKey []byte, prefix string) (interface{}, error) {
@@ -75,9 +81,15 @@ func parsePublicKey(pubKey []byte, prefix string) (interface{}, error) {
 	return key, err
 }
 
+// IsPublicKey returns true in case the given byte array represents a public key
+func IsPublicKey(data []byte) bool {
+	_, err := parsePublicKey(data, "")
+	return err == nil
+}
+
 // ParseCertificate tries to parse a public key in DER format first and
 // PEM format after, returning an error if the parsing failed
-func ParseCertificate(certBytes []byte, prefix string) (*x509.Certificate, error) {
+func parseCertificate(certBytes []byte, prefix string) (*x509.Certificate, error) {
 	x509Cert, err := x509.ParseCertificate(certBytes)
 	if err != nil {
 		block, _ := pem.Decode(certBytes)
@@ -90,4 +102,10 @@ func ParseCertificate(certBytes []byte, prefix string) (*x509.Certificate, error
 		}
 	}
 	return x509Cert, err
+}
+
+// IsCertificate returns true in case the given byte array represents an x.509 certificate
+func IsCertificate(data []byte) bool {
+	_, err := parseCertificate(data, "")
+	return err == nil
 }
