@@ -31,8 +31,8 @@ import (
 
 // LayerInfo holds information about an image layer
 type LayerInfo struct {
-	// The Id of the layer starting at 0
-	ID         uint32
+	// The Number of this layer in the sequence; starting at 0
+	Index      uint32
 	Descriptor ocispec.Descriptor
 }
 
