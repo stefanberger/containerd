@@ -59,7 +59,7 @@ func collectX509s(b64X509s string) ([]*x509.Certificate, error) {
 		if err != nil {
 			return nil, errors.New("Could not base64 decode x509 certificate")
 		}
-		x509Cert, err := ParseCertificate(x509Str, "PKCS7")
+		x509Cert, err := parseCertificate(x509Str, "PKCS7")
 		if err != nil {
 			return nil, err
 		}
