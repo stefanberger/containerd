@@ -110,7 +110,7 @@ var layerinfoCommand = cli.Command{
 			}
 			sort.Strings(schemes)
 			sort.Strings(recipients)
-			fmt.Fprintf(w, "%d\t%s\t%s\t%d\t%s\t%s\t\n", layer.ID, layer.Descriptor.Digest.String(), platforms.Format(*layer.Descriptor.Platform), layer.Descriptor.Size, strings.Join(schemes, ","), strings.Join(recipients, ", "))
+			fmt.Fprintf(w, "%d\t%s\t%s\t%d\t%s\t%s\t\n", layer.Index, layer.Descriptor.Digest.String(), platforms.Format(*layer.Descriptor.Platform), layer.Descriptor.Size, strings.Join(schemes, ","), strings.Join(recipients, ", "))
 		}
 		w.Flush()
 		return nil
