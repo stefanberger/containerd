@@ -21,7 +21,7 @@ import (
 	"strings"
 
 	"github.com/containerd/containerd/cmd/ctr/commands"
-	"github.com/containerd/containerd/images/encryption"
+	encconfig "github.com/containerd/containerd/images/encryption/config"
 	"github.com/pkg/errors"
 	"github.com/urfave/cli"
 )
@@ -121,8 +121,8 @@ var decryptCommand = cli.Command{
 			dcparameters["x509s"] = strings.Join(x509s, ",")
 		}
 
-		cc := &encryption.CryptoConfig{
-			Dc: &encryption.DecryptConfig{
+		cc := &encconfig.CryptoConfig{
+			Dc: &encconfig.DecryptConfig{
 				Parameters: dcparameters,
 			},
 		}
