@@ -14,100 +14,103 @@
    limitations under the License.
 */
 
-package encryption
+package pkcs7
 
 import (
 	"testing"
 )
 
-var validJweCcs = []*CryptoConfig{
-	// Key 1
+var validPkcs7Ccs = []*CryptoConfig{
+	// Client key 1
 	&CryptoConfig{
 		Ec: &EncryptConfig{
 			Parameters: map[string]string{
-				"pubkeys": jwePubKeyPem,
+				"x509s": pkcs7ClientCert,
 			},
 			Operation: OperationAddRecipients,
 			Dc: DecryptConfig{
 				Parameters: map[string]string{
-					"privkeys": jwePrivKeyPem,
+					"privkeys": pkcs7ClientCertKey,
+					"x509s":    pkcs7ClientCert,
 				},
 			},
 		},
-
 		Dc: &DecryptConfig{
 			Parameters: map[string]string{
-				"privkeys": jwePrivKeyPem,
+				"privkeys": pkcs7ClientCertKey,
+				"x509s":    pkcs7ClientCert,
 			},
 		},
 	},
 
-	// Key 2
+	// Client key 2
 	&CryptoConfig{
 		Ec: &EncryptConfig{
 			Parameters: map[string]string{
-				"pubkeys": jwePubKey2Pem,
+				"x509s": pkcs7Client2Cert,
 			},
 			Operation: OperationAddRecipients,
 			Dc: DecryptConfig{
 				Parameters: map[string]string{
-					"privkeys": jwePrivKey2Pem,
+					"privkeys": pkcs7Client2CertKey,
+					"x509s":    pkcs7Client2Cert,
 				},
 			},
 		},
-
 		Dc: &DecryptConfig{
 			Parameters: map[string]string{
-				"privkeys": jwePrivKey2Pem,
+				"privkeys": pkcs7Client2CertKey,
+				"x509s":    pkcs7Client2Cert,
 			},
 		},
 	},
 
-	// Key 1 without enc private key
+	// Client key 1 without enc private key
 	&CryptoConfig{
 		Ec: &EncryptConfig{
 			Parameters: map[string]string{
-				"pubkeys": jwePubKeyPem,
+				"x509s": pkcs7ClientCert,
 			},
 			Operation: OperationAddRecipients,
 		},
-
 		Dc: &DecryptConfig{
 			Parameters: map[string]string{
-				"privkeys": jwePrivKeyPem,
+				"privkeys": pkcs7ClientCertKey,
+				"x509s":    pkcs7ClientCert,
 			},
 		},
 	},
 
-	// Key 2 without enc private key
+	// Client key 2 without enc private key
 	&CryptoConfig{
 		Ec: &EncryptConfig{
 			Parameters: map[string]string{
-				"pubkeys": jwePubKey2Pem,
+				"x509s": pkcs7Client2Cert,
 			},
 			Operation: OperationAddRecipients,
 		},
-
 		Dc: &DecryptConfig{
 			Parameters: map[string]string{
-				"privkeys": jwePrivKey2Pem,
+				"privkeys": pkcs7Client2CertKey,
+				"x509s":    pkcs7Client2Cert,
 			},
 		},
 	},
 }
 
-var invalidJweCcs = []*CryptoConfig{
+var invalidPkcs7Ccs = []*CryptoConfig{
 	// Client key 1 public with client 2 private decrypt
 	&CryptoConfig{
 		Ec: &EncryptConfig{
 			Parameters: map[string]string{
-				"pubkeys": jwePubKeyPem,
+				"x509s": pkcs7ClientCert,
 			},
 			Operation: OperationAddRecipients,
 		},
 		Dc: &DecryptConfig{
 			Parameters: map[string]string{
-				"privkeys": jwePubKey2Pem,
+				"privkeys": pkcs7Client2CertKey,
+				"x509s":    pkcs7Client2Cert,
 			},
 		},
 	},
@@ -116,7 +119,7 @@ var invalidJweCcs = []*CryptoConfig{
 	&CryptoConfig{
 		Ec: &EncryptConfig{
 			Parameters: map[string]string{
-				"pubkeys": jwePubKeyPem,
+				"x509s": pkcs7ClientCert,
 			},
 			Operation: OperationAddRecipients,
 		},
@@ -129,21 +132,22 @@ var invalidJweCcs = []*CryptoConfig{
 	&CryptoConfig{
 		Ec: &EncryptConfig{
 			Parameters: map[string]string{
-				"pubkeys": jwePubKeyPem,
+				"x509s": pkcs7ClientCertKey,
 			},
 			Operation: OperationAddRecipients,
 		},
 		Dc: &DecryptConfig{
 			Parameters: map[string]string{
-				"privkeys": jwePubKeyPem,
+				"privkeys": pkcs7ClientCert,
+				"x509s":    pkcs7ClientCert,
 			},
 		},
 	},
 }
 
-func TestKeyWrapJweSuccess(t *testing.T) {
-	for _, cc := range validJweCcs {
-		kw, ok := keyWrappers["jwe"]
+func TestKeyWrapPkcs7Success(t *testing.T) {
+	for _, cc := range validPkcs7Ccs {
+		kw, ok := keyWrappers["pkcs7"]
 		if !ok {
 			t.Fatal("Unable to find key wrap service")
 		}
@@ -166,9 +170,9 @@ func TestKeyWrapJweSuccess(t *testing.T) {
 	}
 }
 
-func TestKeyWrapJweInvalid(t *testing.T) {
-	for _, cc := range invalidJweCcs {
-		kw, ok := keyWrappers["jwe"]
+func TestKeyWrapPkcs7Invalid(t *testing.T) {
+	for _, cc := range invalidPkcs7Ccs {
+		kw, ok := keyWrappers["pkcs7"]
 		if !ok {
 			t.Fatal("Unable to find key wrap service")
 		}
