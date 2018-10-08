@@ -14,103 +14,100 @@
    limitations under the License.
 */
 
-package encryption
+package jwe
 
 import (
 	"testing"
 )
 
-var validPkcs7Ccs = []*CryptoConfig{
-	// Client key 1
+var validJweCcs = []*CryptoConfig{
+	// Key 1
 	&CryptoConfig{
 		Ec: &EncryptConfig{
 			Parameters: map[string]string{
-				"x509s": pkcs7ClientCert,
+				"pubkeys": jwePubKeyPem,
 			},
 			Operation: OperationAddRecipients,
 			Dc: DecryptConfig{
 				Parameters: map[string]string{
-					"privkeys": pkcs7ClientCertKey,
-					"x509s":    pkcs7ClientCert,
+					"privkeys": jwePrivKeyPem,
 				},
 			},
 		},
+
 		Dc: &DecryptConfig{
 			Parameters: map[string]string{
-				"privkeys": pkcs7ClientCertKey,
-				"x509s":    pkcs7ClientCert,
+				"privkeys": jwePrivKeyPem,
 			},
 		},
 	},
 
-	// Client key 2
+	// Key 2
 	&CryptoConfig{
 		Ec: &EncryptConfig{
 			Parameters: map[string]string{
-				"x509s": pkcs7Client2Cert,
+				"pubkeys": jwePubKey2Pem,
 			},
 			Operation: OperationAddRecipients,
 			Dc: DecryptConfig{
 				Parameters: map[string]string{
-					"privkeys": pkcs7Client2CertKey,
-					"x509s":    pkcs7Client2Cert,
+					"privkeys": jwePrivKey2Pem,
 				},
 			},
 		},
+
 		Dc: &DecryptConfig{
 			Parameters: map[string]string{
-				"privkeys": pkcs7Client2CertKey,
-				"x509s":    pkcs7Client2Cert,
+				"privkeys": jwePrivKey2Pem,
 			},
 		},
 	},
 
-	// Client key 1 without enc private key
+	// Key 1 without enc private key
 	&CryptoConfig{
 		Ec: &EncryptConfig{
 			Parameters: map[string]string{
-				"x509s": pkcs7ClientCert,
+				"pubkeys": jwePubKeyPem,
 			},
 			Operation: OperationAddRecipients,
 		},
+
 		Dc: &DecryptConfig{
 			Parameters: map[string]string{
-				"privkeys": pkcs7ClientCertKey,
-				"x509s":    pkcs7ClientCert,
+				"privkeys": jwePrivKeyPem,
 			},
 		},
 	},
 
-	// Client key 2 without enc private key
+	// Key 2 without enc private key
 	&CryptoConfig{
 		Ec: &EncryptConfig{
 			Parameters: map[string]string{
-				"x509s": pkcs7Client2Cert,
+				"pubkeys": jwePubKey2Pem,
 			},
 			Operation: OperationAddRecipients,
 		},
+
 		Dc: &DecryptConfig{
 			Parameters: map[string]string{
-				"privkeys": pkcs7Client2CertKey,
-				"x509s":    pkcs7Client2Cert,
+				"privkeys": jwePrivKey2Pem,
 			},
 		},
 	},
 }
 
-var invalidPkcs7Ccs = []*CryptoConfig{
+var invalidJweCcs = []*CryptoConfig{
 	// Client key 1 public with client 2 private decrypt
 	&CryptoConfig{
 		Ec: &EncryptConfig{
 			Parameters: map[string]string{
-				"x509s": pkcs7ClientCert,
+				"pubkeys": jwePubKeyPem,
 			},
 			Operation: OperationAddRecipients,
 		},
 		Dc: &DecryptConfig{
 			Parameters: map[string]string{
-				"privkeys": pkcs7Client2CertKey,
-				"x509s":    pkcs7Client2Cert,
+				"privkeys": jwePubKey2Pem,
 			},
 		},
 	},
@@ -119,7 +116,7 @@ var invalidPkcs7Ccs = []*CryptoConfig{
 	&CryptoConfig{
 		Ec: &EncryptConfig{
 			Parameters: map[string]string{
-				"x509s": pkcs7ClientCert,
+				"pubkeys": jwePubKeyPem,
 			},
 			Operation: OperationAddRecipients,
 		},
@@ -132,22 +129,21 @@ var invalidPkcs7Ccs = []*CryptoConfig{
 	&CryptoConfig{
 		Ec: &EncryptConfig{
 			Parameters: map[string]string{
-				"x509s": pkcs7ClientCertKey,
+				"pubkeys": jwePubKeyPem,
 			},
 			Operation: OperationAddRecipients,
 		},
 		Dc: &DecryptConfig{
 			Parameters: map[string]string{
-				"privkeys": pkcs7ClientCert,
-				"x509s":    pkcs7ClientCert,
+				"privkeys": jwePubKeyPem,
 			},
 		},
 	},
 }
 
-func TestKeyWrapPkcs7Success(t *testing.T) {
-	for _, cc := range validPkcs7Ccs {
-		kw, ok := keyWrappers["pkcs7"]
+func TestKeyWrapJweSuccess(t *testing.T) {
+	for _, cc := range validJweCcs {
+		kw, ok := keyWrappers["jwe"]
 		if !ok {
 			t.Fatal("Unable to find key wrap service")
 		}
@@ -170,9 +166,9 @@ func TestKeyWrapPkcs7Success(t *testing.T) {
 	}
 }
 
-func TestKeyWrapPkcs7Invalid(t *testing.T) {
-	for _, cc := range invalidPkcs7Ccs {
-		kw, ok := keyWrappers["pkcs7"]
+func TestKeyWrapJweInvalid(t *testing.T) {
+	for _, cc := range invalidJweCcs {
+		kw, ok := keyWrappers["jwe"]
 		if !ok {
 			t.Fatal("Unable to find key wrap service")
 		}

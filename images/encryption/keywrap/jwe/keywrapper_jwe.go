@@ -14,12 +14,15 @@
    limitations under the License.
 */
 
-package encryption
+package jwe
 
 import (
 	"encoding/base64"
 	"strings"
 
+	"github.com/containerd/containerd/images/encryption/config"
+	"github.com/containerd/containerd/images/encryption/keywrap"
+	"github.com/containerd/containerd/images/encryption/utils"
 	"github.com/pkg/errors"
 
 	jose "gopkg.in/square/go-jose.v2"
@@ -32,9 +35,14 @@ func (kw *jweKeyWrapper) GetAnnotationID() string {
 	return "org.opencontainers.image.enc.keys.jwe"
 }
 
+// NewKeyWrapper returns a new key wrapping interface using jwe
+func NewKeyWrapper() keywrap.KeyWrapper {
+	return &jweKeyWrapper{}
+}
+
 // WrapKeys wraps the session key for recpients and encrypts the optsData, which
 // describe the symmetric key used for encrypting the layer
-func (kw *jweKeyWrapper) WrapKeys(ec *EncryptConfig, optsData []byte) ([]byte, error) {
+func (kw *jweKeyWrapper) WrapKeys(ec *config.EncryptConfig, optsData []byte) ([]byte, error) {
 	var joseRecipients []jose.Recipient
 
 	err := addPubKeys(&joseRecipients, ec.Parameters["pubkeys"])
@@ -57,7 +65,7 @@ func (kw *jweKeyWrapper) WrapKeys(ec *EncryptConfig, optsData []byte) ([]byte, e
 	return []byte(jwe.FullSerialize()), nil
 }
 
-func (kw *jweKeyWrapper) UnwrapKey(dc *DecryptConfig, jweString []byte) ([]byte, error) {
+func (kw *jweKeyWrapper) UnwrapKey(dc *config.DecryptConfig, jweString []byte) ([]byte, error) {
 	jwe, err := jose.ParseEncrypted(string(jweString))
 	if err != nil {
 		return nil, errors.New("jose.ParseEncrypted failed")
@@ -74,7 +82,7 @@ func (kw *jweKeyWrapper) UnwrapKey(dc *DecryptConfig, jweString []byte) ([]byte,
 			return nil, errors.Wrapf(err, "JWE: Could not base64 decode privat key")
 		}
 
-		key, err := parsePrivateKey(privKey, "JWE")
+		key, err := utils.ParsePrivateKey(privKey, "JWE")
 		if err != nil {
 			return nil, err
 		}
@@ -108,7 +116,7 @@ func addPubKeys(joseRecipients *[]jose.Recipient, b64PubKeys string) error {
 			return errors.Wrapf(err, "Could not base64 decode public key")
 		}
 
-		key, err := parsePublicKey(pubKey, "JWE")
+		key, err := utils.ParsePublicKey(pubKey, "JWE")
 		if err != nil {
 			return err
 		}

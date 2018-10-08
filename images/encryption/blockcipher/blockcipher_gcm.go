@@ -14,7 +14,7 @@
    limitations under the License.
 */
 
-package encryption
+package blockcipher
 
 import (
 	"crypto/aes"

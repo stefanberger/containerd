@@ -14,20 +14,35 @@
    limitations under the License.
 */
 
-package encryption
+package blockcipher
 
 import (
 	"testing"
 )
 
-func TestBlockCipherHandlerCreate(t *testing.T) {
-	_, err := NewLayerBlockCipherHandler()
+func TestBlockCipherAesGcmCreateValid(t *testing.T) {
+	_, err := NewGCMLayerBlockCipher(128)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = NewGCMLayerBlockCipher(256)
 	if err != nil {
 		t.Fatal(err)
 	}
 }
 
-func TestBlockCipherEncryption(t *testing.T) {
+func TestBlockCipherAesGcmCreateInvalid(t *testing.T) {
+	_, err := NewGCMLayerBlockCipher(8)
+	if err == nil {
+		t.Fatal(err)
+	}
+	_, err = NewGCMLayerBlockCipher(255)
+	if err == nil {
+		t.Fatal(err)
+	}
+}
+
+func TestBlockCipherAesGcmEncryption(t *testing.T) {
 	var (
 		symKey []byte                  = []byte("01234567890123456789012345678912")
 		opt    LayerBlockCipherOptions = LayerBlockCipherOptions{
@@ -36,18 +51,15 @@ func TestBlockCipherEncryption(t *testing.T) {
 		layerData []byte = []byte("this is some data")
 	)
 
-	h, err := NewLayerBlockCipherHandler()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	ciphertext, lbco, err := h.Encrypt(layerData, AeadAes256Gcm, opt)
+	bc, err := NewGCMLayerBlockCipher(256)
+	ciphertext, lbco, err := bc.Encrypt(layerData, opt)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Use a different instantiated object to indicate an invokation at a diff time
-	plaintext, _, err := h.Decrypt(ciphertext, lbco)
+	bc2, err := NewGCMLayerBlockCipher(256)
+	plaintext, _, err := bc2.Decrypt(ciphertext, lbco)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,7 +69,7 @@ func TestBlockCipherEncryption(t *testing.T) {
 	}
 }
 
-func TestBlockCipherEncryptionInvalidKey(t *testing.T) {
+func TestBlockCipherAesGcmEncryptionInvalidKey(t *testing.T) {
 	var (
 		symKey []byte                  = []byte("01234567890123456789012345678912")
 		opt    LayerBlockCipherOptions = LayerBlockCipherOptions{
@@ -66,12 +78,8 @@ func TestBlockCipherEncryptionInvalidKey(t *testing.T) {
 		layerData []byte = []byte("this is some data")
 	)
 
-	h, err := NewLayerBlockCipherHandler()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	ciphertext, lbco, err := h.Encrypt(layerData, AeadAes256Gcm, opt)
+	bc, err := NewGCMLayerBlockCipher(256)
+	ciphertext, lbco, err := bc.Encrypt(layerData, opt)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,21 +93,17 @@ func TestBlockCipherEncryptionInvalidKey(t *testing.T) {
 	}
 }
 
-func TestBlockCipherEncryptionInvalidKeyLength(t *testing.T) {
+func TestBlockCipherAesGcmEncryptionInvalidKeyLength(t *testing.T) {
 	var (
-		symKey []byte                  = []byte("01234567890123456789012345678912")
+		symKey []byte                  = []byte("012345")
 		opt    LayerBlockCipherOptions = LayerBlockCipherOptions{
 			SymmetricKey: symKey,
 		}
 		layerData []byte = []byte("this is some data")
 	)
 
-	h, err := NewLayerBlockCipherHandler()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	_, _, err = h.Encrypt(layerData, AeadAes128Gcm, opt)
+	bc, err := NewGCMLayerBlockCipher(256)
+	_, _, err = bc.Encrypt(layerData, opt)
 	if err == nil {
 		t.Fatal(err)
 	}
