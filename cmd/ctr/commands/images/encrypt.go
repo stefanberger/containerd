@@ -17,9 +17,7 @@
 package images
 
 import (
-	"encoding/base64"
 	"fmt"
-	"strings"
 
 	"github.com/containerd/containerd/cmd/ctr/commands"
 	encconfig "github.com/containerd/containerd/images/encryption/config"
@@ -106,15 +104,11 @@ var encryptCommand = cli.Command{
 			return err
 		}
 
-		dcparameters := make(map[string]string)
-		parameters := make(map[string]string)
+		dcparameters := make(map[string][][]byte)
+		parameters := make(map[string][][]byte)
 
-		if len(pubKeys) > 0 {
-			parameters["pubkeys"] = strings.Join(pubKeys, ",")
-		}
-		if len(x509s) > 0 {
-			parameters["x509s"] = strings.Join(x509s, ",")
-		}
+		parameters["pubkeys"] = pubKeys
+		parameters["x509s"] = x509s
 
 		layerInfos, err := getImageLayerInfo(client, ctx, local, layers32, context.StringSlice("platform"))
 		if err != nil {
@@ -130,7 +124,7 @@ var encryptCommand = cli.Command{
 		}
 
 		if len(gpgRecipients) > 0 {
-			parameters["gpg-recipients"] = strings.Join(gpgRecipients, ",")
+			parameters["gpg-recipients"] = gpgRecipients
 
 			gpgClient, err := createGPGClient(context)
 			if err != nil {
@@ -142,15 +136,11 @@ var encryptCommand = cli.Command{
 				return err
 			}
 
-			parameters["gpg-pubkeyringfile"] = base64.StdEncoding.EncodeToString(gpgPubRingFile)
+			parameters["gpg-pubkeyringfile"] = [][]byte{gpgPubRingFile}
 		}
 
-		if len(privKeys) > 0 {
-			dcparameters["privkeys"] = strings.Join(privKeys, ",")
-		}
-		if len(decX509s) > 0 {
-			dcparameters["x509s"] = strings.Join(decX509s, ",")
-		}
+		dcparameters["privkeys"] = privKeys
+		dcparameters["x509s"] = decX509s
 
 		cc := &encconfig.CryptoConfig{
 			Ec: &encconfig.EncryptConfig{

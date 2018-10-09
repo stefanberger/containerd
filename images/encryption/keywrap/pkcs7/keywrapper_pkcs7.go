@@ -19,8 +19,6 @@ package pkcs7
 import (
 	"crypto"
 	"crypto/x509"
-	"encoding/base64"
-	"strings"
 
 	"github.com/containerd/containerd/images/encryption/config"
 	"github.com/containerd/containerd/images/encryption/keywrap"
@@ -57,17 +55,13 @@ func (kw *pkcs7KeyWrapper) WrapKeys(ec *config.EncryptConfig, optsData []byte) (
 	return pkcs7.Encrypt(optsData, x509Certs)
 }
 
-func collectX509s(b64X509s string) ([]*x509.Certificate, error) {
-	if b64X509s == "" {
+func collectX509s(x509s [][]byte) ([]*x509.Certificate, error) {
+	if len(x509s) == 0 {
 		return nil, nil
 	}
 	var x509Certs []*x509.Certificate
-	for _, b64x509 := range strings.Split(b64X509s, ",") {
-		x509Str, err := base64.StdEncoding.DecodeString(b64x509)
-		if err != nil {
-			return nil, errors.New("Could not base64 decode x509 certificate")
-		}
-		x509Cert, err := utils.ParseCertificate(x509Str, "PKCS7")
+	for _, x509 := range x509s {
+		x509Cert, err := utils.ParseCertificate(x509, "PKCS7")
 		if err != nil {
 			return nil, err
 		}
@@ -76,7 +70,7 @@ func collectX509s(b64X509s string) ([]*x509.Certificate, error) {
 	return x509Certs, nil
 }
 
-func (kw *pkcs7KeyWrapper) GetPrivateKeys(dcparameters map[string]string) string {
+func (kw *pkcs7KeyWrapper) GetPrivateKeys(dcparameters map[string][][]byte) [][]byte {
 	return dcparameters["privkeys"]
 }
 
@@ -84,7 +78,7 @@ func (kw *pkcs7KeyWrapper) GetPrivateKeys(dcparameters map[string]string) string
 // This symmetric key is encrypted in the PGP payload.
 func (kw *pkcs7KeyWrapper) UnwrapKey(dc *config.DecryptConfig, pkcs7Packet []byte) ([]byte, error) {
 	privKeys := dc.Parameters["privkeys"]
-	if privKeys == "" {
+	if len(privKeys) == 0 {
 		return nil, errors.New("No private keys found for PKCS7 decryption")
 	}
 
@@ -101,12 +95,7 @@ func (kw *pkcs7KeyWrapper) UnwrapKey(dc *config.DecryptConfig, pkcs7Packet []byt
 		return nil, errors.Wrapf(err, "Could not parse PKCS7 packet")
 	}
 
-	for _, b64PrivKey := range strings.Split(privKeys, ",") {
-		privKey, err := base64.StdEncoding.DecodeString(b64PrivKey)
-		if err != nil {
-			return nil, errors.Wrapf(err, "PKCS7: Could not base64 decode privat key")
-		}
-
+	for _, privKey := range privKeys {
 		key, err := utils.ParsePrivateKey(privKey, "PKCS7")
 		if err != nil {
 			return nil, err
