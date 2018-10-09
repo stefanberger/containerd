@@ -17,7 +17,7 @@
 package encryption
 
 import (
-	"encoding/base64"
+	"github.com/containerd/containerd/images/encryption/config"
 	digest "github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"reflect"
@@ -65,26 +65,26 @@ vQIDAQAB
 )
 
 var (
-	ec *EncryptConfig
-	dc *DecryptConfig
+	ec *config.EncryptConfig
+	dc *config.DecryptConfig
 )
 
 func init() {
 	// TODO: Create various EncryptConfigs for testing purposes
-	dcparameters := make(map[string]string)
-	parameters := make(map[string]string)
+	dcparameters := make(map[string][][]byte)
+	parameters := make(map[string][][]byte)
 
-	parameters["pubkeys"] = base64.StdEncoding.EncodeToString(publicKey)
-	dcparameters["privkeys"] = base64.StdEncoding.EncodeToString(privateKey)
+	parameters["pubkeys"] = [][]byte{publicKey}
+	dcparameters["privkeys"] = [][]byte{privateKey}
 
-	ec = &EncryptConfig{
+	ec = &config.EncryptConfig{
 		Parameters: parameters,
-		Operation:  OperationAddRecipients,
-		Dc: DecryptConfig{
+		Operation:  config.OperationAddRecipients,
+		Dc: config.DecryptConfig{
 			Parameters: dcparameters,
 		},
 	}
-	dc = &DecryptConfig{
+	dc = &config.DecryptConfig{
 		Parameters: dcparameters,
 	}
 }
