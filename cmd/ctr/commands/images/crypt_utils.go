@@ -78,17 +78,7 @@ func processPrivateKeyFiles(keyFiles []string) ([][]byte, [][]byte, error) {
 }
 
 func createGPGClient(context *cli.Context) (encryption.GPGClient, error) {
-	gpgVersion := context.String("gpg-version")
-	v := new(encryption.GPGVersion)
-	switch gpgVersion {
-	case "v1":
-		*v = encryption.GPGv1
-	case "v2":
-		*v = encryption.GPGv2
-	default:
-		v = nil
-	}
-	return encryption.NewGPGClient(v, context.String("gpg-homedir"))
+	return encryption.NewGPGClient(context.String("gpg-version"), context.String("gpg-homedir"))
 }
 
 func getGPGPrivateKeys(context *cli.Context, gpgSecretKeyRingFiles [][]byte, layerInfos []encryption.LayerInfo, mustFindKey bool, dcparameters map[string][][]byte) error {
