@@ -858,7 +858,7 @@ func getImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descr
 // rootfs.Layer with the OCI descriptors adapted to point to the decrypted layers.
 // This function will determine the necessary key(s) to decrypt the image and search
 // for them using the gpg client
-func DecryptLayers(ctx context.Context, cs content.Store, layers []rootfs.Layer, gpgClient encryption.GPGClient, gpgVault encryption.GPGVault) ([]rootfs.Layer, error) {
+func DecryptLayers(ctx context.Context, cs content.Store, layers []rootfs.Layer, dcparameters map[string][][]byte) ([]rootfs.Layer, error) {
 	var (
 		newLayers  []rootfs.Layer
 		layerInfos []encryption.LayerInfo
@@ -891,16 +891,38 @@ func DecryptLayers(ctx context.Context, cs content.Store, layers []rootfs.Layer,
 	}
 
 	/* we have to find a GPG key until we also get other private keys passed */
-	mustFindKey := true
-	dcparameters := make(map[string][][]byte)
-
-	err = encryption.GPGGetPrivateKey(layerInfos, gpgClient, gpgVault, mustFindKey, dcparameters)
-	if err != nil {
-		return []rootfs.Layer{}, err
+	var (
+		gpgVault   encryption.GPGVault
+		gpgClient  encryption.GPGClient
+		gpgVersion string
+		gpgHomeDir string
+	)
+	gpgPrivateKeys := dcparameters["gpg-privatekeys"]
+	if len(gpgPrivateKeys) > 0 {
+		gpgVault = encryption.NewGPGVault()
+		gpgVault.AddSecretKeyRingDataArray(gpgPrivateKeys)
 	}
-	// FIXME: we need to set the following
-	//dcparameters["pemkeys"] = strings.Join(pemkeys, ",")
-	//dcparameters["derkeys"] = strings.Join(derkeys, ",")
+
+	haveGPGClient := dcparameters["gpg-client"]
+	if len(haveGPGClient) > 0 {
+		item := dcparameters["gpg-client-version"]
+		if len(item) == 1 {
+			gpgVersion = string(item[0])
+		}
+		item = dcparameters["gpg-client-homedir"]
+		if len(item) == 1 {
+			gpgHomeDir = string(item[0])
+		}
+		gpgClient, err = encryption.NewGPGClient(gpgVersion, gpgHomeDir)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	err = encryption.GPGGetPrivateKey(layerInfos, gpgClient, gpgVault, false, dcparameters)
+	if err != nil {
+		return nil, err
+	}
 
 	cc := &encconfig.CryptoConfig{
 		Dc: &encconfig.DecryptConfig{
