@@ -17,129 +17,130 @@
 package pkcs7
 
 import (
+	"github.com/containerd/containerd/images/encryption/config"
 	"testing"
 )
 
-var validPkcs7Ccs = []*CryptoConfig{
+var validPkcs7Ccs = []*config.CryptoConfig{
 	// Client key 1
-	&CryptoConfig{
-		Ec: &EncryptConfig{
-			Parameters: map[string]string{
-				"x509s": pkcs7ClientCert,
+	&config.CryptoConfig{
+		Ec: &config.EncryptConfig{
+			Parameters: map[string][][]byte{
+				"x509s": [][]byte{pkcs7ClientCert},
 			},
-			Operation: OperationAddRecipients,
-			Dc: DecryptConfig{
-				Parameters: map[string]string{
-					"privkeys": pkcs7ClientCertKey,
-					"x509s":    pkcs7ClientCert,
+			Operation: config.OperationAddRecipients,
+			Dc: config.DecryptConfig{
+				Parameters: map[string][][]byte{
+					"privkeys": [][]byte{pkcs7ClientCertKey},
+					"x509s":    [][]byte{pkcs7ClientCert},
 				},
 			},
 		},
-		Dc: &DecryptConfig{
-			Parameters: map[string]string{
-				"privkeys": pkcs7ClientCertKey,
-				"x509s":    pkcs7ClientCert,
+		Dc: &config.DecryptConfig{
+			Parameters: map[string][][]byte{
+				"privkeys": [][]byte{pkcs7ClientCertKey},
+				"x509s":    [][]byte{pkcs7ClientCert},
 			},
 		},
 	},
 
 	// Client key 2
-	&CryptoConfig{
-		Ec: &EncryptConfig{
-			Parameters: map[string]string{
-				"x509s": pkcs7Client2Cert,
+	&config.CryptoConfig{
+		Ec: &config.EncryptConfig{
+			Parameters: map[string][][]byte{
+				"x509s": [][]byte{pkcs7Client2Cert},
 			},
-			Operation: OperationAddRecipients,
-			Dc: DecryptConfig{
-				Parameters: map[string]string{
-					"privkeys": pkcs7Client2CertKey,
-					"x509s":    pkcs7Client2Cert,
+			Operation: config.OperationAddRecipients,
+			Dc: config.DecryptConfig{
+				Parameters: map[string][][]byte{
+					"privkeys": [][]byte{pkcs7Client2CertKey},
+					"x509s":    [][]byte{pkcs7Client2Cert},
 				},
 			},
 		},
-		Dc: &DecryptConfig{
-			Parameters: map[string]string{
-				"privkeys": pkcs7Client2CertKey,
-				"x509s":    pkcs7Client2Cert,
+		Dc: &config.DecryptConfig{
+			Parameters: map[string][][]byte{
+				"privkeys": [][]byte{pkcs7Client2CertKey},
+				"x509s":    [][]byte{pkcs7Client2Cert},
 			},
 		},
 	},
 
 	// Client key 1 without enc private key
-	&CryptoConfig{
-		Ec: &EncryptConfig{
-			Parameters: map[string]string{
-				"x509s": pkcs7ClientCert,
+	&config.CryptoConfig{
+		Ec: &config.EncryptConfig{
+			Parameters: map[string][][]byte{
+				"x509s": [][]byte{pkcs7ClientCert},
 			},
-			Operation: OperationAddRecipients,
+			Operation: config.OperationAddRecipients,
 		},
-		Dc: &DecryptConfig{
-			Parameters: map[string]string{
-				"privkeys": pkcs7ClientCertKey,
-				"x509s":    pkcs7ClientCert,
+		Dc: &config.DecryptConfig{
+			Parameters: map[string][][]byte{
+				"privkeys": [][]byte{pkcs7ClientCertKey},
+				"x509s":    [][]byte{pkcs7ClientCert},
 			},
 		},
 	},
 
 	// Client key 2 without enc private key
-	&CryptoConfig{
-		Ec: &EncryptConfig{
-			Parameters: map[string]string{
-				"x509s": pkcs7Client2Cert,
+	&config.CryptoConfig{
+		Ec: &config.EncryptConfig{
+			Parameters: map[string][][]byte{
+				"x509s": [][]byte{pkcs7Client2Cert},
 			},
-			Operation: OperationAddRecipients,
+			Operation: config.OperationAddRecipients,
 		},
-		Dc: &DecryptConfig{
-			Parameters: map[string]string{
-				"privkeys": pkcs7Client2CertKey,
-				"x509s":    pkcs7Client2Cert,
+		Dc: &config.DecryptConfig{
+			Parameters: map[string][][]byte{
+				"privkeys": [][]byte{pkcs7Client2CertKey},
+				"x509s":    [][]byte{pkcs7Client2Cert},
 			},
 		},
 	},
 }
 
-var invalidPkcs7Ccs = []*CryptoConfig{
+var invalidPkcs7Ccs = []*config.CryptoConfig{
 	// Client key 1 public with client 2 private decrypt
-	&CryptoConfig{
-		Ec: &EncryptConfig{
-			Parameters: map[string]string{
-				"x509s": pkcs7ClientCert,
+	&config.CryptoConfig{
+		Ec: &config.EncryptConfig{
+			Parameters: map[string][][]byte{
+				"x509s": [][]byte{pkcs7ClientCert},
 			},
-			Operation: OperationAddRecipients,
+			Operation: config.OperationAddRecipients,
 		},
-		Dc: &DecryptConfig{
-			Parameters: map[string]string{
-				"privkeys": pkcs7Client2CertKey,
-				"x509s":    pkcs7Client2Cert,
+		Dc: &config.DecryptConfig{
+			Parameters: map[string][][]byte{
+				"privkeys": [][]byte{pkcs7Client2CertKey},
+				"x509s":    [][]byte{pkcs7Client2Cert},
 			},
 		},
 	},
 
 	// Client key 1 public with no private key
-	&CryptoConfig{
-		Ec: &EncryptConfig{
-			Parameters: map[string]string{
-				"x509s": pkcs7ClientCert,
+	&config.CryptoConfig{
+		Ec: &config.EncryptConfig{
+			Parameters: map[string][][]byte{
+				"x509s": [][]byte{pkcs7ClientCert},
 			},
-			Operation: OperationAddRecipients,
+			Operation: config.OperationAddRecipients,
 		},
-		Dc: &DecryptConfig{
-			Parameters: map[string]string{},
+		Dc: &config.DecryptConfig{
+			Parameters: map[string][][]byte{},
 		},
 	},
 
 	// Invalid Client key 1 private key
-	&CryptoConfig{
-		Ec: &EncryptConfig{
-			Parameters: map[string]string{
-				"x509s": pkcs7ClientCertKey,
+	&config.CryptoConfig{
+		Ec: &config.EncryptConfig{
+			Parameters: map[string][][]byte{
+				"x509s": [][]byte{pkcs7ClientCertKey},
 			},
-			Operation: OperationAddRecipients,
+			Operation: config.OperationAddRecipients,
 		},
-		Dc: &DecryptConfig{
-			Parameters: map[string]string{
-				"privkeys": pkcs7ClientCert,
-				"x509s":    pkcs7ClientCert,
+		Dc: &config.DecryptConfig{
+			Parameters: map[string][][]byte{
+				"privkeys": [][]byte{pkcs7ClientCert},
+				"x509s":    [][]byte{pkcs7ClientCert},
 			},
 		},
 	},
@@ -147,10 +148,7 @@ var invalidPkcs7Ccs = []*CryptoConfig{
 
 func TestKeyWrapPkcs7Success(t *testing.T) {
 	for _, cc := range validPkcs7Ccs {
-		kw, ok := keyWrappers["pkcs7"]
-		if !ok {
-			t.Fatal("Unable to find key wrap service")
-		}
+		kw := NewKeyWrapper()
 
 		data := []byte("This is some secret text")
 
@@ -172,10 +170,7 @@ func TestKeyWrapPkcs7Success(t *testing.T) {
 
 func TestKeyWrapPkcs7Invalid(t *testing.T) {
 	for _, cc := range invalidPkcs7Ccs {
-		kw, ok := keyWrappers["pkcs7"]
-		if !ok {
-			t.Fatal("Unable to find key wrap service")
-		}
+		kw := NewKeyWrapper()
 
 		data := []byte("This is some secret text")
 

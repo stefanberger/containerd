@@ -17,132 +17,133 @@
 package pgp
 
 import (
+	"github.com/containerd/containerd/images/encryption/config"
 	"testing"
 )
 
-var validGpgCcs = []*CryptoConfig{
+var validGpgCcs = []*config.CryptoConfig{
 	// Key 1
-	&CryptoConfig{
-		Ec: &EncryptConfig{
-			Parameters: map[string]string{
-				"gpg-pubkeyringfile": gpgPubKeyRing,
-				"gpg-recipients":     gpgRecipient1,
+	&config.CryptoConfig{
+		Ec: &config.EncryptConfig{
+			Parameters: map[string][][]byte{
+				"gpg-pubkeyringfile": [][]byte{gpgPubKeyRing},
+				"gpg-recipients":     [][]byte{gpgRecipient1},
 			},
-			Operation: OperationAddRecipients,
-			Dc: DecryptConfig{
-				Parameters: map[string]string{
-					"gpg-privatekeys": gpgPrivKey1,
+			Operation: config.OperationAddRecipients,
+			Dc: config.DecryptConfig{
+				Parameters: map[string][][]byte{
+					"gpg-privatekeys": [][]byte{gpgPrivKey1},
 				},
 			},
 		},
 
-		Dc: &DecryptConfig{
-			Parameters: map[string]string{
-				"gpg-privatekeys": gpgPrivKey1,
+		Dc: &config.DecryptConfig{
+			Parameters: map[string][][]byte{
+				"gpg-privatekeys": [][]byte{gpgPrivKey1},
 			},
 		},
 	},
 
 	// Key 2
-	&CryptoConfig{
-		Ec: &EncryptConfig{
-			Parameters: map[string]string{
-				"gpg-pubkeyringfile": gpgPubKeyRing,
-				"gpg-recipients":     gpgRecipient2,
+	&config.CryptoConfig{
+		Ec: &config.EncryptConfig{
+			Parameters: map[string][][]byte{
+				"gpg-pubkeyringfile": [][]byte{gpgPubKeyRing},
+				"gpg-recipients":     [][]byte{gpgRecipient2},
 			},
-			Operation: OperationAddRecipients,
-			Dc: DecryptConfig{
-				Parameters: map[string]string{
-					"gpg-privatekeys": gpgPrivKey2,
+			Operation: config.OperationAddRecipients,
+			Dc: config.DecryptConfig{
+				Parameters: map[string][][]byte{
+					"gpg-privatekeys": [][]byte{gpgPrivKey2},
 				},
 			},
 		},
 
-		Dc: &DecryptConfig{
-			Parameters: map[string]string{
-				"gpg-privatekeys": gpgPrivKey2,
+		Dc: &config.DecryptConfig{
+			Parameters: map[string][][]byte{
+				"gpg-privatekeys": [][]byte{gpgPrivKey2},
 			},
 		},
 	},
 
 	// Key 1 without enc private key
-	&CryptoConfig{
-		Ec: &EncryptConfig{
-			Parameters: map[string]string{
-				"gpg-pubkeyringfile": gpgPubKeyRing,
-				"gpg-recipients":     gpgRecipient1,
+	&config.CryptoConfig{
+		Ec: &config.EncryptConfig{
+			Parameters: map[string][][]byte{
+				"gpg-pubkeyringfile": [][]byte{gpgPubKeyRing},
+				"gpg-recipients":     [][]byte{gpgRecipient1},
 			},
-			Operation: OperationAddRecipients,
+			Operation: config.OperationAddRecipients,
 		},
 
-		Dc: &DecryptConfig{
-			Parameters: map[string]string{
-				"gpg-privatekeys": gpgPrivKey1,
+		Dc: &config.DecryptConfig{
+			Parameters: map[string][][]byte{
+				"gpg-privatekeys": [][]byte{gpgPrivKey1},
 			},
 		},
 	},
 
 	// Key 2 without enc private key
-	&CryptoConfig{
-		Ec: &EncryptConfig{
-			Parameters: map[string]string{
-				"gpg-pubkeyringfile": gpgPubKeyRing,
-				"gpg-recipients":     gpgRecipient2,
+	&config.CryptoConfig{
+		Ec: &config.EncryptConfig{
+			Parameters: map[string][][]byte{
+				"gpg-pubkeyringfile": [][]byte{gpgPubKeyRing},
+				"gpg-recipients":     [][]byte{gpgRecipient2},
 			},
-			Operation: OperationAddRecipients,
+			Operation: config.OperationAddRecipients,
 		},
 
-		Dc: &DecryptConfig{
-			Parameters: map[string]string{
-				"gpg-privatekeys": gpgPrivKey2,
+		Dc: &config.DecryptConfig{
+			Parameters: map[string][][]byte{
+				"gpg-privatekeys": [][]byte{gpgPrivKey2},
 			},
 		},
 	},
 }
 
-var invalidGpgCcs = []*CryptoConfig{
+var invalidGpgCcs = []*config.CryptoConfig{
 	// Client key 1 public with client 2 private decrypt
-	&CryptoConfig{
-		Ec: &EncryptConfig{
-			Parameters: map[string]string{
-				"gpg-pubkeyringfile": gpgPubKeyRing,
-				"gpg-recipients":     gpgRecipient1,
+	&config.CryptoConfig{
+		Ec: &config.EncryptConfig{
+			Parameters: map[string][][]byte{
+				"gpg-pubkeyringfile": [][]byte{gpgPubKeyRing},
+				"gpg-recipients":     [][]byte{gpgRecipient1},
 			},
-			Operation: OperationAddRecipients,
+			Operation: config.OperationAddRecipients,
 		},
-		Dc: &DecryptConfig{
-			Parameters: map[string]string{
-				"gpg-privatekeys": gpgPrivKey2,
+		Dc: &config.DecryptConfig{
+			Parameters: map[string][][]byte{
+				"gpg-privatekeys": [][]byte{gpgPrivKey2},
 			},
 		},
 	},
 
 	// Client key 1 public with no private key
-	&CryptoConfig{
-		Ec: &EncryptConfig{
-			Parameters: map[string]string{
-				"gpg-pubkeyringfile": gpgPubKeyRing,
-				"gpg-recipients":     gpgRecipient1,
+	&config.CryptoConfig{
+		Ec: &config.EncryptConfig{
+			Parameters: map[string][][]byte{
+				"gpg-pubkeyringfile": [][]byte{gpgPubKeyRing},
+				"gpg-recipients":     [][]byte{gpgRecipient1},
 			},
-			Operation: OperationAddRecipients,
+			Operation: config.OperationAddRecipients,
 		},
-		Dc: &DecryptConfig{
-			Parameters: map[string]string{},
+		Dc: &config.DecryptConfig{
+			Parameters: map[string][][]byte{},
 		},
 	},
 
 	// Invalid Client key 1 private key
-	&CryptoConfig{
-		Ec: &EncryptConfig{
-			Parameters: map[string]string{
-				"gpg-pubkeyringfile": gpgPrivKey1,
-				"gpg-recipients":     gpgRecipient1,
+	&config.CryptoConfig{
+		Ec: &config.EncryptConfig{
+			Parameters: map[string][][]byte{
+				"gpg-pubkeyringfile": [][]byte{gpgPrivKey1},
+				"gpg-recipients":     [][]byte{gpgRecipient1},
 			},
-			Operation: OperationAddRecipients,
+			Operation: config.OperationAddRecipients,
 		},
-		Dc: &DecryptConfig{
-			Parameters: map[string]string{
-				"gpg-privatekeys": gpgPrivKey1,
+		Dc: &config.DecryptConfig{
+			Parameters: map[string][][]byte{
+				"gpg-privatekeys": [][]byte{gpgPrivKey1},
 			},
 		},
 	},
@@ -150,10 +151,7 @@ var invalidGpgCcs = []*CryptoConfig{
 
 func TestKeyWrapGpgSuccess(t *testing.T) {
 	for _, cc := range validGpgCcs {
-		kw, ok := keyWrappers["pgp"]
-		if !ok {
-			t.Fatal("Unable to find key wrap service")
-		}
+		kw := NewKeyWrapper()
 
 		data := []byte("This is some secret text")
 
@@ -175,10 +173,7 @@ func TestKeyWrapGpgSuccess(t *testing.T) {
 
 func TestKeyWrapGpgInvalid(t *testing.T) {
 	for _, cc := range invalidGpgCcs {
-		kw, ok := keyWrappers["pgp"]
-		if !ok {
-			t.Fatal("Unable to find key wrap service")
-		}
+		kw := NewKeyWrapper()
 
 		data := []byte("This is some secret text")
 
