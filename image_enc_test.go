@@ -21,12 +21,11 @@ import (
 	"runtime"
 	"testing"
 
-	"encoding/base64"
-
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/images"
 	"github.com/containerd/containerd/images/encryption"
+	encconfig "github.com/containerd/containerd/images/encryption/config"
 	"github.com/containerd/containerd/platforms"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )
@@ -134,17 +133,17 @@ func TestImageEncryption(t *testing.T) {
 		Platforms: pl,
 	}
 
-	dcparameters := make(map[string]string)
-	parameters := make(map[string]string)
+	dcparameters := make(map[string][][]byte)
+	parameters := make(map[string][][]byte)
 
-	parameters["pubkeys"] = base64.StdEncoding.EncodeToString(publicKey)
-	dcparameters["privkeys"] = base64.StdEncoding.EncodeToString(privateKey)
+	parameters["pubkeys"] = [][]byte{publicKey}
+	dcparameters["privkeys"] = [][]byte{privateKey}
 
-	cc := &encryption.CryptoConfig{
-		Ec: &encryption.EncryptConfig{
+	cc := &encconfig.CryptoConfig{
+		Ec: &encconfig.EncryptConfig{
 			Parameters: parameters,
-			Operation:  encryption.OperationAddRecipients,
-			Dc: encryption.DecryptConfig{
+			Operation:  encconfig.OperationAddRecipients,
+			Dc: encconfig.DecryptConfig{
 				Parameters: dcparameters,
 			},
 		},
@@ -163,8 +162,8 @@ func TestImageEncryption(t *testing.T) {
 		t.Fatal("Encrypted image does not have encrypted layers")
 	}
 
-	cc = &encryption.CryptoConfig{
-		Dc: &encryption.DecryptConfig{
+	cc = &encconfig.CryptoConfig{
+		Dc: &encconfig.DecryptConfig{
 			Parameters: dcparameters,
 		},
 	}
