@@ -409,3 +409,39 @@ func GPGGetPrivateKey(layerInfos []LayerInfo, gpgClient GPGClient, gpgVault GPGV
 
 	return nil
 }
+
+// GPGSetupPrivateKeys uses the gpg specific parameters in the dcparameters map
+// to get the private keys needed for decryption the give layers
+func GPGSetupPrivateKeys(dcparameters map[string][][]byte, layerInfos []LayerInfo) error {
+	/* we have to find a GPG key until we also get other private keys passed */
+	var (
+		gpgVault   GPGVault
+		gpgClient  GPGClient
+		gpgVersion string
+		gpgHomeDir string
+		err        error
+	)
+	gpgPrivateKeys := dcparameters["gpg-privatekeys"]
+	if len(gpgPrivateKeys) > 0 {
+		gpgVault = NewGPGVault()
+		gpgVault.AddSecretKeyRingDataArray(gpgPrivateKeys)
+	}
+
+	haveGPGClient := dcparameters["gpg-client"]
+	if len(haveGPGClient) > 0 {
+		item := dcparameters["gpg-client-version"]
+		if len(item) == 1 {
+			gpgVersion = string(item[0])
+		}
+		item = dcparameters["gpg-client-homedir"]
+		if len(item) == 1 {
+			gpgHomeDir = string(item[0])
+		}
+		gpgClient, err = NewGPGClient(gpgVersion, gpgHomeDir)
+		if err != nil {
+			return err
+		}
+	}
+
+	return GPGGetPrivateKey(layerInfos, gpgClient, gpgVault, false, dcparameters)
+}
