@@ -91,18 +91,12 @@ func (kw *gpgKeyWrapper) WrapKeys(ec *config.EncryptConfig, optsData []byte) ([]
 // UnwrapKey unwraps the symmetric key with which the layer is encrypted
 // This symmetric key is encrypted in the PGP payload.
 func (kw *gpgKeyWrapper) UnwrapKey(dc *config.DecryptConfig, pgpPacket []byte) ([]byte, error) {
-	b64pgpPrivateKeys, b64pgpPrivateKeysPwd, err := kw.getKeyParameters(dc.Parameters)
+	pgpPrivateKeys, pgpPrivateKeysPwd, err := kw.getKeyParameters(dc.Parameters)
 	if err != nil {
 		return nil, err
 	}
 
-	b64pgpPrivateKeysPwdArray := strings.Split(b64pgpPrivateKeysPwd, ",")
-
-	for idx, b64pgpPrivateKey := range strings.Split(b64pgpPrivateKeys, ",") {
-		pgpPrivateKey, err := base64.StdEncoding.DecodeString(b64pgpPrivateKey)
-		if err != nil {
-			return nil, errors.Wrap(err, "Could not base64 decode PGP private key")
-		}
+	for idx, pgpPrivateKey := range pgpPrivateKeys {
 		r := bytes.NewBuffer(pgpPrivateKey)
 		entityList, err := openpgp.ReadKeyRing(r)
 		if err != nil {
@@ -110,9 +104,9 @@ func (kw *gpgKeyWrapper) UnwrapKey(dc *config.DecryptConfig, pgpPacket []byte) (
 		}
 
 		var prompt openpgp.PromptFunction
-		if len(b64pgpPrivateKeysPwdArray) > idx {
+		if len(pgpPrivateKeysPwd) > idx {
 			prompt = func(keys []openpgp.Key, symmetric bool) ([]byte, error) {
-				return base64.StdEncoding.DecodeString(b64pgpPrivateKeysPwdArray[idx])
+				return pgpPrivateKeysPwd[idx], nil
 			}
 		}
 
@@ -187,15 +181,15 @@ func (kw *gpgKeyWrapper) GetRecipients(b64pgpPackets string) ([]string, error) {
 	return array, nil
 }
 
-func (kw *gpgKeyWrapper) GetPrivateKeys(dcparameters map[string]string) string {
+func (kw *gpgKeyWrapper) GetPrivateKeys(dcparameters map[string][][]byte) [][]byte {
 	return dcparameters["gpg-privatekeys"]
 }
 
-func (kw *gpgKeyWrapper) getKeyParameters(dcparameters map[string]string) (string, string, error) {
+func (kw *gpgKeyWrapper) getKeyParameters(dcparameters map[string][][]byte) ([][]byte, [][]byte, error) {
 
 	privKeys := kw.GetPrivateKeys(dcparameters)
-	if privKeys == "" {
-		return "", "", errors.New("GPG: Missing private key parameter")
+	if len(privKeys) == 0 {
+		return nil, nil, errors.New("GPG: Missing private key parameter")
 	}
 
 	return privKeys, dcparameters["gpg-privatekeys-password"], nil
@@ -204,11 +198,11 @@ func (kw *gpgKeyWrapper) getKeyParameters(dcparameters map[string]string) (strin
 // createEntityList creates the opengpg EntityList by reading the KeyRing
 // first and then filtering out recipients' keys
 func (kw *gpgKeyWrapper) createEntityList(ec *config.EncryptConfig) (openpgp.EntityList, error) {
-	pgpPubringfile, err := base64.StdEncoding.DecodeString(ec.Parameters["gpg-pubkeyringfile"])
-	if err != nil {
-		return nil, errors.Wrapf(err, "")
+	pgpPubringFile := ec.Parameters["gpg-pubkeyringfile"]
+	if len(pgpPubringFile) == 0 {
+		return nil, nil
 	}
-	r := bytes.NewReader(pgpPubringfile)
+	r := bytes.NewReader(pgpPubringFile[0])
 
 	entityList, err := openpgp.ReadKeyRing(r)
 	if err != nil {
@@ -216,14 +210,13 @@ func (kw *gpgKeyWrapper) createEntityList(ec *config.EncryptConfig) (openpgp.Ent
 	}
 
 	gpgRecipients := ec.Parameters["gpg-recipients"]
-	if gpgRecipients == "" {
+	if len(gpgRecipients) == 0 {
 		return nil, nil
 	}
 
-	recipients := strings.Split(gpgRecipients, ",")
 	rSet := make(map[string]int)
-	for _, r := range recipients {
-		rSet[r] = 0
+	for _, r := range gpgRecipients {
+		rSet[string(r)] = 0
 	}
 
 	var filteredList openpgp.EntityList
@@ -233,10 +226,11 @@ func (kw *gpgKeyWrapper) createEntityList(ec *config.EncryptConfig) (openpgp.Ent
 			if err != nil {
 				return nil, err
 			}
-			for _, r := range recipients {
-				if strings.Compare(addr.Name, r) == 0 || strings.Compare(addr.Address, r) == 0 {
+			for _, r := range gpgRecipients {
+				recp := string(r)
+				if strings.Compare(addr.Name, recp) == 0 || strings.Compare(addr.Address, recp) == 0 {
 					filteredList = append(filteredList, entity)
-					rSet[r] = rSet[r] + 1
+					rSet[recp] = rSet[recp] + 1
 				}
 			}
 		}
