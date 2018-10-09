@@ -23,6 +23,8 @@ import (
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/images"
+	"github.com/containerd/containerd/images/encryption"
+	encconfig "github.com/containerd/containerd/images/encryption/config"
 	"github.com/containerd/containerd/platforms"
 	"github.com/containerd/containerd/rootfs"
 	digest "github.com/opencontainers/go-digest"
@@ -142,11 +144,6 @@ func (i *image) Unpack(ctx context.Context, snapshotterName string) error {
 		return err
 	}
 
-	layers, err = images.DecryptLayers(ctx, i.ContentStore(), layers, i.dcparameters)
-	if err != nil {
-		return err
-	}
-
 	var (
 		sn = i.client.SnapshotService(snapshotterName)
 		a  = i.client.DiffService()
@@ -155,8 +152,33 @@ func (i *image) Unpack(ctx context.Context, snapshotterName string) error {
 		chain    []digest.Digest
 		unpacked bool
 	)
-	for _, layer := range layers {
-		unpacked, err = rootfs.ApplyLayer(ctx, layer, chain, sn, a)
+
+	for id, layer := range layers {
+		var cc encconfig.CryptoConfig
+		if i.dcparameters != nil || len(i.dcparameters) > 0 {
+			ds := platforms.DefaultSpec()
+			layerInfo := encryption.LayerInfo{
+				Index: uint32(id),
+				Descriptor: ocispec.Descriptor{
+					Digest:      layer.Blob.Digest,
+					Platform:    &ds,
+					Annotations: layer.Blob.Annotations,
+				},
+			}
+
+			err = encryption.GPGSetupPrivateKeys(i.dcparameters, []encryption.LayerInfo{layerInfo})
+			if err != nil {
+				return err
+			}
+
+			cc = encconfig.CryptoConfig{
+				Dc: &encconfig.DecryptConfig{
+					Parameters: i.dcparameters,
+				},
+			}
+		}
+
+		unpacked, err = rootfs.ApplyLayer(ctx, layer, chain, sn, a, cc)
 		if err != nil {
 			return err
 		}

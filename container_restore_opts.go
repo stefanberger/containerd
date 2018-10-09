@@ -22,6 +22,7 @@ import (
 	"github.com/containerd/containerd/containers"
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/images"
+	encconfig "github.com/containerd/containerd/images/encryption/config"
 	"github.com/containerd/containerd/platforms"
 	"github.com/gogo/protobuf/proto"
 	ptypes "github.com/gogo/protobuf/types"
@@ -142,7 +143,8 @@ func WithRestoreRW(ctx context.Context, id string, client *Client, checkpoint Im
 			return err
 		}
 
-		if _, err := client.DiffService().Apply(ctx, *rw, mounts); err != nil {
+		var cc encconfig.CryptoConfig
+		if _, err := client.DiffService().Apply(ctx, *rw, mounts, cc); err != nil {
 			return err
 		}
 		return nil
