@@ -17,9 +17,6 @@
 package jwe
 
 import (
-	"encoding/base64"
-	"strings"
-
 	"github.com/containerd/containerd/images/encryption/config"
 	"github.com/containerd/containerd/images/encryption/keywrap"
 	"github.com/containerd/containerd/images/encryption/utils"
@@ -72,16 +69,11 @@ func (kw *jweKeyWrapper) UnwrapKey(dc *config.DecryptConfig, jweString []byte) (
 	}
 
 	privKeys := kw.GetPrivateKeys(dc.Parameters)
-	if privKeys == "" {
+	if len(privKeys) == 0 {
 		return nil, errors.New("No private keys found for JWE decryption")
 	}
 
-	for _, b64PrivKey := range strings.Split(privKeys, ",") {
-		privKey, err := base64.StdEncoding.DecodeString(b64PrivKey)
-		if err != nil {
-			return nil, errors.Wrapf(err, "JWE: Could not base64 decode privat key")
-		}
-
+	for _, privKey := range privKeys {
 		key, err := utils.ParsePrivateKey(privKey, "JWE")
 		if err != nil {
 			return nil, err
@@ -94,7 +86,7 @@ func (kw *jweKeyWrapper) UnwrapKey(dc *config.DecryptConfig, jweString []byte) (
 	return nil, errors.New("JWE: No suitable private key found for decryption")
 }
 
-func (kw *jweKeyWrapper) GetPrivateKeys(dcparameters map[string]string) string {
+func (kw *jweKeyWrapper) GetPrivateKeys(dcparameters map[string][][]byte) [][]byte {
 	return dcparameters["privkeys"]
 }
 
@@ -106,16 +98,11 @@ func (kw *jweKeyWrapper) GetRecipients(b64jwes string) ([]string, error) {
 	return []string{"[jwe]"}, nil
 }
 
-func addPubKeys(joseRecipients *[]jose.Recipient, b64PubKeys string) error {
-	if b64PubKeys == "" {
+func addPubKeys(joseRecipients *[]jose.Recipient, pubKeys [][]byte) error {
+	if len(pubKeys) == 0 {
 		return nil
 	}
-	for _, b64PubKey := range strings.Split(b64PubKeys, ",") {
-		pubKey, err := base64.StdEncoding.DecodeString(b64PubKey)
-		if err != nil {
-			return errors.Wrapf(err, "Could not base64 decode public key")
-		}
-
+	for _, pubKey := range pubKeys {
 		key, err := utils.ParsePublicKey(pubKey, "JWE")
 		if err != nil {
 			return err

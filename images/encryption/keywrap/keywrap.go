@@ -26,9 +26,9 @@ type KeyWrapper interface {
 	WrapKeys(ec *config.EncryptConfig, optsData []byte) ([]byte, error)
 	UnwrapKey(dc *config.DecryptConfig, annotation []byte) ([]byte, error)
 	GetAnnotationID() string
-	// GetPrivateKeys (optional) gets the string of private keys. It is an optional implementation
+	// GetPrivateKeys (optional) gets the array of private keys. It is an optional implementation
 	// as in some key services, a private key may not be exportable (i.e. HSM)
-	GetPrivateKeys(dcparameters map[string]string) string
+	GetPrivateKeys(dcparameters map[string][][]byte) [][]byte
 
 	// GetKeyIdsFromPacket (optional) gets a list of key IDs. This is optional as some encryption
 	// schemes may not have a notion of key IDs
