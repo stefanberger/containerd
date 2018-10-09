@@ -384,11 +384,13 @@ func (c *Client) Pull(ctx context.Context, ref string, opts ...RemoteOpt) (Image
 	i := NewImageWithPlatform(c, img, pullCtx.PlatformMatcher)
 
 	if pullCtx.Unpack {
-		dcparameters, err := utils.SortDecryptionKeys(c.decryptionKeys)
-		if err != nil {
-			return nil, err
+		if c.decryptionKeys != "" {
+			dcparameters, err := utils.SortDecryptionKeys(c.decryptionKeys)
+			if err != nil {
+				return nil, err
+			}
+			i.SetDecryptionParameters(dcparameters)
 		}
-		i.SetDecryptionParameters(dcparameters)
 		if err := i.Unpack(ctx, pullCtx.Snapshotter); err != nil {
 			return nil, errors.Wrapf(err, "failed to unpack image on snapshotter %s", pullCtx.Snapshotter)
 		}
