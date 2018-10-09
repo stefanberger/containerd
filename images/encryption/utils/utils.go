@@ -19,8 +19,10 @@ package utils
 import (
 	"bytes"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/pem"
 	"fmt"
+	"strings"
 
 	"golang.org/x/crypto/openpgp"
 
@@ -102,9 +104,43 @@ func IsCertificate(data []byte) bool {
 	return err == nil
 }
 
-/// IsGPGPrivateKeyRing returns true in case the given byte array represents a GPG private key ring file
+// IsGPGPrivateKeyRing returns true in case the given byte array represents a GPG private key ring file
 func IsGPGPrivateKeyRing(data []byte) bool {
 	r := bytes.NewBuffer(data)
 	_, err := openpgp.ReadKeyRing(r)
 	return err == nil
+}
+
+// SortDecryptionKeys parses a list of comma separated base64 entries and sorts the data into
+// a map. Each entry in the list may be either a GPG private key ring, private key, or x.509
+// certificate
+func SortDecryptionKeys(b64ItemList string) (map[string][][]byte, error) {
+	dcparameters := make(map[string][][]byte)
+
+	for _, b64Item := range strings.Split(b64ItemList, ",") {
+		item, err := base64.StdEncoding.DecodeString(b64Item)
+		if err != nil {
+			return nil, errors.New("Could not base64 decode a passed decryption key")
+		}
+		var key string
+		if IsPrivateKey(item) {
+			key = "privkeys"
+		} else if IsCertificate(item) {
+			key = "x509s"
+		} else if IsGPGPrivateKeyRing(item) {
+			key = "gpg-privatekeys"
+		}
+		if key != "" {
+			values := dcparameters[key]
+			if values == nil {
+				dcparameters[key] = [][]byte{item}
+			} else {
+				dcparameters[key] = append(dcparameters[key], item)
+			}
+		} else {
+			return nil, errors.New("Unknown decryption key type")
+		}
+	}
+
+	return dcparameters, nil
 }
