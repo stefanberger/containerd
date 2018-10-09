@@ -29,6 +29,7 @@ import (
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/images"
+	encconfig "github.com/containerd/containerd/images/encryption/config"
 	"github.com/containerd/containerd/mount"
 	"github.com/containerd/containerd/platforms"
 	"github.com/gogo/protobuf/proto"
@@ -92,7 +93,9 @@ func WithCheckpoint(im Image, snapshotKey string) NewContainerOpts {
 			if err != nil {
 				return errors.Wrapf(err, "unable to get mounts for %s", snapshotKey)
 			}
-			if _, err := client.DiffService().Apply(ctx, *rw, mounts); err != nil {
+
+			var cc encconfig.CryptoConfig
+			if _, err := client.DiffService().Apply(ctx, *rw, mounts, cc); err != nil {
 				return errors.Wrap(err, "unable to apply rw diff")
 			}
 		}
