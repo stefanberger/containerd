@@ -84,7 +84,20 @@ func GuessGPGVersion() GPGVersion {
 
 // NewGPGClient creates a new GPGClient object representing the given version
 // and using the given home directory
-func NewGPGClient(version *GPGVersion, homedir string) (GPGClient, error) {
+func NewGPGClient(gpgVersion, gpgHomeDir string) (GPGClient, error) {
+	v := new(GPGVersion)
+	switch gpgVersion {
+	case "v1":
+		*v = GPGv1
+	case "v2":
+		*v = GPGv2
+	default:
+		v = nil
+	}
+	return newGPGClient(v, gpgHomeDir)
+}
+
+func newGPGClient(version *GPGVersion, homedir string) (GPGClient, error) {
 	var gpgVersion GPGVersion
 	if version != nil {
 		gpgVersion = *version
