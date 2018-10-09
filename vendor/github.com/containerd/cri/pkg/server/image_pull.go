@@ -101,15 +101,10 @@ func (c *criService) PullImage(ctx context.Context, r *runtime.PullImageRequest)
 	// one key is supported
 	privateKeyStr, _, err := ParseAuth(r.GetAuth())
 
-	privateKey, err := base64.StdEncoding.DecodeString(privateKeyStr)
-	if err != nil {
-		return nil, err
-	}
-
 	image, err := c.client.Pull(ctx, ref,
 		containerd.WithSchema1Conversion,
 		containerd.WithResolver(resolver),
-		containerd.WithDecryptionKeys(privateKey),
+		containerd.WithDecryptionKeys(privateKeyStr),
 		containerd.WithPullSnapshotter(c.config.ContainerdConfig.Snapshotter),
 		containerd.WithPullUnpack,
 	)

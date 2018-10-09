@@ -23,7 +23,6 @@ import (
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/images"
-	"github.com/containerd/containerd/images/encryption"
 	"github.com/containerd/containerd/platforms"
 	"github.com/containerd/containerd/rootfs"
 	digest "github.com/opencontainers/go-digest"
@@ -52,10 +51,8 @@ type Image interface {
 	IsUnpacked(context.Context, string) (bool, error)
 	// ContentStore provides a content store which contains image blob data
 	ContentStore() content.Store
-	// SetGPGClient sets the GPG client to use when decrypting the image
-	SetGPGClient(gpgClient encryption.GPGClient)
-	// SetGPGVault sets the GPGVault to use when decrypting the image
-	SetGPGVault(gpgVault encryption.GPGVault)
+	// SetDecryptionParameters sets the map holding the decryption keys
+	SetDecryptionParameters(dcparameters map[string][][]byte)
 }
 
 var _ = (Image)(&image{})
@@ -81,10 +78,9 @@ func NewImageWithPlatform(client *Client, i images.Image, platform platforms.Mat
 type image struct {
 	client *Client
 
-	i         images.Image
-	platform  platforms.MatchComparer
-	gpgClient encryption.GPGClient
-	gpgVault  encryption.GPGVault
+	i            images.Image
+	platform     platforms.MatchComparer
+	dcparameters map[string][][]byte
 }
 
 func (i *image) Name() string {
@@ -146,7 +142,7 @@ func (i *image) Unpack(ctx context.Context, snapshotterName string) error {
 		return err
 	}
 
-	layers, err = images.DecryptLayers(ctx, i.ContentStore(), layers, i.gpgClient, i.gpgVault)
+	layers, err = images.DecryptLayers(ctx, i.ContentStore(), layers, i.dcparameters)
 	if err != nil {
 		return err
 	}
@@ -235,10 +231,6 @@ func (i *image) ContentStore() content.Store {
 	return i.client.ContentStore()
 }
 
-func (i *image) SetGPGClient(gpgClient encryption.GPGClient) {
-	i.gpgClient = gpgClient
-}
-
-func (i *image) SetGPGVault(gpgVault encryption.GPGVault) {
-	i.gpgVault = gpgVault
+func (i *image) SetDecryptionParameters(dcparameters map[string][][]byte) {
+	i.dcparameters = dcparameters
 }
