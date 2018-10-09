@@ -404,6 +404,14 @@ func RootFS(ctx context.Context, provider content.Provider, configDesc ocispec.D
 	return config.RootFS.DiffIDs, nil
 }
 
+// IsEncryptedDiff returns true if mediaType is a known encrypted media type.
+func IsEncryptedDiff(ctx context.Context, mediaType string) bool {
+	if mediaType == MediaTypeDockerSchema2LayerGzipEnc || mediaType == MediaTypeDockerSchema2LayerEnc {
+		return true
+	}
+	return false
+}
+
 // IsCompressedDiff returns true if mediaType is a known compressed diff media type.
 // It returns false if the media type is a diff, but not compressed. If the media type
 // is not a known diff type, it returns errdefs.ErrNotImplemented
@@ -475,6 +483,31 @@ func encryptLayer(cc *encconfig.CryptoConfig, data []byte, desc ocispec.Descript
 		return ocispec.Descriptor{}, []byte{}, errors.Errorf("Encryption: unsupporter layer MediaType: %s\n", desc.MediaType)
 	}
 
+	return newDesc, p, nil
+}
+
+// DecryptBlob decrypts the layer blob using the CryptoConfig and creates a new OCI Descriptor.
+// The caller is expected to store the returned plain data and OCI Descriptor
+func DecryptBlob(cc *encconfig.CryptoConfig, data []byte, desc ocispec.Descriptor) (ocispec.Descriptor, []byte, error) {
+	p, err := encryption.DecryptLayer(cc.Dc, data, desc)
+	if err != nil {
+		return ocispec.Descriptor{}, []byte{}, err
+	}
+
+	newDesc := ocispec.Descriptor{
+		Digest:   digest.FromBytes(p),
+		Size:     int64(len(p)),
+		Platform: desc.Platform,
+	}
+
+	switch desc.MediaType {
+	case MediaTypeDockerSchema2LayerGzipEnc:
+		newDesc.MediaType = MediaTypeDockerSchema2LayerGzip
+	case MediaTypeDockerSchema2LayerEnc:
+		newDesc.MediaType = MediaTypeDockerSchema2Layer
+	default:
+		return ocispec.Descriptor{}, []byte{}, errors.Errorf("Decryption: unsupporter layer MediaType: %s\n", desc.MediaType)
+	}
 	return newDesc, p, nil
 }
 

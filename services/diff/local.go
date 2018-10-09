@@ -23,6 +23,7 @@ import (
 	"github.com/containerd/containerd/api/types"
 	"github.com/containerd/containerd/diff"
 	"github.com/containerd/containerd/errdefs"
+	encconfig "github.com/containerd/containerd/images/encryption/config"
 	"github.com/containerd/containerd/mount"
 	"github.com/containerd/containerd/plugin"
 	"github.com/containerd/containerd/services"
@@ -97,10 +98,11 @@ func (l *local) Apply(ctx context.Context, er *diffapi.ApplyRequest, _ ...grpc.C
 		err     error
 		desc    = toDescriptor(er.Diff)
 		mounts  = toMounts(er.Mounts)
+		cc      = toCC(er.Dcparameters)
 	)
 
 	for _, differ := range l.differs {
-		ocidesc, err = differ.Apply(ctx, desc, mounts)
+		ocidesc, err = differ.Apply(ctx, desc, mounts, cc)
 		if !errdefs.IsNotImplemented(err) {
 			break
 		}
@@ -178,4 +180,20 @@ func fromDescriptor(d ocispec.Descriptor) *types.Descriptor {
 		Size_:       d.Size,
 		Annotations: d.Annotations,
 	}
+}
+
+func toCC(d map[string]*diffapi.Data) encconfig.CryptoConfig {
+	var cc encconfig.CryptoConfig
+	dc := make(map[string][][]byte)
+	for k, v := range d {
+		dc[k] = v.Data
+	}
+
+	cc = encconfig.CryptoConfig{
+		Dc: &encconfig.DecryptConfig{
+			Parameters: dc,
+		},
+	}
+
+	return cc
 }
