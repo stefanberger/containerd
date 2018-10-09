@@ -890,36 +890,7 @@ func DecryptLayers(ctx context.Context, cs content.Store, layers []rootfs.Layer,
 		return layers, nil
 	}
 
-	/* we have to find a GPG key until we also get other private keys passed */
-	var (
-		gpgVault   encryption.GPGVault
-		gpgClient  encryption.GPGClient
-		gpgVersion string
-		gpgHomeDir string
-	)
-	gpgPrivateKeys := dcparameters["gpg-privatekeys"]
-	if len(gpgPrivateKeys) > 0 {
-		gpgVault = encryption.NewGPGVault()
-		gpgVault.AddSecretKeyRingDataArray(gpgPrivateKeys)
-	}
-
-	haveGPGClient := dcparameters["gpg-client"]
-	if len(haveGPGClient) > 0 {
-		item := dcparameters["gpg-client-version"]
-		if len(item) == 1 {
-			gpgVersion = string(item[0])
-		}
-		item = dcparameters["gpg-client-homedir"]
-		if len(item) == 1 {
-			gpgHomeDir = string(item[0])
-		}
-		gpgClient, err = encryption.NewGPGClient(gpgVersion, gpgHomeDir)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	err = encryption.GPGGetPrivateKey(layerInfos, gpgClient, gpgVault, false, dcparameters)
+	err = encryption.GPGSetupPrivateKeys(dcparameters, layerInfos)
 	if err != nil {
 		return nil, err
 	}
