@@ -17,7 +17,6 @@
 package encryption
 
 import (
-	"encoding/base64"
 	"fmt"
 	"github.com/containerd/containerd/errdefs"
 	"github.com/pkg/errors"
@@ -298,7 +297,7 @@ func extractEmailFromDetails(details []byte) string {
 // that are available. If we do not find a private key on the system for
 // getting to the symmetric key of a layer then an error is generated.
 // Otherwise the wrapped symmetric key is test-decrypted using the private key.
-func GPGGetPrivateKey(layerInfos []LayerInfo, gpgClient GPGClient, gpgVault GPGVault, mustFindKey bool, dcparameters map[string]string) error {
+func GPGGetPrivateKey(layerInfos []LayerInfo, gpgClient GPGClient, gpgVault GPGVault, mustFindKey bool, dcparameters map[string][][]byte) error {
 	// PrivateKeyData describes a private key
 	type PrivateKeyData struct {
 		KeyData         []byte
@@ -385,15 +384,15 @@ func GPGGetPrivateKey(layerInfos []LayerInfo, gpgClient GPGClient, gpgVault GPGV
 	}
 
 	var (
-		privKeys    []string
-		privKeysPwd []string
+		privKeys    [][]byte
+		privKeysPwd [][]byte
 	)
 	for _, pkd := range keyIDPasswordMap {
-		privKeys = append(privKeys, base64.StdEncoding.EncodeToString(pkd.KeyData))
-		privKeysPwd = append(privKeysPwd, base64.StdEncoding.EncodeToString(pkd.KeyDataPassword))
+		privKeys = append(privKeys, pkd.KeyData)
+		privKeysPwd = append(privKeysPwd, pkd.KeyDataPassword)
 	}
-	dcparameters["gpg-privatekeys"] = strings.Join(privKeys, ",")
-	dcparameters["gpg-privatekeys-password"] = strings.Join(privKeysPwd, ",")
+	dcparameters["gpg-privatekeys"] = privKeys
+	dcparameters["gpg-privatekeys-password"] = privKeysPwd
 
 	return nil
 }

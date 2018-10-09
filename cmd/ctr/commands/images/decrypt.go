@@ -18,7 +18,6 @@ package images
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/containerd/containerd/cmd/ctr/commands"
 	encconfig "github.com/containerd/containerd/images/encryption/config"
@@ -93,7 +92,7 @@ var decryptCommand = cli.Command{
 			return nil
 		}
 
-		dcparameters := make(map[string]string)
+		dcparameters := make(map[string][][]byte)
 
 		// x509 cert is needed for PCS7 decryption
 		_, _, x509s, err := processRecipientKeys(context.StringSlice("recipient"))
@@ -115,10 +114,10 @@ var decryptCommand = cli.Command{
 		}
 
 		if len(privKeys) > 0 {
-			dcparameters["privkeys"] = strings.Join(privKeys, ",")
+			dcparameters["privkeys"] = privKeys
 		}
 		if len(x509s) > 0 {
-			dcparameters["x509s"] = strings.Join(x509s, ",")
+			dcparameters["x509s"] = x509s
 		}
 
 		cc := &encconfig.CryptoConfig{

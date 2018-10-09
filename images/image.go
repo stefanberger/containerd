@@ -892,7 +892,7 @@ func DecryptLayers(ctx context.Context, cs content.Store, layers []rootfs.Layer,
 
 	/* we have to find a GPG key until we also get other private keys passed */
 	mustFindKey := true
-	dcparameters := make(map[string]string)
+	dcparameters := make(map[string][][]byte)
 
 	err = encryption.GPGGetPrivateKey(layerInfos, gpgClient, gpgVault, mustFindKey, dcparameters)
 	if err != nil {

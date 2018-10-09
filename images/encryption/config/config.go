@@ -20,8 +20,8 @@ package config
 // the identifiers of those that will be able to decrypt the container and
 // the PGP public keyring file data that contains their public keys.
 type EncryptConfig struct {
-	// map holding 'gpg-recipients' and 'gpg-pubkeyringfile'
-	Parameters map[string]string
+	// map holding 'gpg-recipients', 'gpg-pubkeyringfile', 'pubkeys', 'x509s'
+	Parameters map[string][][]byte
 
 	// for adding recipients on an already encrypted image we need the
 	// symmetric keys for the layers so we can wrap them with the recpient's
@@ -37,11 +37,10 @@ const (
 	OperationRemoveRecipients = int32(iota)
 )
 
-// DecryptConfig stores the platform and layer number encoded in a string as a
-// key to the map. The symmetric key needed for decrypting a platform specific
-// layer is stored as value.
+// DecryptConfig wraps the Parameters map that holds the decryption key
 type DecryptConfig struct {
-	Parameters map[string]string
+	// map holding 'privkeys', 'x509s', 'gpg-privatekeys'
+	Parameters map[string][][]byte
 }
 
 // CryptoConfig is a common wrapper for EncryptConfig and DecrypConfig that can
