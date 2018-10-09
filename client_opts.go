@@ -205,9 +205,9 @@ func WithAppendDistributionSourceLabel() RemoteOpt {
 }
 
 // WithDecryptionKeys sets private keys in client struct
-func WithDecryptionKeys(decryptionKey []byte) RemoteOpt {
+func WithDecryptionKeys(decryptionKeys string) RemoteOpt {
 	return func(client *Client, c *RemoteContext) error {
-		client.decryptionKey = decryptionKey
+		client.decryptionKeys = decryptionKeys
 		return nil
 	}
 }

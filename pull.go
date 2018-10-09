@@ -21,7 +21,7 @@ import (
 
 	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/images"
-	"github.com/containerd/containerd/images/encryption"
+	"github.com/containerd/containerd/images/encryption/utils"
 	"github.com/containerd/containerd/platforms"
 	"github.com/containerd/containerd/remotes"
 	"github.com/containerd/containerd/remotes/docker"
@@ -70,9 +70,11 @@ func (c *Client) Pull(ctx context.Context, ref string, opts ...RemoteOpt) (Image
 	i := NewImageWithPlatform(c, img, pullCtx.PlatformMatcher)
 
 	if pullCtx.Unpack {
-		gpgVault := encryption.NewGPGVault()
-		gpgVault.AddSecretKeyRingData(c.decryptionKey)
-		i.SetGPGVault(gpgVault)
+		dcparameters, err := utils.SortDecryptionKeys(c.decryptionKeys)
+		if err != nil {
+			return nil, err
+		}
+		i.SetDecryptionParameters(dcparameters)
 		if err := i.Unpack(ctx, pullCtx.Snapshotter); err != nil {
 			return nil, errors.Wrapf(err, "failed to unpack image on snapshotter %s", pullCtx.Snapshotter)
 		}

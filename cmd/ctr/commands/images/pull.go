@@ -23,7 +23,6 @@ import (
 	"github.com/containerd/containerd/cmd/ctr/commands"
 	"github.com/containerd/containerd/cmd/ctr/commands/content"
 	"github.com/containerd/containerd/images"
-	"github.com/containerd/containerd/images/encryption"
 	"github.com/containerd/containerd/log"
 	"github.com/containerd/containerd/platforms"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
@@ -117,26 +116,33 @@ command. As part of this process, we do the following:
 			p = append(p, platforms.DefaultSpec())
 		}
 
-		// Create gpg client
-		gpgClient, err := createGPGClient(context)
+		dcparameters := make(map[string][][]byte)
+
+		// x509 cert is needed for PCS7 decryption
+		_, _, x509s, err := processRecipientKeys(context.StringSlice("recipient"))
 		if err != nil {
-			return errors.New("Unable to create GPG Client")
+			return err
 		}
-		var gpgVault encryption.GPGVault
-		key := context.StringSlice("key")
-		if len(key) > 0 {
-			gpgVault := encryption.NewGPGVault()
-			err = gpgVault.AddSecretKeyRingFiles(context.StringSlice("key"))
-			if err != nil {
-				return err
-			}
+
+		gpgSecretKeyRingFiles, privKeys, err := processPrivateKeyFiles(context.StringSlice("key"))
+		if err != nil {
+			return err
+		}
+
+		// we do not have layerInfo in this case
+		dcparameters["gpg-privatekeys"] = gpgSecretKeyRingFiles
+		dcparameters["privkeys"] = privKeys
+		dcparameters["x509s"] = x509s
+		if len(gpgSecretKeyRingFiles) == 0 {
+			dcparameters["gpg-client"] = [][]byte{[]byte("1")}
+			dcparameters["gpg-client-version"] = [][]byte{[]byte(context.String("gpg-version"))}
+			dcparameters["gpg-client-homedir"] = [][]byte{[]byte(context.String("gpg-homedir"))}
 		}
 
 		for _, platform := range p {
 			fmt.Printf("unpacking %s %s...\n", platforms.Format(platform), img.Target.Digest)
 			i := containerd.NewImageWithPlatform(client, img, platforms.Only(platform))
-			i.SetGPGClient(gpgClient)
-			i.SetGPGVault(gpgVault)
+			i.SetDecryptionParameters(dcparameters)
 			err = i.Unpack(ctx, context.String("snapshotter"))
 			if err != nil {
 				return err
