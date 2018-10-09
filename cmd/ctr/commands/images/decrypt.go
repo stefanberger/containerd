@@ -113,12 +113,8 @@ var decryptCommand = cli.Command{
 			}
 		}
 
-		if len(privKeys) > 0 {
-			dcparameters["privkeys"] = privKeys
-		}
-		if len(x509s) > 0 {
-			dcparameters["x509s"] = x509s
-		}
+		dcparameters["privkeys"] = privKeys
+		dcparameters["x509s"] = x509s
 
 		cc := &encconfig.CryptoConfig{
 			Dc: &encconfig.DecryptConfig{
