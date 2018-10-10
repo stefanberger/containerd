@@ -588,7 +588,7 @@ func isUserSelectedPlatform(platform *ocispec.Platform, platformList []ocispec.P
 	return false
 }
 
-// Encrypt all the Children of a given descriptor
+// Encrypt or decrypt all the Children of a given descriptor
 func cryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descriptor, cc *encconfig.CryptoConfig, lf *encryption.LayerFilter, encrypt bool, thisPlatform *ocispec.Platform) (ocispec.Descriptor, bool, error) {
 	layerIndex := int32(0)
 
@@ -757,9 +757,9 @@ func cryptManifestList(ctx context.Context, cs content.Store, desc ocispec.Descr
 	return desc, false, nil
 }
 
-// CryptImage is the dispatcher to encrypt/decrypt an image; it accepts either an OCI descriptor
+// cryptImage is the dispatcher to encrypt/decrypt an image; it accepts either an OCI descriptor
 // representing a manifest list or a single manifest
-func CryptImage(ctx context.Context, cs content.Store, desc ocispec.Descriptor, cc *encconfig.CryptoConfig, lf *encryption.LayerFilter, encrypt bool) (ocispec.Descriptor, bool, error) {
+func cryptImage(ctx context.Context, cs content.Store, desc ocispec.Descriptor, cc *encconfig.CryptoConfig, lf *encryption.LayerFilter, encrypt bool) (ocispec.Descriptor, bool, error) {
 	switch desc.MediaType {
 	case ocispec.MediaTypeImageIndex, MediaTypeDockerSchema2ManifestList:
 		return cryptManifestList(ctx, cs, desc, cc, lf, encrypt)
@@ -768,6 +768,16 @@ func CryptImage(ctx context.Context, cs content.Store, desc ocispec.Descriptor, 
 	default:
 		return ocispec.Descriptor{}, false, errors.Errorf("CryptImage: Unhandled media type: %s", desc.MediaType)
 	}
+}
+
+// EncryptImage encrypts an image; it accepts either an OCI descriptor representing a manifest list or a single manifest
+func EncryptImage(ctx context.Context, cs content.Store, desc ocispec.Descriptor, cc *encconfig.CryptoConfig, lf *encryption.LayerFilter) (ocispec.Descriptor, bool, error) {
+	return cryptImage(ctx, cs, desc, cc, lf, true)
+}
+
+// DecryptImage decrypts an image; it accepts either an OCI descriptor representing a manifest list or a single manifest
+func DecryptImage(ctx context.Context, cs content.Store, desc ocispec.Descriptor, cc *encconfig.CryptoConfig, lf *encryption.LayerFilter) (ocispec.Descriptor, bool, error) {
+	return cryptImage(ctx, cs, desc, cc, lf, false)
 }
 
 // GetImageLayerInfo gets the image key Ids necessary for decrypting an image
