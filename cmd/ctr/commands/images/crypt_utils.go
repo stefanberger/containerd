@@ -29,6 +29,8 @@ import (
 	encconfig "github.com/containerd/containerd/images/encryption/config"
 	encutils "github.com/containerd/containerd/images/encryption/utils"
 	"github.com/containerd/containerd/platforms"
+
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/urfave/cli"
 )
 
@@ -118,7 +120,15 @@ func cryptImage(client *containerd.Client, ctx gocontext.Context, name, newName 
 		Platforms: pl,
 	}
 
-	newSpec, modified, err := images.CryptImage(ctx, client.ContentStore(), image.Target, cc, lf, encrypt)
+	var (
+		modified bool
+		newSpec  ocispec.Descriptor
+	)
+	if (encrypt) {
+		newSpec, modified, err = images.EncryptImage(ctx, client.ContentStore(), image.Target, cc, lf)
+	} else {
+		newSpec, modified, err = images.DecryptImage(ctx, client.ContentStore(), image.Target, cc, lf)
+	}
 	if err != nil {
 		return image, err
 	}
