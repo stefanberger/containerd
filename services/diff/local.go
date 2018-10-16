@@ -98,7 +98,7 @@ func (l *local) Apply(ctx context.Context, er *diffapi.ApplyRequest, _ ...grpc.C
 		err     error
 		desc    = toDescriptor(er.Diff)
 		mounts  = toMounts(er.Mounts)
-		cc      = toCC(er.Dcparameters)
+		cc      = toCryptoConfig(er.Dcparameters)
 	)
 
 	for _, differ := range l.differs {
@@ -182,18 +182,15 @@ func fromDescriptor(d ocispec.Descriptor) *types.Descriptor {
 	}
 }
 
-func toCC(d map[string]*diffapi.Data) encconfig.CryptoConfig {
-	var cc encconfig.CryptoConfig
+func toCryptoConfig(d map[string]*diffapi.ByteArrays) encconfig.CryptoConfig {
 	dc := make(map[string][][]byte)
 	for k, v := range d {
-		dc[k] = v.Data
+		dc[k] = v.ByteArrays
 	}
 
-	cc = encconfig.CryptoConfig{
+	return encconfig.CryptoConfig{
 		Dc: &encconfig.DecryptConfig{
 			Parameters: dc,
 		},
 	}
-
-	return cc
 }
