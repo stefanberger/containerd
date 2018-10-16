@@ -18,15 +18,16 @@ package encryption
 
 import (
 	"fmt"
-	"github.com/containerd/containerd/errdefs"
-	"github.com/pkg/errors"
-	"golang.org/x/crypto/ssh/terminal"
 	"io/ioutil"
 	"os"
 	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/containerd/containerd/errdefs"
+	"github.com/pkg/errors"
+	"golang.org/x/crypto/ssh/terminal"
 )
 
 // GPGVersion enum representing the versino of GPG client to use.

@@ -63,6 +63,7 @@ func init() {
 var keyWrappers map[string]keywrap.KeyWrapper
 var keyWrapperAnnotations map[string]string
 
+// RegisterKeyWrapper allows to register key wrappers by their encryption scheme
 func RegisterKeyWrapper(scheme string, iface keywrap.KeyWrapper) {
 	keyWrappers[scheme] = iface
 	keyWrapperAnnotations[iface.GetAnnotationID()] = scheme

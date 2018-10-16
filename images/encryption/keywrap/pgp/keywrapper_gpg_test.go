@@ -17,85 +17,86 @@
 package pgp
 
 import (
-	"github.com/containerd/containerd/images/encryption/config"
 	"testing"
+
+	"github.com/containerd/containerd/images/encryption/config"
 )
 
 var validGpgCcs = []*config.CryptoConfig{
 	// Key 1
-	&config.CryptoConfig{
+	{
 		Ec: &config.EncryptConfig{
 			Parameters: map[string][][]byte{
-				"gpg-pubkeyringfile": [][]byte{gpgPubKeyRing},
-				"gpg-recipients":     [][]byte{gpgRecipient1},
+				"gpg-pubkeyringfile": {gpgPubKeyRing},
+				"gpg-recipients":     {gpgRecipient1},
 			},
 			Operation: config.OperationAddRecipients,
 			Dc: config.DecryptConfig{
 				Parameters: map[string][][]byte{
-					"gpg-privatekeys": [][]byte{gpgPrivKey1},
+					"gpg-privatekeys": {gpgPrivKey1},
 				},
 			},
 		},
 
 		Dc: &config.DecryptConfig{
 			Parameters: map[string][][]byte{
-				"gpg-privatekeys": [][]byte{gpgPrivKey1},
+				"gpg-privatekeys": {gpgPrivKey1},
 			},
 		},
 	},
 
 	// Key 2
-	&config.CryptoConfig{
+	{
 		Ec: &config.EncryptConfig{
 			Parameters: map[string][][]byte{
-				"gpg-pubkeyringfile": [][]byte{gpgPubKeyRing},
-				"gpg-recipients":     [][]byte{gpgRecipient2},
+				"gpg-pubkeyringfile": {gpgPubKeyRing},
+				"gpg-recipients":     {gpgRecipient2},
 			},
 			Operation: config.OperationAddRecipients,
 			Dc: config.DecryptConfig{
 				Parameters: map[string][][]byte{
-					"gpg-privatekeys": [][]byte{gpgPrivKey2},
+					"gpg-privatekeys": {gpgPrivKey2},
 				},
 			},
 		},
 
 		Dc: &config.DecryptConfig{
 			Parameters: map[string][][]byte{
-				"gpg-privatekeys": [][]byte{gpgPrivKey2},
+				"gpg-privatekeys": {gpgPrivKey2},
 			},
 		},
 	},
 
 	// Key 1 without enc private key
-	&config.CryptoConfig{
+	{
 		Ec: &config.EncryptConfig{
 			Parameters: map[string][][]byte{
-				"gpg-pubkeyringfile": [][]byte{gpgPubKeyRing},
-				"gpg-recipients":     [][]byte{gpgRecipient1},
+				"gpg-pubkeyringfile": {gpgPubKeyRing},
+				"gpg-recipients":     {gpgRecipient1},
 			},
 			Operation: config.OperationAddRecipients,
 		},
 
 		Dc: &config.DecryptConfig{
 			Parameters: map[string][][]byte{
-				"gpg-privatekeys": [][]byte{gpgPrivKey1},
+				"gpg-privatekeys": {gpgPrivKey1},
 			},
 		},
 	},
 
 	// Key 2 without enc private key
-	&config.CryptoConfig{
+	{
 		Ec: &config.EncryptConfig{
 			Parameters: map[string][][]byte{
-				"gpg-pubkeyringfile": [][]byte{gpgPubKeyRing},
-				"gpg-recipients":     [][]byte{gpgRecipient2},
+				"gpg-pubkeyringfile": {gpgPubKeyRing},
+				"gpg-recipients":     {gpgRecipient2},
 			},
 			Operation: config.OperationAddRecipients,
 		},
 
 		Dc: &config.DecryptConfig{
 			Parameters: map[string][][]byte{
-				"gpg-privatekeys": [][]byte{gpgPrivKey2},
+				"gpg-privatekeys": {gpgPrivKey2},
 			},
 		},
 	},
@@ -103,27 +104,27 @@ var validGpgCcs = []*config.CryptoConfig{
 
 var invalidGpgCcs = []*config.CryptoConfig{
 	// Client key 1 public with client 2 private decrypt
-	&config.CryptoConfig{
+	{
 		Ec: &config.EncryptConfig{
 			Parameters: map[string][][]byte{
-				"gpg-pubkeyringfile": [][]byte{gpgPubKeyRing},
-				"gpg-recipients":     [][]byte{gpgRecipient1},
+				"gpg-pubkeyringfile": {gpgPubKeyRing},
+				"gpg-recipients":     {gpgRecipient1},
 			},
 			Operation: config.OperationAddRecipients,
 		},
 		Dc: &config.DecryptConfig{
 			Parameters: map[string][][]byte{
-				"gpg-privatekeys": [][]byte{gpgPrivKey2},
+				"gpg-privatekeys": {gpgPrivKey2},
 			},
 		},
 	},
 
 	// Client key 1 public with no private key
-	&config.CryptoConfig{
+	{
 		Ec: &config.EncryptConfig{
 			Parameters: map[string][][]byte{
-				"gpg-pubkeyringfile": [][]byte{gpgPubKeyRing},
-				"gpg-recipients":     [][]byte{gpgRecipient1},
+				"gpg-pubkeyringfile": {gpgPubKeyRing},
+				"gpg-recipients":     {gpgRecipient1},
 			},
 			Operation: config.OperationAddRecipients,
 		},
@@ -133,17 +134,17 @@ var invalidGpgCcs = []*config.CryptoConfig{
 	},
 
 	// Invalid Client key 1 private key
-	&config.CryptoConfig{
+	{
 		Ec: &config.EncryptConfig{
 			Parameters: map[string][][]byte{
-				"gpg-pubkeyringfile": [][]byte{gpgPrivKey1},
-				"gpg-recipients":     [][]byte{gpgRecipient1},
+				"gpg-pubkeyringfile": {gpgPrivKey1},
+				"gpg-recipients":     {gpgRecipient1},
 			},
 			Operation: config.OperationAddRecipients,
 		},
 		Dc: &config.DecryptConfig{
 			Parameters: map[string][][]byte{
-				"gpg-privatekeys": [][]byte{gpgPrivKey1},
+				"gpg-privatekeys": {gpgPrivKey1},
 			},
 		},
 	},
