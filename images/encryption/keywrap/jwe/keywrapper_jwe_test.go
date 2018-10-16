@@ -17,81 +17,82 @@
 package jwe
 
 import (
-	"github.com/containerd/containerd/images/encryption/config"
 	"testing"
+
+	"github.com/containerd/containerd/images/encryption/config"
 )
 
 var validJweCcs = []*config.CryptoConfig{
 	// Key 1
-	&config.CryptoConfig{
+	{
 		Ec: &config.EncryptConfig{
 			Parameters: map[string][][]byte{
-				"pubkeys": [][]byte{jwePubKeyPem},
+				"pubkeys": {jwePubKeyPem},
 			},
 			Operation: config.OperationAddRecipients,
 			Dc: config.DecryptConfig{
 				Parameters: map[string][][]byte{
-					"privkeys": [][]byte{jwePrivKeyPem},
+					"privkeys": {jwePrivKeyPem},
 				},
 			},
 		},
 
 		Dc: &config.DecryptConfig{
 			Parameters: map[string][][]byte{
-				"privkeys": [][]byte{jwePrivKeyPem},
+				"privkeys": {jwePrivKeyPem},
 			},
 		},
 	},
 
 	// Key 2
-	&config.CryptoConfig{
+	{
 		Ec: &config.EncryptConfig{
 			Parameters: map[string][][]byte{
-				"pubkeys": [][]byte{jwePubKey2Pem},
+				"pubkeys": {jwePubKey2Pem},
 			},
 			Operation: config.OperationAddRecipients,
 			Dc: config.DecryptConfig{
 				Parameters: map[string][][]byte{
-					"privkeys": [][]byte{jwePrivKey2Pem},
+					"privkeys": {jwePrivKey2Pem},
 				},
 			},
 		},
 
 		Dc: &config.DecryptConfig{
 			Parameters: map[string][][]byte{
-				"privkeys": [][]byte{jwePrivKey2Pem},
+				"privkeys": {jwePrivKey2Pem},
 			},
 		},
 	},
 
 	// Key 1 without enc private key
-	&config.CryptoConfig{
+	{
 		Ec: &config.EncryptConfig{
 			Parameters: map[string][][]byte{
-				"pubkeys": [][]byte{jwePubKeyPem},
+				"pubkeys": {jwePubKeyPem},
 			},
 			Operation: config.OperationAddRecipients,
 		},
 
 		Dc: &config.DecryptConfig{
 			Parameters: map[string][][]byte{
-				"privkeys": [][]byte{jwePrivKeyPem},
+				"privkeys": {jwePrivKeyPem},
 			},
 		},
 	},
 
 	// Key 2 without enc private key
-	&config.CryptoConfig{
+	{
 		Ec: &config.EncryptConfig{
 			Parameters: map[string][][]byte{
-				"pubkeys": [][]byte{jwePubKey2Pem},
+				"pubkeys": {jwePubKey2Pem},
 			},
 			Operation: config.OperationAddRecipients,
 		},
 
 		Dc: &config.DecryptConfig{
 			Parameters: map[string][][]byte{
-				"privkeys": [][]byte{jwePrivKey2Pem},
+				"privkeys": {jwePrivKey2Pem},
 			},
 		},
 	},
@@ -99,25 +100,25 @@ var validJweCcs = []*config.CryptoConfig{
 
 var invalidJweCcs = []*config.CryptoConfig{
 	// Client key 1 public with client 2 private decrypt
-	&config.CryptoConfig{
+	{
 		Ec: &config.EncryptConfig{
 			Parameters: map[string][][]byte{
-				"pubkeys": [][]byte{jwePubKeyPem},
+				"pubkeys": {jwePubKeyPem},
 			},
 			Operation: config.OperationAddRecipients,
 		},
 		Dc: &config.DecryptConfig{
 			Parameters: map[string][][]byte{
-				"privkeys": [][]byte{jwePubKey2Pem},
+				"privkeys": {jwePubKey2Pem},
 			},
 		},
 	},
 
 	// Client key 1 public with no private key
-	&config.CryptoConfig{
+	{
 		Ec: &config.EncryptConfig{
 			Parameters: map[string][][]byte{
-				"pubkeys": [][]byte{jwePubKeyPem},
+				"pubkeys": {jwePubKeyPem},
 			},
 			Operation: config.OperationAddRecipients,
 		},
@@ -127,16 +128,16 @@ var invalidJweCcs = []*config.CryptoConfig{
 	},
 
 	// Invalid Client key 1 private key
-	&config.CryptoConfig{
+	{
 		Ec: &config.EncryptConfig{
 			Parameters: map[string][][]byte{
-				"pubkeys": [][]byte{jwePubKeyPem},
+				"pubkeys": {jwePubKeyPem},
 			},
 			Operation: config.OperationAddRecipients,
 		},
 		Dc: &config.DecryptConfig{
 			Parameters: map[string][][]byte{
-				"privkeys": [][]byte{jwePubKeyPem},
+				"privkeys": {jwePubKeyPem},
 			},
 		},
 	},

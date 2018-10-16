@@ -38,7 +38,7 @@ import (
 type gpgKeyWrapper struct {
 }
 
-// NewPgpKeyWrapper returns a new key wrapping interface using pgp
+// NewKeyWrapper returns a new key wrapping interface for pgp
 func NewKeyWrapper() keywrap.KeyWrapper {
 	return &gpgKeyWrapper{}
 }
