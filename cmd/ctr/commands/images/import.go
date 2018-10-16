@@ -68,6 +68,16 @@ If foobar.tar contains an OCI ref named "latest" and anonymous ref "sha256:deadb
 			Name:  "all-platforms",
 			Usage: "imports content for all platforms, false by default",
 		},
+		cli.StringFlag{
+			Name:  "gpg-homedir",
+			Usage: "The GPG homedir to use; by default gpg uses ~/.gnupg",
+		}, cli.StringFlag{
+			Name:  "gpg-version",
+			Usage: "The GPG version (\"v1\" or \"v2\"), default will make an educated guess",
+		}, cli.StringSliceFlag{
+			Name:  "key",
+			Usage: "A secret key's filename; may be provided multiple times",
+		},
 	}, commands.SnapshotterFlags...),
 
 	Action: func(context *cli.Context) error {
@@ -119,11 +129,17 @@ If foobar.tar contains an OCI ref named "latest" and anonymous ref "sha256:deadb
 			return closeErr
 		}
 
+		dcparameters, err := createDcParameters(context, nil)
+		if err != nil {
+			return err
+		}
+
 		log.G(ctx).Debugf("unpacking %d images", len(imgs))
 
 		for _, img := range imgs {
 			// TODO: Allow configuration of the platform
 			image := containerd.NewImage(client, img)
+			image.SetDecryptionParameters(dcparameters)
 
 			// TODO: Show unpack status
 			fmt.Printf("unpacking %s (%s)...", img.Name, img.Target.Digest)
