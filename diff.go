@@ -50,7 +50,7 @@ func (r *diffRemote) Apply(ctx context.Context, diff ocispec.Descriptor, mounts 
 	req := &diffapi.ApplyRequest{
 		Diff:         fromDescriptor(diff),
 		Mounts:       fromMounts(mounts),
-		Dcparameters: fromCC(cc),
+		Dcparameters: fromCryptoConfig(cc),
 	}
 	resp, err := r.client.Apply(ctx, req)
 	if err != nil {
@@ -110,13 +110,13 @@ func fromMounts(mounts []mount.Mount) []*types.Mount {
 	return apiMounts
 }
 
-func fromCC(cc encconfig.CryptoConfig) map[string]*diffapi.Data {
-	dcparameters := make(map[string]*diffapi.Data)
+func fromCryptoConfig(cc encconfig.CryptoConfig) map[string]*diffapi.ByteArrays {
+	dcparameters := make(map[string]*diffapi.ByteArrays)
 	if cc.Dc != nil && cc.Dc.Parameters != nil {
 		for k, v := range cc.Dc.Parameters {
-			var data diffapi.Data
-			data.Data = v
-			dcparameters[k] = &data
+			dcparameters[k] = &diffapi.ByteArrays{
+				ByteArrays : v,
+			}
 		}
 	}
 	return dcparameters

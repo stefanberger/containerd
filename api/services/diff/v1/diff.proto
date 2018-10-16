@@ -20,8 +20,8 @@ service Diff {
 	rpc Diff(DiffRequest) returns (DiffResponse);
 }
 
-message Data {
-	repeated bytes data = 1;
+message ByteArrays {
+	repeated bytes byte_arrays = 1;
 }
 
 message ApplyRequest {
@@ -30,7 +30,7 @@ message ApplyRequest {
 
 	repeated containerd.types.Mount mounts = 2;
 
-	map<string, Data> dcparameters = 3;
+	map<string, ByteArrays> dcparameters = 3;
 }
 
 message ApplyResponse {
