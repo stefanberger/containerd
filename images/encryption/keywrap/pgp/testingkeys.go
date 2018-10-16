@@ -31,10 +31,6 @@ func b64Dec(str string) string {
 	return string(s)
 }
 
-func b64Enc(str string) string {
-	return base64.StdEncoding.EncodeToString([]byte(str))
-}
-
 var (
 	gpgPubKeyRing = []byte(b64Dec(`mQENBFulXFgBCADKrLe251CMrFS4Un4sPcFb9TVZxdSuMlf4lhFhMphqQkctMoyjeeGebN8P0R8E
 8xeV4iJnIMPWqoWTabvDGkl9HorFrSVeZVj0OD9JoMAIg55KSbT1XUWzDgNiZ4p6PJkORx2uTdfZ

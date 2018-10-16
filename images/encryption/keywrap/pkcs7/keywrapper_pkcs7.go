@@ -31,7 +31,7 @@ import (
 type pkcs7KeyWrapper struct {
 }
 
-// NewPgpKeyWrapper returns a new key wrapping interface using jwe
+// NewKeyWrapper returns a new key wrapping interface using jwe
 func NewKeyWrapper() keywrap.KeyWrapper {
 	return &pkcs7KeyWrapper{}
 }
