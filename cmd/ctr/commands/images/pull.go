@@ -116,27 +116,9 @@ command. As part of this process, we do the following:
 			p = append(p, platforms.DefaultSpec())
 		}
 
-		dcparameters := make(map[string][][]byte)
-
-		// x509 cert is needed for PCS7 decryption
-		_, _, x509s, err := processRecipientKeys(context.StringSlice("recipient"))
+		dcparameters, err := createDcParameters(context, nil)
 		if err != nil {
 			return err
-		}
-
-		gpgSecretKeyRingFiles, privKeys, err := processPrivateKeyFiles(context.StringSlice("key"))
-		if err != nil {
-			return err
-		}
-
-		// we do not have layerInfo in this case
-		dcparameters["gpg-privatekeys"] = gpgSecretKeyRingFiles
-		dcparameters["privkeys"] = privKeys
-		dcparameters["x509s"] = x509s
-		if len(gpgSecretKeyRingFiles) == 0 {
-			dcparameters["gpg-client"] = [][]byte{[]byte("1")}
-			dcparameters["gpg-client-version"] = [][]byte{[]byte(context.String("gpg-version"))}
-			dcparameters["gpg-client-homedir"] = [][]byte{[]byte(context.String("gpg-homedir"))}
 		}
 
 		for _, platform := range p {

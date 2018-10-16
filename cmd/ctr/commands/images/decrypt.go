@@ -92,29 +92,10 @@ var decryptCommand = cli.Command{
 			return nil
 		}
 
-		dcparameters := make(map[string][][]byte)
-
-		// x509 cert is needed for PCS7 decryption
-		_, _, x509s, err := processRecipientKeys(context.StringSlice("recipient"))
+		dcparameters, err := createDcParameters(context, layerInfos)
 		if err != nil {
 			return err
 		}
-
-		gpgSecretKeyRingFiles, privKeys, err := processPrivateKeyFiles(context.StringSlice("key"))
-		if err != nil {
-			return err
-		}
-
-		if len(privKeys) == 0 {
-			// Get pgp private keys from keyring only if no private key was passed
-			err = getGPGPrivateKeys(context, gpgSecretKeyRingFiles, layerInfos, true, dcparameters)
-			if err != nil {
-				return err
-			}
-		}
-
-		dcparameters["privkeys"] = privKeys
-		dcparameters["x509s"] = x509s
 
 		cc := &encconfig.CryptoConfig{
 			Dc: &encconfig.DecryptConfig{
