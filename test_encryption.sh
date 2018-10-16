@@ -206,7 +206,14 @@ testPGP() {
 	failExit $? "Image decryption with PGP failed\n$MSG"
 	sleep ${SLEEP_TIME}
 
-	echo "PASS: Import and export of PGP encrypted image"
+	LAYER_INFO_ALPINE_NEW="$($CTR images layerinfo ${ALPINE})"
+	failExit $? "Image layerinfo on imported image failed (PGP)"
+
+	diff <(echo "${LAYER_INFO_ALPINE}"     | gawk '{print $3}') \
+	     <(echo "${LAYER_INFO_ALPINE_NEW}" | gawk '{print $3}' )
+	failExit $? "Image layerinfo on plain ${ALPINE} image shows differences in architectures"
+
+	echo "PASS: Export and import of PGP encrypted image"
 	echo
 	echo "Testing adding a PGP recipient"
 	$CTR images encrypt \
