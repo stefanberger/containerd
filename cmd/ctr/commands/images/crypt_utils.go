@@ -34,6 +34,8 @@ import (
 	"github.com/urfave/cli"
 )
 
+// processRecipientKeys sorts the array of recipients by type. Recipients may be either
+// x509 certificates, public keys, or PGP public keys identified by email address or name
 func processRecipientKeys(recipients []string) ([][]byte, [][]byte, [][]byte, error) {
 	var (
 		gpgRecipients [][]byte
@@ -57,6 +59,8 @@ func processRecipientKeys(recipients []string) ([][]byte, [][]byte, [][]byte, er
 	return gpgRecipients, pubkeys, x509s, nil
 }
 
+// processPrivateKeyFiles sorts the different types of private key files; private
+// key files may either be private keys or GPG private key ring files
 func processPrivateKeyFiles(keyFiles []string) ([][]byte, [][]byte, error) {
 	var (
 		gpgSecretKeyRingFiles [][]byte
@@ -160,6 +164,7 @@ func encryptImage(client *containerd.Client, ctx gocontext.Context, name, newNam
 func decryptImage(client *containerd.Client, ctx gocontext.Context, name, newName string, cc *encconfig.CryptoConfig, layers []int32, platformList []string) (images.Image, error) {
 	return cryptImage(client, ctx, name, newName, cc, layers, platformList, false)
 }
+
 func getImageLayerInfo(client *containerd.Client, ctx gocontext.Context, name string, layers []int32, platformList []string) ([]encryption.LayerInfo, error) {
 	s := client.ImageService()
 
@@ -178,4 +183,39 @@ func getImageLayerInfo(client *containerd.Client, ctx gocontext.Context, name st
 	}
 
 	return images.GetImageLayerInfo(ctx, client.ContentStore(), image.Target, lf, -1)
+}
+
+func createDcParameters(context *cli.Context, layerInfos []encryption.LayerInfo) (map[string][][]byte, error) {
+	dcparameters := make(map[string][][]byte)
+
+	// x509 cert is needed for PCS7 decryption
+	_, _, x509s, err := processRecipientKeys(context.StringSlice("recipient"))
+	if err != nil {
+		return nil, err
+	}
+
+	gpgSecretKeyRingFiles, privKeys, err := processPrivateKeyFiles(context.StringSlice("key"))
+	if err != nil {
+		return nil, err
+	}
+
+	if len(privKeys) == 0 && layerInfos != nil {
+		// Get pgp private keys from keyring only if no private key was passed
+		err = getGPGPrivateKeys(context, gpgSecretKeyRingFiles, layerInfos, true, dcparameters)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		dcparameters["gpg-privatekeys"] = gpgSecretKeyRingFiles
+		if len(gpgSecretKeyRingFiles) == 0 {
+			dcparameters["gpg-client"] = [][]byte{[]byte("1")}
+			dcparameters["gpg-client-version"] = [][]byte{[]byte(context.String("gpg-version"))}
+			dcparameters["gpg-client-homedir"] = [][]byte{[]byte(context.String("gpg-homedir"))}
+		}
+	}
+
+	dcparameters["privkeys"] = privKeys
+	dcparameters["x509s"] = x509s
+
+	return dcparameters, nil
 }
