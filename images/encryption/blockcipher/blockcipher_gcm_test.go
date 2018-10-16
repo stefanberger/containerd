@@ -44,14 +44,18 @@ func TestBlockCipherAesGcmCreateInvalid(t *testing.T) {
 
 func TestBlockCipherAesGcmEncryption(t *testing.T) {
 	var (
-		symKey []byte                  = []byte("01234567890123456789012345678912")
-		opt    LayerBlockCipherOptions = LayerBlockCipherOptions{
+		symKey = []byte("01234567890123456789012345678912")
+		opt    = LayerBlockCipherOptions{
 			SymmetricKey: symKey,
 		}
-		layerData []byte = []byte("this is some data")
+		layerData = []byte("this is some data")
 	)
 
 	bc, err := NewGCMLayerBlockCipher(256)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	ciphertext, lbco, err := bc.Encrypt(layerData, opt)
 	if err != nil {
 		t.Fatal(err)
@@ -59,6 +63,10 @@ func TestBlockCipherAesGcmEncryption(t *testing.T) {
 
 	// Use a different instantiated object to indicate an invokation at a diff time
 	bc2, err := NewGCMLayerBlockCipher(256)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	plaintext, _, err := bc2.Decrypt(ciphertext, lbco)
 	if err != nil {
 		t.Fatal(err)
@@ -71,14 +79,18 @@ func TestBlockCipherAesGcmEncryption(t *testing.T) {
 
 func TestBlockCipherAesGcmEncryptionInvalidKey(t *testing.T) {
 	var (
-		symKey []byte                  = []byte("01234567890123456789012345678912")
-		opt    LayerBlockCipherOptions = LayerBlockCipherOptions{
+		symKey = []byte("01234567890123456789012345678912")
+		opt    = LayerBlockCipherOptions{
 			SymmetricKey: symKey,
 		}
-		layerData []byte = []byte("this is some data")
+		layerData = []byte("this is some data")
 	)
 
 	bc, err := NewGCMLayerBlockCipher(256)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	ciphertext, lbco, err := bc.Encrypt(layerData, opt)
 	if err != nil {
 		t.Fatal(err)
@@ -86,6 +98,10 @@ func TestBlockCipherAesGcmEncryptionInvalidKey(t *testing.T) {
 
 	// Use a different instantiated object to indicate an invokation at a diff time
 	bc2, err := NewGCMLayerBlockCipher(256)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	lbco.SymmetricKey = []byte("aaa34567890123456789012345678912")
 	_, _, err = bc2.Decrypt(ciphertext, lbco)
 	if err == nil {
@@ -95,14 +111,18 @@ func TestBlockCipherAesGcmEncryptionInvalidKey(t *testing.T) {
 
 func TestBlockCipherAesGcmEncryptionInvalidKeyLength(t *testing.T) {
 	var (
-		symKey []byte                  = []byte("012345")
-		opt    LayerBlockCipherOptions = LayerBlockCipherOptions{
+		symKey = []byte("012345")
+		opt    = LayerBlockCipherOptions{
 			SymmetricKey: symKey,
 		}
-		layerData []byte = []byte("this is some data")
+		layerData = []byte("this is some data")
 	)
 
 	bc, err := NewGCMLayerBlockCipher(256)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	_, _, err = bc.Encrypt(layerData, opt)
 	if err == nil {
 		t.Fatal(err)

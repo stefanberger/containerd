@@ -17,11 +17,12 @@
 package encryption
 
 import (
+	"reflect"
+	"testing"
+
 	"github.com/containerd/containerd/images/encryption/config"
 	digest "github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
-	"reflect"
-	"testing"
 )
 
 var (

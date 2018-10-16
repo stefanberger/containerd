@@ -16,25 +16,6 @@
 
 package pkcs7
 
-import (
-	"encoding/base64"
-	"strings"
-)
-
-func b64Dec(str string) string {
-	str = strings.Replace(str, " ", "", -1)
-	s, err := base64.StdEncoding.DecodeString(str)
-	if err != nil {
-		panic(err)
-	}
-
-	return string(s)
-}
-
-func b64Enc(str string) string {
-	return base64.StdEncoding.EncodeToString([]byte(str))
-}
-
 // Start PKCS7 keys
 var (
 	pkcs7CaCert = []byte(`-----BEGIN CERTIFICATE-----
