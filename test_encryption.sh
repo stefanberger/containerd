@@ -178,6 +178,8 @@ testPGP() {
 	if [ $? -eq 0 ]; then
 		failExit 1 "Import of encrypted image without passing PGP key should not have succeeded"
 	fi
+	# need a delay here
+	sleep ${SLEEP_TIME}
 
 	MSG=$($CTR images import \
 		--base-name ${ALPINE_ENC_IMPORT_BASE} \
@@ -186,6 +188,8 @@ testPGP() {
 		--key <(echo "${GPGTESTKEY1}" | base64 -d) \
 		${WORKDIR}/${ALPINE_ENC_EXPORT_NAME} 2>&1)
 	failExit $? "Import of PGP encrypted image should have worked\n$MSG"
+	# need a delay here
+	sleep ${SLEEP_TIME}
 
 	LAYER_INFO_ALPINE_ENC_NEW="$($CTR images layerinfo ${ALPINE_ENC})"
 	failExit $? "Image layerinfo on imported image failed (PGP)"
