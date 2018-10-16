@@ -32,7 +32,6 @@ import (
 	encconfig "github.com/containerd/containerd/images/encryption/config"
 	"github.com/containerd/containerd/log"
 	"github.com/containerd/containerd/platforms"
-	"github.com/containerd/containerd/rootfs"
 	digest "github.com/opencontainers/go-digest"
 	specs "github.com/opencontainers/image-spec/specs-go"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
@@ -406,7 +405,8 @@ func RootFS(ctx context.Context, provider content.Provider, configDesc ocispec.D
 
 // IsEncryptedDiff returns true if mediaType is a known encrypted media type.
 func IsEncryptedDiff(ctx context.Context, mediaType string) bool {
-	if mediaType == MediaTypeDockerSchema2LayerGzipEnc || mediaType == MediaTypeDockerSchema2LayerEnc {
+	switch mediaType {
+	case MediaTypeDockerSchema2LayerGzipEnc, MediaTypeDockerSchema2LayerEnc:
 		return true
 	}
 	return false
@@ -895,68 +895,4 @@ func getImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descr
 	}
 
 	return lis, nil
-}
-
-// DecryptLayers decrypts the given array of rootfs.Layer and returns a an array of
-// rootfs.Layer with the OCI descriptors adapted to point to the decrypted layers.
-// This function will determine the necessary key(s) to decrypt the image and search
-// for them using the gpg client
-func DecryptLayers(ctx context.Context, cs content.Store, layers []rootfs.Layer, dcparameters map[string][][]byte) ([]rootfs.Layer, error) {
-	var (
-		newLayers  []rootfs.Layer
-		layerInfos []encryption.LayerInfo
-		err        error
-	)
-
-	// in the 1st pass through the layers we gather required keys
-	isEncrypted := false
-	ds := platforms.DefaultSpec()
-
-	for index, layer := range layers {
-		layerInfo := encryption.LayerInfo{
-			Index: uint32(index),
-			Descriptor: ocispec.Descriptor{
-				Digest:   layer.Blob.Digest,
-				Platform: &ds,
-			},
-		}
-		switch layer.Blob.MediaType {
-		case MediaTypeDockerSchema2LayerEnc, MediaTypeDockerSchema2LayerGzipEnc:
-			isEncrypted = true
-			layerInfo.Descriptor.Annotations = layer.Blob.Annotations
-		}
-		layerInfos = append(layerInfos, layerInfo)
-	}
-
-	if !isEncrypted {
-		// nothing to do here
-		return layers, nil
-	}
-
-	err = encryption.GPGSetupPrivateKeys(dcparameters, layerInfos)
-	if err != nil {
-		return nil, err
-	}
-
-	cc := &encconfig.CryptoConfig{
-		Dc: &encconfig.DecryptConfig{
-			Parameters: dcparameters,
-		},
-	}
-
-	// in the 2nd pass we decrypt the layers
-	for i, layer := range layers {
-		if len(layerInfos[i].Descriptor.Annotations) > 0 {
-			// need to decrypt this layer
-			newDesc, err := cryptLayer(ctx, cs, layer.Blob, cc, false)
-			if err != nil {
-				return []rootfs.Layer{}, err
-			}
-			fmt.Printf("encrypt:%s -> decrypted:%s\n", layer.Blob.Digest, newDesc.Digest)
-			layer.Blob = newDesc
-		}
-		newLayers = append(newLayers, layer)
-	}
-
-	return newLayers, nil
 }
