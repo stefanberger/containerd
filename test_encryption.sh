@@ -23,6 +23,8 @@ SLEEP_TIME=${SLEEP_TIME:-2.0}
 ALPINE=docker.io/library/alpine:latest
 ALPINE_ENC=docker.io/library/alpine:enc
 ALPINE_DEC=docker.io/library/alpine:dec
+ALPINE_ENC_EXPORT_NAME=alpine.enc
+ALPINE_ENC_IMPORT_BASE=docker.io/library/alpine
 
 NGINX=docker.io/library/nginx:latest
 NGINX_ENC=docker.io/library/nginx:enc
@@ -53,7 +55,7 @@ failExit() {
 	fi
 }
 
-$CTR images rm --sync ${ALPINE_ENC} ${ALPINE_DEC} ${NGINX_ENC} &>/dev/null
+$CTR images rm --sync ${ALPINE_ENC} ${ALPINE_DEC} ${NGINX_ENC} ${NGINX_DEC} &>/dev/null
 $CTR images pull --all-platforms ${ALPINE} &>/dev/null
 failExit $? "Image pull failed on ${ALPINE}"
 
@@ -123,7 +125,6 @@ testPGP() {
 
 	echo "PASS: PGP Type of encryption on ${NGINX}"
 	echo
-
 	echo "Testing PGP Type of encryption on ${ALPINE}"
 
 	$CTR images encrypt \
@@ -157,12 +158,56 @@ testPGP() {
 	diff <(echo "${LAYER_INFO_ALPINE}") <(echo "${LAYER_INFO_ALPINE_DEC}")
 	failExit $? "Image layerinfos are different (PGP)"
 
-	$CTR images rm --sync ${ALPINE_DEC} &>/dev/null
+	$CTR images rm --sync ${ALPINE_DEC} ${ALPINE} &>/dev/null
 	sleep ${SLEEP_TIME}
 
 	echo "PASS: PGP Type of encryption"
 	echo
+	echo "Testing image export and import using ${ALPINE_ENC}"
 
+	$CTR images export ${WORKDIR}/${ALPINE_ENC_EXPORT_NAME} ${ALPINE_ENC}
+	failExit $? "Could not export ${ALPINE_ENC}"
+
+	# remove ${ALPINE} and ${ALPINE_ENC} to clear cached and so we need to decrypt
+	$CTR images rm --sync ${ALPINE} ${ALPINE_ENC} &>/dev/null
+	sleep ${SLEEP_TIME}
+
+	$CTR images import \
+		--base-name ${ALPINE_ENC_IMPORT_BASE} \
+		${WORKDIR}/${ALPINE_ENC_EXPORT_NAME} &>/dev/null
+	if [ $? -eq 0 ]; then
+		failExit 1 "Import of encrypted image without passing PGP key should not have succeeded"
+	fi
+
+	MSG=$($CTR images import \
+		--base-name ${ALPINE_ENC_IMPORT_BASE} \
+		--gpg-homedir ${GPGHOMEDIR} \
+		--gpg-version 2 \
+		--key <(echo "${GPGTESTKEY1}" | base64 -d) \
+		${WORKDIR}/${ALPINE_ENC_EXPORT_NAME} 2>&1)
+	failExit $? "Import of PGP encrypted image should have worked\n$MSG"
+
+	LAYER_INFO_ALPINE_ENC_NEW="$($CTR images layerinfo ${ALPINE_ENC})"
+	failExit $? "Image layerinfo on imported image failed (PGP)"
+
+	diff <(echo "${LAYER_INFO_ALPINE_ENC_NEW}" | gawk '{print $3}') \
+	     <(echo "${LAYER_INFO_ALPINE_ENC}"     | gawk '{print $3}' )
+	failExit $? "Image layerinfo on PGP encrypted image shows differences in architectures"
+
+	diff <(echo "${LAYER_INFO_ALPINE_ENC_NEW}") <(echo "${LAYER_INFO_ALPINE_ENC}")
+	failExit $? "Image layerinfos are different (PGP)"
+
+	# restore ${ALPINE}
+	MSG=$($CTR images decrypt \
+		--gpg-homedir ${GPGHOMEDIR} \
+		--gpg-version 2 \
+		--key <(echo "${GPGTESTKEY1}" | base64 -d) \
+		${ALPINE_ENC} ${ALPINE} 2>&1)
+	failExit $? "Image decryption with PGP failed\n$MSG"
+	sleep ${SLEEP_TIME}
+
+	echo "PASS: Import and export of PGP encrypted image"
+	echo
 	echo "Testing adding a PGP recipient"
 	$CTR images encrypt \
 		--gpg-homedir ${GPGHOMEDIR} \
