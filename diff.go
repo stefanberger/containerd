@@ -115,7 +115,7 @@ func fromCryptoConfig(cc encconfig.CryptoConfig) map[string]*diffapi.ByteArrays 
 	if cc.Dc != nil && cc.Dc.Parameters != nil {
 		for k, v := range cc.Dc.Parameters {
 			dcparameters[k] = &diffapi.ByteArrays{
-				ByteArrays : v,
+				ByteArrays: v,
 			}
 		}
 	}

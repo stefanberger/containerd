@@ -124,7 +124,7 @@ func cryptImage(client *containerd.Client, ctx gocontext.Context, name, newName 
 		modified bool
 		newSpec  ocispec.Descriptor
 	)
-	if (encrypt) {
+	if encrypt {
 		newSpec, modified, err = images.EncryptImage(ctx, client.ContentStore(), image.Target, cc, lf)
 	} else {
 		newSpec, modified, err = images.DecryptImage(ctx, client.ContentStore(), image.Target, cc, lf)

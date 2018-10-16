@@ -29,11 +29,11 @@ func TestBlockCipherHandlerCreate(t *testing.T) {
 
 func TestBlockCipherEncryption(t *testing.T) {
 	var (
-		symKey []byte                  = []byte("01234567890123456789012345678912")
-		opt    LayerBlockCipherOptions = LayerBlockCipherOptions{
+		symKey = []byte("01234567890123456789012345678912")
+		opt    = LayerBlockCipherOptions{
 			SymmetricKey: symKey,
 		}
-		layerData []byte = []byte("this is some data")
+		layerData = []byte("this is some data")
 	)
 
 	h, err := NewLayerBlockCipherHandler()
@@ -59,11 +59,11 @@ func TestBlockCipherEncryption(t *testing.T) {
 
 func TestBlockCipherEncryptionInvalidKey(t *testing.T) {
 	var (
-		symKey []byte                  = []byte("01234567890123456789012345678912")
-		opt    LayerBlockCipherOptions = LayerBlockCipherOptions{
+		symKey = []byte("01234567890123456789012345678912")
+		opt    = LayerBlockCipherOptions{
 			SymmetricKey: symKey,
 		}
-		layerData []byte = []byte("this is some data")
+		layerData = []byte("this is some data")
 	)
 
 	h, err := NewLayerBlockCipherHandler()
@@ -78,6 +78,10 @@ func TestBlockCipherEncryptionInvalidKey(t *testing.T) {
 
 	// Use a different instantiated object to indicate an invokation at a diff time
 	bc2, err := NewGCMLayerBlockCipher(256)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	lbco.SymmetricKey = []byte("aaa34567890123456789012345678912")
 	_, _, err = bc2.Decrypt(ciphertext, lbco)
 	if err == nil {
@@ -87,11 +91,11 @@ func TestBlockCipherEncryptionInvalidKey(t *testing.T) {
 
 func TestBlockCipherEncryptionInvalidKeyLength(t *testing.T) {
 	var (
-		symKey []byte                  = []byte("01234567890123456789012345678912")
-		opt    LayerBlockCipherOptions = LayerBlockCipherOptions{
+		symKey = []byte("01234567890123456789012345678912")
+		opt    = LayerBlockCipherOptions{
 			SymmetricKey: symKey,
 		}
-		layerData []byte = []byte("this is some data")
+		layerData = []byte("this is some data")
 	)
 
 	h, err := NewLayerBlockCipherHandler()
