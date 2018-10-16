@@ -96,6 +96,26 @@ var validJweCcs = []*config.CryptoConfig{
 			},
 		},
 	},
+	// Key (DER format)
+	{
+		Ec: &config.EncryptConfig{
+			Parameters: map[string][][]byte{
+				"pubkeys": {jwePubKeyDer},
+			},
+			Operation: config.OperationAddRecipients,
+			Dc: config.DecryptConfig{
+				Parameters: map[string][][]byte{
+					"privkeys": {jwePrivKeyDer},
+				},
+			},
+		},
+
+		Dc: &config.DecryptConfig{
+			Parameters: map[string][][]byte{
+				"privkeys": {jwePrivKeyDer},
+			},
+		},
+	},
 }
 
 var invalidJweCcs = []*config.CryptoConfig{
