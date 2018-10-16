@@ -150,7 +150,7 @@ func TestImageEncryption(t *testing.T) {
 	}
 
 	// Perform encryption of image
-	encSpec, modified, err := images.CryptImage(ctx, client.ContentStore(), image.Target, cc, lf, true)
+	encSpec, modified, err := images.EncryptImage(ctx, client.ContentStore(), image.Target, cc, lf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -169,7 +169,7 @@ func TestImageEncryption(t *testing.T) {
 	}
 
 	// Perform decryption of image
-	decSpec, modified, err := images.CryptImage(ctx, client.ContentStore(), encSpec, cc, lf, false)
+	decSpec, modified, err := images.DecryptImage(ctx, client.ContentStore(), encSpec, cc, lf)
 	if err != nil {
 		t.Fatal(err)
 	}
