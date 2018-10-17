@@ -154,7 +154,7 @@ func (i *image) Unpack(ctx context.Context, snapshotterName string) error {
 	)
 
 	for id, layer := range layers {
-		var cc encconfig.CryptoConfig
+		var cc *encconfig.CryptoConfig
 		if i.dcparameters != nil || len(i.dcparameters) > 0 {
 			ds := platforms.DefaultSpec()
 			layerInfo := encryption.LayerInfo{
@@ -171,7 +171,7 @@ func (i *image) Unpack(ctx context.Context, snapshotterName string) error {
 				return err
 			}
 
-			cc = encconfig.CryptoConfig{
+			cc = &encconfig.CryptoConfig{
 				Dc: &encconfig.DecryptConfig{
 					Parameters: i.dcparameters,
 				},
