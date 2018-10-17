@@ -102,7 +102,7 @@ func (l *local) Apply(ctx context.Context, er *diffapi.ApplyRequest, _ ...grpc.C
 	)
 
 	for _, differ := range l.differs {
-		ocidesc, err = differ.Apply(ctx, desc, mounts, cc)
+		ocidesc, err = differ.Apply(ctx, desc, mounts, &cc)
 		if !errdefs.IsNotImplemented(err) {
 			break
 		}
