@@ -59,7 +59,7 @@ type Applier interface {
 	// implementation and content descriptor. For example, in the common
 	// case the descriptor is a file system difference in tar format,
 	// that tar would be applied on top of the mounts.
-	Apply(ctx context.Context, desc ocispec.Descriptor, mount []mount.Mount, cc encconfig.CryptoConfig) (ocispec.Descriptor, error)
+	Apply(ctx context.Context, desc ocispec.Descriptor, mount []mount.Mount, cc *encconfig.CryptoConfig) (ocispec.Descriptor, error)
 }
 
 // WithMediaType sets the media type to use for creating the diff, without
