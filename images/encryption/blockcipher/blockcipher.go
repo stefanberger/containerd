@@ -25,9 +25,9 @@ type LayerCipherType string
 
 // TODO: Should be obtained from OCI spec once included
 const (
-	AEAD_AES_128_GCM LayerCipherType = "AEAD_AES_128_GCM"
-	AEAD_AES_256_GCM LayerCipherType = "AEAD_AES_256_GCM"
-	CipherTypeOpt    string          = "type"
+	AEADAES128GCM LayerCipherType = "AEAD_AES_128_GCM"
+	AEADAES256GCM LayerCipherType = "AEAD_AES_256_GCM"
+	CipherTypeOpt string          = "type"
 )
 
 // LayerBlockCipherOptions includes the information required to encrypt/decrypt
@@ -82,12 +82,12 @@ func NewLayerBlockCipherHandler() (*LayerBlockCipherHandler, error) {
 	}
 
 	var err error
-	h.cipherMap[AEAD_AES_128_GCM], err = NewGCMLayerBlockCipher(128)
+	h.cipherMap[AEADAES128GCM], err = NewGCMLayerBlockCipher(128)
 	if err != nil {
 		return nil, errors.Wrap(err, "Unable to set up Cipher GCM 128")
 	}
 
-	h.cipherMap[AEAD_AES_256_GCM], err = NewGCMLayerBlockCipher(256)
+	h.cipherMap[AEADAES256GCM], err = NewGCMLayerBlockCipher(256)
 	if err != nil {
 		return nil, errors.Wrap(err, "Unable to set up Cipher GCM 256")
 	}
