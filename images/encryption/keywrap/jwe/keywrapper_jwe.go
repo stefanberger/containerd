@@ -110,9 +110,7 @@ func addPubKeys(joseRecipients *[]jose.Recipient, pubKeys [][]byte) error {
 
 		*joseRecipients = append(*joseRecipients, jose.Recipient{
 			Algorithm: jose.RSA_OAEP,
-			Key: &jose.JSONWebKey{
-				Key: key,
-			},
+			Key:       key,
 		})
 	}
 	return nil
