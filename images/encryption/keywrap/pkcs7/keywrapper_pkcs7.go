@@ -77,7 +77,7 @@ func (kw *pkcs7KeyWrapper) GetPrivateKeys(dcparameters map[string][][]byte) [][]
 // UnwrapKey unwraps the symmetric key with which the layer is encrypted
 // This symmetric key is encrypted in the PGP payload.
 func (kw *pkcs7KeyWrapper) UnwrapKey(dc *config.DecryptConfig, pkcs7Packet []byte) ([]byte, error) {
-	privKeys := dc.Parameters["privkeys"]
+	privKeys := kw.GetPrivateKeys(dc.Parameters)
 	if len(privKeys) == 0 {
 		return nil, errors.New("No private keys found for PKCS7 decryption")
 	}
