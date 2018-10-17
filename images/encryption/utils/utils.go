@@ -24,10 +24,36 @@ import (
 	"fmt"
 	"strings"
 
-	"golang.org/x/crypto/openpgp"
-
 	"github.com/pkg/errors"
+	"golang.org/x/crypto/openpgp"
+	json "gopkg.in/square/go-jose.v2"
 )
+
+// parseJWKPrivateKey parses the input byte array as a JWK and makes sure it's a private key
+func parseJWKPrivateKey(privKey []byte, prefix string) (interface{}, error) {
+	jwk := json.JSONWebKey{}
+	err := jwk.UnmarshalJSON(privKey)
+	if err != nil {
+		return nil, errors.Wrapf(err, "%s: Could not parse input as JWK", prefix)
+	}
+	if jwk.IsPublic() {
+		return nil, fmt.Errorf("%s: JWK is not a private key", prefix)
+	}
+	return &jwk, nil
+}
+
+// parseJWKPublicKey parses the input byte array as a JWK
+func parseJWKPublicKey(privKey []byte, prefix string) (interface{}, error) {
+	jwk := json.JSONWebKey{}
+	err := jwk.UnmarshalJSON(privKey)
+	if err != nil {
+		return nil, errors.Wrapf(err, "%s: Could not parse input as JWK", prefix)
+	}
+	if !jwk.IsPublic() {
+		return nil, fmt.Errorf("%s: JWK is not a public key", prefix)
+	}
+	return &jwk, nil
+}
 
 // ParsePrivateKey tries to parse a private key in DER format first and
 // PEM format after, returning an error if the parsing failed
@@ -38,15 +64,16 @@ func ParsePrivateKey(privKey []byte, prefix string) (interface{}, error) {
 	}
 	if err != nil {
 		block, _ := pem.Decode(privKey)
-		if block == nil {
-			return nil, fmt.Errorf("%s: Could not PEM decode private key", prefix)
-		}
-		key, err = x509.ParsePKCS8PrivateKey(block.Bytes)
-		if err != nil {
-			key, err = x509.ParsePKCS1PrivateKey(block.Bytes)
+		if block != nil {
+			key, err = x509.ParsePKCS8PrivateKey(block.Bytes)
 			if err != nil {
-				return nil, errors.Wrapf(err, "%s: Could not parse private key", prefix)
+				key, err = x509.ParsePKCS1PrivateKey(block.Bytes)
+				if err != nil {
+					return nil, errors.Wrapf(err, "%s: Could not parse private key", prefix)
+				}
 			}
+		} else {
+			key, err = parseJWKPrivateKey(privKey, prefix)
 		}
 	}
 	return key, err
@@ -64,12 +91,13 @@ func ParsePublicKey(pubKey []byte, prefix string) (interface{}, error) {
 	key, err := x509.ParsePKIXPublicKey(pubKey)
 	if err != nil {
 		block, _ := pem.Decode(pubKey)
-		if block == nil {
-			return nil, fmt.Errorf("%s: Could not PEM decode public key", prefix)
-		}
-		key, err = x509.ParsePKIXPublicKey(block.Bytes)
-		if err != nil {
-			return nil, errors.Wrapf(err, "%s: Could not parse public key", prefix)
+		if block != nil {
+			key, err = x509.ParsePKIXPublicKey(block.Bytes)
+			if err != nil {
+				return nil, errors.Wrapf(err, "%s: Could not parse public key", prefix)
+			}
+		} else {
+			key, err = parseJWKPublicKey(pubKey, prefix)
 		}
 	}
 	return key, err
