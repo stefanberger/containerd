@@ -116,6 +116,26 @@ var validJweCcs = []*config.CryptoConfig{
 			},
 		},
 	},
+	// Key (JWK format)
+	{
+		Ec: &config.EncryptConfig{
+			Parameters: map[string][][]byte{
+				"pubkeys": {jwePubKeyJwk},
+			},
+			Operation: config.OperationAddRecipients,
+			Dc: config.DecryptConfig{
+				Parameters: map[string][][]byte{
+					"privkeys": {jwePrivKeyJwk},
+				},
+			},
+		},
+
+		Dc: &config.DecryptConfig{
+			Parameters: map[string][][]byte{
+				"privkeys": {jwePrivKeyJwk},
+			},
+		},
+	},
 }
 
 var invalidJweCcs = []*config.CryptoConfig{
