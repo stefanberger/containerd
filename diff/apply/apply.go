@@ -68,8 +68,6 @@ func (s *fsApplier) Apply(ctx context.Context, desc ocispec.Descriptor, mounts [
 		}
 	}()
 
-	isEncrypted := images.IsEncryptedDiff(ctx, desc.MediaType)
-
 	isCompressed, err := images.IsCompressedDiff(ctx, desc.MediaType)
 	if err != nil {
 		return emptyDesc, errors.Wrapf(errdefs.ErrNotImplemented, "unsupported diff media type: %v", desc.MediaType)
@@ -85,7 +83,7 @@ func (s *fsApplier) Apply(ctx context.Context, desc ocispec.Descriptor, mounts [
 
 		r := content.NewReader(ra)
 
-		if isEncrypted {
+		if images.IsEncryptedDiff(ctx, desc.MediaType) {
 			buf := new(bytes.Buffer)
 			buf.ReadFrom(r)
 
@@ -96,7 +94,6 @@ func (s *fsApplier) Apply(ctx context.Context, desc ocispec.Descriptor, mounts [
 
 			desc = newDesc
 			r = bytes.NewReader(b)
-
 		}
 
 		if isCompressed {
