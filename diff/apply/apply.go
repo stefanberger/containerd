@@ -55,7 +55,7 @@ var emptyDesc = ocispec.Descriptor{}
 // Apply applies the content associated with the provided digests onto the
 // provided mounts. Archive content will be extracted and decompressed if
 // necessary.
-func (s *fsApplier) Apply(ctx context.Context, desc ocispec.Descriptor, mounts []mount.Mount, cc encconfig.CryptoConfig) (d ocispec.Descriptor, err error) {
+func (s *fsApplier) Apply(ctx context.Context, desc ocispec.Descriptor, mounts []mount.Mount, cc *encconfig.CryptoConfig) (d ocispec.Descriptor, err error) {
 	t1 := time.Now()
 	defer func() {
 		if err == nil {
@@ -89,7 +89,7 @@ func (s *fsApplier) Apply(ctx context.Context, desc ocispec.Descriptor, mounts [
 			buf := new(bytes.Buffer)
 			buf.ReadFrom(r)
 
-			newDesc, b, err := images.DecryptBlob(&cc, buf.Bytes(), desc)
+			newDesc, b, err := images.DecryptBlob(cc, buf.Bytes(), desc)
 			if err != nil {
 				return err
 			}

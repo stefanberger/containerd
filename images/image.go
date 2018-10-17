@@ -489,6 +489,9 @@ func encryptLayer(cc *encconfig.CryptoConfig, data []byte, desc ocispec.Descript
 // DecryptBlob decrypts the layer blob using the CryptoConfig and creates a new OCI Descriptor.
 // The caller is expected to store the returned plain data and OCI Descriptor
 func DecryptBlob(cc *encconfig.CryptoConfig, data []byte, desc ocispec.Descriptor) (ocispec.Descriptor, []byte, error) {
+	if cc == nil {
+		return ocispec.Descriptor{}, []byte{}, errors.Wrapf(errdefs.ErrInvalidArgument, "CryptoConfig must not be nil")
+	}
 	p, err := encryption.DecryptLayer(cc.Dc, data, desc)
 	if err != nil {
 		return ocispec.Descriptor{}, []byte{}, err
@@ -793,6 +796,9 @@ func cryptManifestList(ctx context.Context, cs content.Store, desc ocispec.Descr
 // cryptImage is the dispatcher to encrypt/decrypt an image; it accepts either an OCI descriptor
 // representing a manifest list or a single manifest
 func cryptImage(ctx context.Context, cs content.Store, desc ocispec.Descriptor, cc *encconfig.CryptoConfig, lf *encryption.LayerFilter, encrypt bool) (ocispec.Descriptor, bool, error) {
+	if cc == nil {
+		return ocispec.Descriptor{}, false, errors.Wrapf(errdefs.ErrInvalidArgument, "CryptoConfig must not be nil")
+	}
 	switch desc.MediaType {
 	case ocispec.MediaTypeImageIndex, MediaTypeDockerSchema2ManifestList:
 		return cryptManifestList(ctx, cs, desc, cc, lf, encrypt)
