@@ -41,7 +41,7 @@ func TestBlockCipherEncryption(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ciphertext, lbco, err := h.Encrypt(layerData, AEAD_AES_256_GCM, opt)
+	ciphertext, lbco, err := h.Encrypt(layerData, AEADAES256GCM, opt)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +71,7 @@ func TestBlockCipherEncryptionInvalidKey(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ciphertext, lbco, err := h.Encrypt(layerData, AEAD_AES_256_GCM, opt)
+	ciphertext, lbco, err := h.Encrypt(layerData, AEADAES256GCM, opt)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,7 +103,7 @@ func TestBlockCipherEncryptionInvalidKeyLength(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, _, err = h.Encrypt(layerData, AEAD_AES_128_GCM, opt)
+	_, _, err = h.Encrypt(layerData, AEADAES128GCM, opt)
 	if err == nil {
 		t.Fatal(err)
 	}

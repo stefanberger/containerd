@@ -122,7 +122,7 @@ func EncryptLayer(ec *config.EncryptConfig, encOrPlainLayer []byte, desc ocispec
 	for annotationsID, scheme := range keyWrapperAnnotations {
 		b64Annotations := desc.Annotations[annotationsID]
 		if b64Annotations == "" && optsData == nil {
-			encLayer, optsData, err = commonEncryptLayer(encOrPlainLayer, symKey, blockcipher.AEAD_AES_256_GCM)
+			encLayer, optsData, err = commonEncryptLayer(encOrPlainLayer, symKey, blockcipher.AEADAES256GCM)
 			if err != nil {
 				return nil, nil, err
 			}
