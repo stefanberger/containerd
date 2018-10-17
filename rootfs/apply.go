@@ -48,7 +48,7 @@ type Layer struct {
 // The returned result is a chain id digest representing all the applied layers.
 // Layers are applied in order they are given, making the first layer the
 // bottom-most layer in the layer chain.
-func ApplyLayers(ctx context.Context, layers []Layer, sn snapshots.Snapshotter, a diff.Applier, cc encconfig.CryptoConfig) (digest.Digest, error) {
+func ApplyLayers(ctx context.Context, layers []Layer, sn snapshots.Snapshotter, a diff.Applier, cc *encconfig.CryptoConfig) (digest.Digest, error) {
 	chain := make([]digest.Digest, len(layers))
 	for i, layer := range layers {
 		chain[i] = layer.Diff.Digest
@@ -75,7 +75,7 @@ func ApplyLayers(ctx context.Context, layers []Layer, sn snapshots.Snapshotter, 
 // ApplyLayer applies a single layer on top of the given provided layer chain,
 // using the provided snapshotter and applier. If the layer was unpacked true
 // is returned, if the layer already exists false is returned.
-func ApplyLayer(ctx context.Context, layer Layer, chain []digest.Digest, sn snapshots.Snapshotter, a diff.Applier, cc encconfig.CryptoConfig, opts ...snapshots.Opt) (bool, error) {
+func ApplyLayer(ctx context.Context, layer Layer, chain []digest.Digest, sn snapshots.Snapshotter, a diff.Applier, cc *encconfig.CryptoConfig, opts ...snapshots.Opt) (bool, error) {
 	var (
 		chainID = identity.ChainID(append(chain, layer.Diff.Digest)).String()
 		applied bool
@@ -96,7 +96,7 @@ func ApplyLayer(ctx context.Context, layer Layer, chain []digest.Digest, sn snap
 	return applied, nil
 }
 
-func applyLayers(ctx context.Context, layers []Layer, chain []digest.Digest, sn snapshots.Snapshotter, a diff.Applier, cc encconfig.CryptoConfig, opts ...snapshots.Opt) error {
+func applyLayers(ctx context.Context, layers []Layer, chain []digest.Digest, sn snapshots.Snapshotter, a diff.Applier, cc *encconfig.CryptoConfig, opts ...snapshots.Opt) error {
 	var (
 		parent  = identity.ChainID(chain[:len(chain)-1])
 		chainID = identity.ChainID(chain)
