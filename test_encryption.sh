@@ -290,6 +290,10 @@ createJWEKeys() {
 	PRIVKEY2PEM=${WORKDIR}/mykey2.pem
 	PUBKEY2PEM=${WORKDIR}/mypubkey2.pem
 
+	PRIVKEY3PASSPEM=${WORKDIR}/mykey3pass.pem
+	PRIVKEY3PASSWORD="1234"
+	PUBKEY3PEM=${WORKDIR}/pubkey3.pem
+
 	PRIVKEYJWK=${WORKDIR}/mykey.jwk
 	PUBKEYJWK=${WORKDIR}/mypubkey.jwk
 
@@ -316,6 +320,12 @@ createJWEKeys() {
 
 	MSG="$(openssl rsa -inform pem -outform pem -pubout -in ${PRIVKEY2PEM} -out ${PUBKEY2PEM} 2>&1)"
 	failExit $? "Could not write 2nd public key in PEM format\n$MSG"
+
+	MSG="$(openssl genrsa -aes256 -passout pass:${PRIVKEY3PASSWORD} -out ${PRIVKEY3PASSPEM} 2>&1)"
+	failExit $? "Could not generate 3rd private key\n$MSG"
+
+	MSG="$(openssl rsa -inform pem -outform pem -passin pass:${PRIVKEY3PASSWORD} -pubout -in ${PRIVKEY3PASSPEM} -out ${PUBKEY3PEM} 2>&1)"
+	failExit $? "Could not write 3rd public key in PEM format\n$MSG"
 
 	echo "${JWKTESTKEY1}" > ${PRIVKEYJWK}
 	echo "${JWKTESTPUBKEY1}" > ${PUBKEYJWK}
@@ -379,13 +389,18 @@ testJWE() {
 	$CTR images encrypt \
 		--key ${PRIVKEYPEM} \
 		--recipient ${PUBKEY2PEM} \
+		--recipient ${PUBKEY3PEM} \
 		${ALPINE_ENC}
 	failExit $? "Adding recipient to JWE encrypted image failed"
 	sleep ${SLEEP_TIME}
 
-	for privkey in ${PRIVKEYPEM} ${PRIVKEY2PEM}; do
+	for privkey in ${PRIVKEYPEM} ${PRIVKEY2PEM} ${PRIVKEY3PASSPEM}; do
+		local key=${privkey}
+		if [ "${privkey}" == "${PRIVKEY3PASSPEM}" ]; then
+			key=${privkey}:pass=${PRIVKEY3PASSWORD}
+		fi
 		$CTR images decrypt \
-			--key ${privkey} \
+			--key ${key} \
 			${ALPINE_ENC} ${ALPINE_DEC}
 		failExit $? "Image decryption with JWE failed: private key: ${privkey}"
 

@@ -74,12 +74,20 @@ func (kw *pkcs7KeyWrapper) GetPrivateKeys(dcparameters map[string][][]byte) [][]
 	return dcparameters["privkeys"]
 }
 
+func (kw *pkcs7KeyWrapper) getPrivateKeysPasswords(dcparameters map[string][][]byte) [][]byte {
+	return dcparameters["privkeys-passwords"]
+}
+
 // UnwrapKey unwraps the symmetric key with which the layer is encrypted
 // This symmetric key is encrypted in the PGP payload.
 func (kw *pkcs7KeyWrapper) UnwrapKey(dc *config.DecryptConfig, pkcs7Packet []byte) ([]byte, error) {
 	privKeys := kw.GetPrivateKeys(dc.Parameters)
 	if len(privKeys) == 0 {
 		return nil, errors.New("No private keys found for PKCS7 decryption")
+	}
+	privKeysPasswords := kw.getPrivateKeysPasswords(dc.Parameters)
+	if len(privKeysPasswords) != len(privKeys) {
+		return nil, errors.New("Private key password array length must be same as that of private keys")
 	}
 
 	x509Certs, err := collectX509s(dc.Parameters["x509s"])
@@ -95,8 +103,8 @@ func (kw *pkcs7KeyWrapper) UnwrapKey(dc *config.DecryptConfig, pkcs7Packet []byt
 		return nil, errors.Wrapf(err, "Could not parse PKCS7 packet")
 	}
 
-	for _, privKey := range privKeys {
-		key, err := utils.ParsePrivateKey(privKey, "PKCS7")
+	for idx, privKey := range privKeys {
+		key, err := utils.ParsePrivateKey(privKey, privKeysPasswords[idx], "PKCS7")
 		if err != nil {
 			return nil, err
 		}
