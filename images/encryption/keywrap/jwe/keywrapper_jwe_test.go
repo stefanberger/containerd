@@ -104,6 +104,24 @@ var validJweCcs = []*config.CryptoConfig{
 			},
 		},
 	},
+
+	// Key 3 with enc private key
+	{
+		Ec: &config.EncryptConfig{
+			Parameters: map[string][][]byte{
+				"pubkeys": {jwePubKey3Pem},
+			},
+			Operation: config.OperationAddRecipients,
+		},
+
+		Dc: &config.DecryptConfig{
+			Parameters: map[string][][]byte{
+				"privkeys":           {jwePrivKey3PassPem},
+				"privkeys-passwords": {jwePrivKey3Password},
+			},
+		},
+	},
+
 	// Key (DER format)
 	{
 		Ec: &config.EncryptConfig{
