@@ -89,7 +89,7 @@ var encryptCommand = cli.Command{
 
 		layers32 := commands.IntToInt32Array(context.IntSlice("layer"))
 
-		gpgSecretKeyRingFiles, privKeys, err := processPrivateKeyFiles(context.StringSlice("key"))
+		gpgSecretKeyRingFiles, privKeys, privKeysPasswords, err := processPrivateKeyFiles(context.StringSlice("key"))
 		if err != nil {
 			return err
 		}
@@ -140,6 +140,7 @@ var encryptCommand = cli.Command{
 		}
 
 		dcparameters["privkeys"] = privKeys
+		dcparameters["privkeys-passwords"] = privKeysPasswords
 		dcparameters["x509s"] = decX509s
 
 		cc := &encconfig.CryptoConfig{
