@@ -138,6 +138,7 @@ func TestImageEncryption(t *testing.T) {
 
 	parameters["pubkeys"] = [][]byte{publicKey}
 	dcparameters["privkeys"] = [][]byte{privateKey}
+	dcparameters["privkeys-passwords"] = [][]byte{{}}
 
 	cc := &encconfig.CryptoConfig{
 		Ec: &encconfig.EncryptConfig{
