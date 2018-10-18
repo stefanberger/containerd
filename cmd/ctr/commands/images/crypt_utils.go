@@ -85,11 +85,11 @@ func processPwdString(pwdString string) ([]byte, error) {
 		}
 		defer f.Close()
 		pwd := make([]byte, 64)
-		_, err = f.Read(pwd)
+		n, err := f.Read(pwd)
 		if err != nil {
 			return nil, errors.Wrapf(err, "Could not read from file descriptor")
 		}
-		return pwd, nil
+		return pwd[:n], nil
 	}
 	return []byte(pwdString), nil
 }
