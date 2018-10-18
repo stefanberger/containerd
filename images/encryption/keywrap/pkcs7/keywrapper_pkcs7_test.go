@@ -22,6 +22,8 @@ import (
 	"github.com/containerd/containerd/images/encryption/config"
 )
 
+var oneEmpty []byte
+
 var validPkcs7Ccs = []*config.CryptoConfig{
 	// Client key 1
 	{
@@ -32,15 +34,17 @@ var validPkcs7Ccs = []*config.CryptoConfig{
 			Operation: config.OperationAddRecipients,
 			Dc: config.DecryptConfig{
 				Parameters: map[string][][]byte{
-					"privkeys": {pkcs7ClientCertKey},
-					"x509s":    {pkcs7ClientCert},
+					"privkeys":           {pkcs7ClientCertKey},
+					"privkeys-passwords": {oneEmpty},
+					"x509s":              {pkcs7ClientCert},
 				},
 			},
 		},
 		Dc: &config.DecryptConfig{
 			Parameters: map[string][][]byte{
-				"privkeys": {pkcs7ClientCertKey},
-				"x509s":    {pkcs7ClientCert},
+				"privkeys":           {pkcs7ClientCertKey},
+				"privkeys-passwords": {oneEmpty},
+				"x509s":              {pkcs7ClientCert},
 			},
 		},
 	},
@@ -54,15 +58,17 @@ var validPkcs7Ccs = []*config.CryptoConfig{
 			Operation: config.OperationAddRecipients,
 			Dc: config.DecryptConfig{
 				Parameters: map[string][][]byte{
-					"privkeys": {pkcs7Client2CertKey},
-					"x509s":    {pkcs7Client2Cert},
+					"privkeys":           {pkcs7Client2CertKey},
+					"privkeys-passwords": {oneEmpty},
+					"x509s":              {pkcs7Client2Cert},
 				},
 			},
 		},
 		Dc: &config.DecryptConfig{
 			Parameters: map[string][][]byte{
-				"privkeys": {pkcs7Client2CertKey},
-				"x509s":    {pkcs7Client2Cert},
+				"privkeys":           {pkcs7Client2CertKey},
+				"privkeys-passwords": {oneEmpty},
+				"x509s":              {pkcs7Client2Cert},
 			},
 		},
 	},
@@ -77,8 +83,9 @@ var validPkcs7Ccs = []*config.CryptoConfig{
 		},
 		Dc: &config.DecryptConfig{
 			Parameters: map[string][][]byte{
-				"privkeys": {pkcs7ClientCertKey},
-				"x509s":    {pkcs7ClientCert},
+				"privkeys":           {pkcs7ClientCertKey},
+				"privkeys-passwords": {oneEmpty},
+				"x509s":              {pkcs7ClientCert},
 			},
 		},
 	},
@@ -93,8 +100,9 @@ var validPkcs7Ccs = []*config.CryptoConfig{
 		},
 		Dc: &config.DecryptConfig{
 			Parameters: map[string][][]byte{
-				"privkeys": {pkcs7Client2CertKey},
-				"x509s":    {pkcs7Client2Cert},
+				"privkeys":           {pkcs7Client2CertKey},
+				"privkeys-passwords": {oneEmpty},
+				"x509s":              {pkcs7Client2Cert},
 			},
 		},
 	},
@@ -111,8 +119,9 @@ var invalidPkcs7Ccs = []*config.CryptoConfig{
 		},
 		Dc: &config.DecryptConfig{
 			Parameters: map[string][][]byte{
-				"privkeys": {pkcs7Client2CertKey},
-				"x509s":    {pkcs7Client2Cert},
+				"privkeys":           {pkcs7Client2CertKey},
+				"privkeys-passwords": {oneEmpty},
+				"x509s":              {pkcs7Client2Cert},
 			},
 		},
 	},
@@ -140,8 +149,9 @@ var invalidPkcs7Ccs = []*config.CryptoConfig{
 		},
 		Dc: &config.DecryptConfig{
 			Parameters: map[string][][]byte{
-				"privkeys": {pkcs7ClientCert},
-				"x509s":    {pkcs7ClientCert},
+				"privkeys":           {pkcs7ClientCert},
+				"privkeys-passwords": {oneEmpty},
+				"x509s":              {pkcs7ClientCert},
 			},
 		},
 	},

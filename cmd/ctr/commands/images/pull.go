@@ -61,7 +61,7 @@ command. As part of this process, we do the following:
 			Usage: "The GPG version (\"v1\" or \"v2\"), default will make an educated guess",
 		}, cli.StringSliceFlag{
 			Name:  "key",
-			Usage: "A secret key's filename; may be provided multiple times",
+			Usage: "A secret key's filename and an optional password separated by colon; may be provided multiple times",
 		},
 	),
 	Action: func(context *cli.Context) error {
