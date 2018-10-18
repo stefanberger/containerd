@@ -77,6 +77,7 @@ func init() {
 
 	parameters["pubkeys"] = [][]byte{publicKey}
 	dcparameters["privkeys"] = [][]byte{privateKey}
+	dcparameters["privkeys-passwords"] = [][]byte{{}}
 
 	ec = &config.EncryptConfig{
 		Parameters: parameters,

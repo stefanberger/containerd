@@ -31,10 +31,17 @@ var decryptCommand = cli.Command{
 	ArgsUsage: "[flags] <local> <new name>",
 	Description: `Decrypt an image locally.
 
-	Decrypt an image using private keys managed by GPG.
+	Decrypt an image using private keys.
 	The user has contol over which layers to decrypt and for which platform.
 	If no payers or platforms are specified, all layers for all platforms are
 	decrypted.
+
+	Private keys in PEM format may be encrypted and the password may be passed
+	along in any of the following formats:
+	- <filename>:<password>
+	- <filename>:pass=<password>
+	- <filename>:fd=<file descriptor>
+	- <filename>:filename=<password file>
 `,
 	Flags: append(commands.RegistryFlags, cli.IntSliceFlag{
 		Name:  "layer",
@@ -50,7 +57,7 @@ var decryptCommand = cli.Command{
 		Usage: "The GPG version (\"v1\" or \"v2\"), default will make an educated guess",
 	}, cli.StringSliceFlag{
 		Name:  "key",
-		Usage: "A secret key's filename. The file suffix must be .pem or .der for JWE and anything else for OpenPGP; this option may be provided multiple times",
+		Usage: "A secret key's filename and an optional password separated by colon; this option may be provided multiple times",
 	}, cli.StringSliceFlag{
 		Name:  "recipient",
 		Usage: "Recipient of the image; used only for PKCs7 and must be an x509 certificate",

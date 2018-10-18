@@ -22,6 +22,8 @@ import (
 	"github.com/containerd/containerd/images/encryption/config"
 )
 
+var oneEmpty []byte
+
 var validJweCcs = []*config.CryptoConfig{
 	// Key 1
 	{
@@ -32,14 +34,16 @@ var validJweCcs = []*config.CryptoConfig{
 			Operation: config.OperationAddRecipients,
 			Dc: config.DecryptConfig{
 				Parameters: map[string][][]byte{
-					"privkeys": {jwePrivKeyPem},
+					"privkeys":           {jwePrivKeyPem},
+					"privkeys-passwords": {oneEmpty},
 				},
 			},
 		},
 
 		Dc: &config.DecryptConfig{
 			Parameters: map[string][][]byte{
-				"privkeys": {jwePrivKeyPem},
+				"privkeys":           {jwePrivKeyPem},
+				"privkeys-passwords": {oneEmpty},
 			},
 		},
 	},
@@ -53,14 +57,16 @@ var validJweCcs = []*config.CryptoConfig{
 			Operation: config.OperationAddRecipients,
 			Dc: config.DecryptConfig{
 				Parameters: map[string][][]byte{
-					"privkeys": {jwePrivKey2Pem},
+					"privkeys":           {jwePrivKey2Pem},
+					"privkeys-passwords": {oneEmpty},
 				},
 			},
 		},
 
 		Dc: &config.DecryptConfig{
 			Parameters: map[string][][]byte{
-				"privkeys": {jwePrivKey2Pem},
+				"privkeys":           {jwePrivKey2Pem},
+				"privkeys-passwords": {oneEmpty},
 			},
 		},
 	},
@@ -76,7 +82,8 @@ var validJweCcs = []*config.CryptoConfig{
 
 		Dc: &config.DecryptConfig{
 			Parameters: map[string][][]byte{
-				"privkeys": {jwePrivKeyPem},
+				"privkeys":           {jwePrivKeyPem},
+				"privkeys-passwords": {oneEmpty},
 			},
 		},
 	},
@@ -92,7 +99,8 @@ var validJweCcs = []*config.CryptoConfig{
 
 		Dc: &config.DecryptConfig{
 			Parameters: map[string][][]byte{
-				"privkeys": {jwePrivKey2Pem},
+				"privkeys":           {jwePrivKey2Pem},
+				"privkeys-passwords": {oneEmpty},
 			},
 		},
 	},
@@ -105,14 +113,16 @@ var validJweCcs = []*config.CryptoConfig{
 			Operation: config.OperationAddRecipients,
 			Dc: config.DecryptConfig{
 				Parameters: map[string][][]byte{
-					"privkeys": {jwePrivKeyDer},
+					"privkeys":           {jwePrivKeyDer},
+					"privkeys-passwords": {oneEmpty},
 				},
 			},
 		},
 
 		Dc: &config.DecryptConfig{
 			Parameters: map[string][][]byte{
-				"privkeys": {jwePrivKeyDer},
+				"privkeys":           {jwePrivKeyDer},
+				"privkeys-passwords": {oneEmpty},
 			},
 		},
 	},
@@ -125,14 +135,16 @@ var validJweCcs = []*config.CryptoConfig{
 			Operation: config.OperationAddRecipients,
 			Dc: config.DecryptConfig{
 				Parameters: map[string][][]byte{
-					"privkeys": {jwePrivKeyJwk},
+					"privkeys":           {jwePrivKeyJwk},
+					"privkeys-passwords": {oneEmpty},
 				},
 			},
 		},
 
 		Dc: &config.DecryptConfig{
 			Parameters: map[string][][]byte{
-				"privkeys": {jwePrivKeyJwk},
+				"privkeys":           {jwePrivKeyJwk},
+				"privkeys-passwords": {oneEmpty},
 			},
 		},
 	},
@@ -149,7 +161,8 @@ var invalidJweCcs = []*config.CryptoConfig{
 		},
 		Dc: &config.DecryptConfig{
 			Parameters: map[string][][]byte{
-				"privkeys": {jwePubKey2Pem},
+				"privkeys":           {jwePubKey2Pem},
+				"privkeys-passwords": {oneEmpty},
 			},
 		},
 	},
@@ -177,7 +190,8 @@ var invalidJweCcs = []*config.CryptoConfig{
 		},
 		Dc: &config.DecryptConfig{
 			Parameters: map[string][][]byte{
-				"privkeys": {jwePubKeyPem},
+				"privkeys":           {jwePubKeyPem},
+				"privkeys-passwords": {oneEmpty},
 			},
 		},
 	},

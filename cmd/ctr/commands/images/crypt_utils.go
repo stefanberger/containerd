@@ -21,6 +21,8 @@ import (
 
 	"fmt"
 	"io/ioutil"
+	"os"
+	"strconv"
 	"strings"
 
 	"github.com/containerd/containerd"
@@ -31,6 +33,7 @@ import (
 	"github.com/containerd/containerd/platforms"
 
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/pkg/errors"
 	"github.com/urfave/cli"
 )
 
@@ -59,28 +62,79 @@ func processRecipientKeys(recipients []string) ([][]byte, [][]byte, [][]byte, er
 	return gpgRecipients, pubkeys, x509s, nil
 }
 
-// processPrivateKeyFiles sorts the different types of private key files; private
-// key files may either be private keys or GPG private key ring files
-func processPrivateKeyFiles(keyFiles []string) ([][]byte, [][]byte, error) {
+// Process a password that may be in any of the following formats:
+// - file=<passwordfile>
+// - pass=<password>
+// - fd=<filedescriptor>
+// - <password>
+func processPwdString(pwdString string) ([]byte, error) {
+	if strings.HasPrefix(pwdString, "file=") {
+		return ioutil.ReadFile(pwdString[5:])
+	} else if strings.HasPrefix(pwdString, "pass=") {
+		return []byte(pwdString[5:]), nil
+	} else if strings.HasPrefix(pwdString, "fd=") {
+		fdStr := pwdString[3:]
+		fd, err := strconv.Atoi(fdStr)
+		if err != nil {
+			return nil, errors.Wrapf(err, "Could not parse file descriptor %s", fdStr)
+		}
+		f := os.NewFile(uintptr(fd), "pwdfile")
+		if f == nil {
+			return nil, fmt.Errorf("%s is not a valid file descriptor", fdStr)
+		}
+		defer f.Close()
+		pwd := make([]byte, 64)
+		_, err = f.Read(pwd)
+		if err != nil {
+			return nil, errors.Wrapf(err, "Could not read from file descriptor")
+		}
+		return pwd, nil
+	}
+	return []byte(pwdString), nil
+}
+
+// processPrivateKeyFiles sorts the different types of private key files; private key files may either be
+// private keys or GPG private key ring files. The private key files may include the password for the
+// private key and take any of the following forms:
+// - <filename>
+// - <filename>:file=<passwordfile>
+// - <filename>:pass=<password>
+// - <filename>:fd=<filedescriptor>
+// - <filename>:<password>
+func processPrivateKeyFiles(keyFilesAndPwds []string) ([][]byte, [][]byte, [][]byte, error) {
 	var (
 		gpgSecretKeyRingFiles [][]byte
 		privkeys              [][]byte
+		privkeysPasswords     [][]byte
+		err                   error
 	)
 	// keys needed for decryption in case of adding a recipient
-	for _, keyfile := range keyFiles {
+	for _, keyfileAndPwd := range keyFilesAndPwds {
+		var password []byte
+
+		parts := strings.Split(keyfileAndPwd, ":")
+		if len(parts) == 2 {
+			password, err = processPwdString(parts[1])
+			if err != nil {
+				return nil, nil, nil, err
+			}
+		}
+
+		keyfile := parts[0]
 		tmp, err := ioutil.ReadFile(keyfile)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
-		if encutils.IsPrivateKey(tmp) {
+		if encutils.IsPrivateKey(tmp, password) {
 			privkeys = append(privkeys, tmp)
+			privkeysPasswords = append(privkeysPasswords, password)
 		} else if encutils.IsGPGPrivateKeyRing(tmp) {
 			gpgSecretKeyRingFiles = append(gpgSecretKeyRingFiles, tmp)
 		} else {
-			return nil, nil, fmt.Errorf("Unidentified private key in file %s", keyfile)
+			return nil, nil, nil, fmt.Errorf("Unidentified private key in file %s (password=%s)", keyfile, string(password))
 		}
 	}
-	return gpgSecretKeyRingFiles, privkeys, nil
+	return gpgSecretKeyRingFiles, privkeys, privkeysPasswords, nil
 }
 
 func createGPGClient(context *cli.Context) (encryption.GPGClient, error) {
@@ -194,7 +248,7 @@ func createDcParameters(context *cli.Context, layerInfos []encryption.LayerInfo)
 		return nil, err
 	}
 
-	gpgSecretKeyRingFiles, privKeys, err := processPrivateKeyFiles(context.StringSlice("key"))
+	gpgSecretKeyRingFiles, privKeys, privKeysPasswords, err := processPrivateKeyFiles(context.StringSlice("key"))
 	if err != nil {
 		return nil, err
 	}
@@ -215,6 +269,7 @@ func createDcParameters(context *cli.Context, layerInfos []encryption.LayerInfo)
 	}
 
 	dcparameters["privkeys"] = privKeys
+	dcparameters["privkeys-passwords"] = privKeysPasswords
 	dcparameters["x509s"] = x509s
 
 	return dcparameters, nil

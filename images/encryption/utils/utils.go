@@ -57,7 +57,7 @@ func parseJWKPublicKey(privKey []byte, prefix string) (interface{}, error) {
 
 // ParsePrivateKey tries to parse a private key in DER format first and
 // PEM format after, returning an error if the parsing failed
-func ParsePrivateKey(privKey []byte, prefix string) (interface{}, error) {
+func ParsePrivateKey(privKey, privKeyPassword []byte, prefix string) (interface{}, error) {
 	key, err := x509.ParsePKCS8PrivateKey(privKey)
 	if err != nil {
 		key, err = x509.ParsePKCS1PrivateKey(privKey)
@@ -65,9 +65,22 @@ func ParsePrivateKey(privKey []byte, prefix string) (interface{}, error) {
 	if err != nil {
 		block, _ := pem.Decode(privKey)
 		if block != nil {
-			key, err = x509.ParsePKCS8PrivateKey(block.Bytes)
+			var der []byte
+			if x509.IsEncryptedPEMBlock(block) {
+				if privKeyPassword == nil {
+					return nil, fmt.Errorf("%s: Missing password for encrypted private key")
+				}
+				der, err = x509.DecryptPEMBlock(block, privKeyPassword)
+				if err != nil {
+					return nil, errors.Wrapf(err, "%s: Could not decrypt private key", prefix)
+				}
+			} else {
+				der = block.Bytes
+			}
+
+			key, err = x509.ParsePKCS8PrivateKey(der)
 			if err != nil {
-				key, err = x509.ParsePKCS1PrivateKey(block.Bytes)
+				key, err = x509.ParsePKCS1PrivateKey(der)
 				if err != nil {
 					return nil, errors.Wrapf(err, "%s: Could not parse private key", prefix)
 				}
@@ -80,8 +93,8 @@ func ParsePrivateKey(privKey []byte, prefix string) (interface{}, error) {
 }
 
 // IsPrivateKey returns true in case the given byte array represents a private key
-func IsPrivateKey(data []byte) bool {
-	_, err := ParsePrivateKey(data, "")
+func IsPrivateKey(data []byte, password []byte) bool {
+	_, err := ParsePrivateKey(data, password, "")
 	return err == nil
 }
 
@@ -146,24 +159,32 @@ func SortDecryptionKeys(b64ItemList string) (map[string][][]byte, error) {
 	dcparameters := make(map[string][][]byte)
 
 	for _, b64Item := range strings.Split(b64ItemList, ",") {
-		item, err := base64.StdEncoding.DecodeString(b64Item)
+		var password []byte
+		b64Data := strings.Split(b64Item, ":")
+		keyData, err := base64.StdEncoding.DecodeString(b64Data[0])
 		if err != nil {
 			return nil, errors.New("Could not base64 decode a passed decryption key")
 		}
+		if len(b64Data) == 2 {
+			password, err = base64.StdEncoding.DecodeString(b64Data[1])
+			if err != nil {
+				return nil, errors.New("Could not base64 decode a passed decryption key password")
+			}
+		}
 		var key string
-		if IsPrivateKey(item) {
+		if IsPrivateKey(keyData, password) {
 			key = "privkeys"
-		} else if IsCertificate(item) {
+		} else if IsCertificate(keyData) {
 			key = "x509s"
-		} else if IsGPGPrivateKeyRing(item) {
+		} else if IsGPGPrivateKeyRing(keyData) {
 			key = "gpg-privatekeys"
 		}
 		if key != "" {
 			values := dcparameters[key]
 			if values == nil {
-				dcparameters[key] = [][]byte{item}
+				dcparameters[key] = [][]byte{keyData}
 			} else {
-				dcparameters[key] = append(dcparameters[key], item)
+				dcparameters[key] = append(dcparameters[key], keyData)
 			}
 		} else {
 			return nil, errors.New("Unknown decryption key type")
