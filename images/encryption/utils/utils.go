@@ -24,6 +24,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/containerd/containerd/errdefs"
+
 	"github.com/pkg/errors"
 	"golang.org/x/crypto/openpgp"
 	json "gopkg.in/square/go-jose.v2"
@@ -68,11 +70,11 @@ func ParsePrivateKey(privKey, privKeyPassword []byte, prefix string) (interface{
 			var der []byte
 			if x509.IsEncryptedPEMBlock(block) {
 				if privKeyPassword == nil {
-					return nil, fmt.Errorf("%s: Missing password for encrypted private key")
+					return nil, errors.Wrapf(errdefs.ErrWrongPassword, "%s: Missing password for encrypted private key", prefix)
 				}
 				der, err = x509.DecryptPEMBlock(block, privKeyPassword)
 				if err != nil {
-					return nil, errors.Wrapf(err, "%s: Could not decrypt private key", prefix)
+					return nil, errors.Wrapf(errdefs.ErrWrongPassword, "%s: Could not decrypt private key", prefix)
 				}
 			} else {
 				der = block.Bytes
@@ -93,9 +95,10 @@ func ParsePrivateKey(privKey, privKeyPassword []byte, prefix string) (interface{
 }
 
 // IsPrivateKey returns true in case the given byte array represents a private key
-func IsPrivateKey(data []byte, password []byte) bool {
+// It returns an error if for example the password is wrong
+func IsPrivateKey(data []byte, password []byte) (bool, error) {
 	_, err := ParsePrivateKey(data, password, "")
-	return err == nil
+	return err == nil, err
 }
 
 // ParsePublicKey tries to parse a public key in DER format first and
@@ -172,7 +175,11 @@ func SortDecryptionKeys(b64ItemList string) (map[string][][]byte, error) {
 			}
 		}
 		var key string
-		if IsPrivateKey(keyData, password) {
+		isPrivKey, err := IsPrivateKey(keyData, password)
+		if errdefs.IsWrongPassword(err) {
+			return nil, err
+		}
+		if isPrivKey {
 			key = "privkeys"
 		} else if IsCertificate(keyData) {
 			key = "x509s"
