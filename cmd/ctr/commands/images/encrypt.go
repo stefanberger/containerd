@@ -89,7 +89,7 @@ var encryptCommand = cli.Command{
 
 		layers32 := commands.IntToInt32Array(context.IntSlice("layer"))
 
-		gpgSecretKeyRingFiles, privKeys, privKeysPasswords, err := processPrivateKeyFiles(context.StringSlice("key"))
+		gpgSecretKeyRingFiles, _, privKeys, privKeysPasswords, err := processPrivateKeyFiles(context.StringSlice("key"))
 		if err != nil {
 			return err
 		}
