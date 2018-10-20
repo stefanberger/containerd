@@ -21,6 +21,7 @@ import (
 	"crypto"
 	"crypto/rand"
 	"encoding/base64"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/mail"
@@ -105,7 +106,17 @@ func (kw *gpgKeyWrapper) UnwrapKey(dc *config.DecryptConfig, pgpPacket []byte) (
 
 		var prompt openpgp.PromptFunction
 		if len(pgpPrivateKeysPwd) > idx {
+			responded := false
 			prompt = func(keys []openpgp.Key, symmetric bool) ([]byte, error) {
+				if responded {
+					return nil, fmt.Errorf("Don't seem to have the right password")
+				}
+				responded = true
+				for _, key := range keys {
+					if key.PrivateKey != nil {
+						key.PrivateKey.Decrypt(pgpPrivateKeysPwd[idx])
+					}
+				}
 				return pgpPrivateKeysPwd[idx], nil
 			}
 		}
@@ -192,7 +203,7 @@ func (kw *gpgKeyWrapper) getKeyParameters(dcparameters map[string][][]byte) ([][
 		return nil, nil, errors.New("GPG: Missing private key parameter")
 	}
 
-	return privKeys, dcparameters["gpg-privatekeys-password"], nil
+	return privKeys, dcparameters["gpg-privatekeys-passwords"], nil
 }
 
 // createEntityList creates the opengpg EntityList by reading the KeyRing

@@ -406,7 +406,7 @@ func GPGGetPrivateKey(layerInfos []LayerInfo, gpgClient GPGClient, gpgVault GPGV
 		privKeysPwd = append(privKeysPwd, pkd.KeyDataPassword)
 	}
 	dcparameters["gpg-privatekeys"] = privKeys
-	dcparameters["gpg-privatekeys-password"] = privKeysPwd
+	dcparameters["gpg-privatekeys-passwords"] = privKeysPwd
 
 	return nil
 }
