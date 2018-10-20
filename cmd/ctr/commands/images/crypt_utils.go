@@ -102,9 +102,10 @@ func processPwdString(pwdString string) ([]byte, error) {
 // - <filename>:pass=<password>
 // - <filename>:fd=<filedescriptor>
 // - <filename>:<password>
-func processPrivateKeyFiles(keyFilesAndPwds []string) ([][]byte, [][]byte, [][]byte, error) {
+func processPrivateKeyFiles(keyFilesAndPwds []string) ([][]byte, [][]byte, [][]byte, [][]byte, error) {
 	var (
 		gpgSecretKeyRingFiles [][]byte
+		gpgSecretKeyPasswords [][]byte
 		privkeys              [][]byte
 		privkeysPasswords     [][]byte
 		err                   error
@@ -117,29 +118,30 @@ func processPrivateKeyFiles(keyFilesAndPwds []string) ([][]byte, [][]byte, [][]b
 		if len(parts) == 2 {
 			password, err = processPwdString(parts[1])
 			if err != nil {
-				return nil, nil, nil, err
+				return nil, nil, nil, nil, err
 			}
 		}
 
 		keyfile := parts[0]
 		tmp, err := ioutil.ReadFile(keyfile)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, nil, err
 		}
 		isPrivKey, err := encutils.IsPrivateKey(tmp, password)
 		if errdefs.IsWrongPassword(err) {
-			return nil, nil, nil, err
+			return nil, nil, nil, nil, err
 		}
 		if isPrivKey {
 			privkeys = append(privkeys, tmp)
 			privkeysPasswords = append(privkeysPasswords, password)
 		} else if encutils.IsGPGPrivateKeyRing(tmp) {
 			gpgSecretKeyRingFiles = append(gpgSecretKeyRingFiles, tmp)
+			gpgSecretKeyPasswords = append(gpgSecretKeyPasswords, password)
 		} else {
-			return nil, nil, nil, fmt.Errorf("Unidentified private key in file %s (password=%s)", keyfile, string(password))
+			return nil, nil, nil, nil, fmt.Errorf("Unidentified private key in file %s (password=%s)", keyfile, string(password))
 		}
 	}
-	return gpgSecretKeyRingFiles, privkeys, privkeysPasswords, nil
+	return gpgSecretKeyRingFiles, gpgSecretKeyPasswords, privkeys, privkeysPasswords, nil
 }
 
 func createGPGClient(context *cli.Context) (encryption.GPGClient, error) {
@@ -253,23 +255,25 @@ func createDcParameters(context *cli.Context, layerInfos []encryption.LayerInfo)
 		return nil, err
 	}
 
-	gpgSecretKeyRingFiles, privKeys, privKeysPasswords, err := processPrivateKeyFiles(context.StringSlice("key"))
+	gpgSecretKeyRingFiles, gpgSecretKeyPasswords, privKeys, privKeysPasswords, err := processPrivateKeyFiles(context.StringSlice("key"))
 	if err != nil {
 		return nil, err
 	}
 
-	if len(privKeys) == 0 && layerInfos != nil {
+	if len(gpgSecretKeyRingFiles) == 0 && len(privKeys) == 0 && layerInfos != nil {
 		// Get pgp private keys from keyring only if no private key was passed
 		err = getGPGPrivateKeys(context, gpgSecretKeyRingFiles, layerInfos, true, dcparameters)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		dcparameters["gpg-privatekeys"] = gpgSecretKeyRingFiles
 		if len(gpgSecretKeyRingFiles) == 0 {
 			dcparameters["gpg-client"] = [][]byte{[]byte("1")}
 			dcparameters["gpg-client-version"] = [][]byte{[]byte(context.String("gpg-version"))}
 			dcparameters["gpg-client-homedir"] = [][]byte{[]byte(context.String("gpg-homedir"))}
+		} else {
+			dcparameters["gpg-privatekeys"] = gpgSecretKeyRingFiles
+			dcparameters["gpg-privatekeys-passwords"] = gpgSecretKeyPasswords
 		}
 	}
 
