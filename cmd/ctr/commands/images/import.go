@@ -119,7 +119,7 @@ If foobar.tar contains an OCI ref named "latest" and anonymous ref "sha256:deadb
 			return closeErr
 		}
 
-		dcparameters, err := createDcParameters(context, nil)
+		dcparameters, err := CreateDcParameters(context, nil)
 		if err != nil {
 			return err
 		}
