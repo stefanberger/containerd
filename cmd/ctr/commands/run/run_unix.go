@@ -25,6 +25,7 @@ import (
 
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/cmd/ctr/commands"
+	"github.com/containerd/containerd/cmd/ctr/commands/images"
 	"github.com/containerd/containerd/contrib/nvidia"
 	"github.com/containerd/containerd/oci"
 	"github.com/opencontainers/runtime-spec/specs-go"
@@ -50,6 +51,11 @@ func NewContainer(ctx gocontext.Context, client *containerd.Client, context *cli
 			return nil, err
 		}
 		return client.NewContainer(ctx, id, containerd.WithCheckpoint(im, id), containerd.WithRuntime(context.String("runtime"), nil))
+	}
+
+	err := images.CheckEntitlement(ctx, client, context, context.Args().First())
+	if err != nil {
+		return nil, err
 	}
 
 	var (
