@@ -250,7 +250,7 @@ func createDcParameters(context *cli.Context, layerInfos []encryption.LayerInfo)
 	dcparameters := make(map[string][][]byte)
 
 	// x509 cert is needed for PCS7 decryption
-	_, _, x509s, err := processRecipientKeys(context.StringSlice("recipient"))
+	_, _, x509s, err := processRecipientKeys(context.StringSlice("dec-recipient"))
 	if err != nil {
 		return nil, err
 	}

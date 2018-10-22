@@ -43,25 +43,14 @@ var decryptCommand = cli.Command{
 	- <filename>:fd=<file descriptor>
 	- <filename>:filename=<password file>
 `,
-	Flags: append(commands.RegistryFlags, cli.IntSliceFlag{
+	Flags: append(append(commands.RegistryFlags, cli.IntSliceFlag{
 		Name:  "layer",
 		Usage: "The layer to decrypt; this must be either the layer number or a negative number starting with -1 for topmost layer",
 	}, cli.StringSliceFlag{
 		Name:  "platform",
 		Usage: "For which platform to decrypt; by default decryption is done for all platforms",
-	}, cli.StringFlag{
-		Name:  "gpg-homedir",
-		Usage: "The GPG homedir to use; by default gpg uses ~/.gnupg",
-	}, cli.StringFlag{
-		Name:  "gpg-version",
-		Usage: "The GPG version (\"v1\" or \"v2\"), default will make an educated guess",
-	}, cli.StringSliceFlag{
-		Name:  "key",
-		Usage: "A secret key's filename and an optional password separated by colon; this option may be provided multiple times",
-	}, cli.StringSliceFlag{
-		Name:  "recipient",
-		Usage: "Recipient of the image; used only for PKCs7 and must be an x509 certificate",
-	}),
+	},
+	), commands.ImageDecryptionFlags...),
 	Action: func(context *cli.Context) error {
 		local := context.Args().First()
 		if local == "" {

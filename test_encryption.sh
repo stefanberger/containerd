@@ -537,7 +537,7 @@ testPKCS7() {
 			privkey="$(echo ${privKeyAndRecipient} | cut -d ":" -f1)"
 			recp="$(echo ${privKeyAndRecipient} | cut -d ":" -f2)"
 			$CTR images decrypt \
-				--recipient ${recipient} \
+				--dec-recipient ${recipient} \
 				--key ${privkey} \
 				${ALPINE_ENC} ${ALPINE_DEC}
 			failExit $? "Image decryption with PKCS7 failed: private key: ${privkey}"
@@ -579,7 +579,7 @@ testPKCS7() {
 		recp="$(echo ${privKeyAndRecipient} | cut -d ":" -f2)"
 		$CTR images decrypt \
 			--key ${privkey} \
-			--recipient ${recp} \
+			--dec-recipient ${recp} \
 			${ALPINE_ENC} ${ALPINE_DEC}
 		failExit $? "Image decryption with PKCS7 failed: private key: ${privkey}"
 
@@ -719,7 +719,7 @@ testPGPandJWEandPKCS7() {
 		recp="$(echo ${privKeyAndRecipient} | cut -d ":" -f2)"
 		$CTR images decrypt \
 			--key ${privkey} \
-			--recipient ${recp} \
+			--dec-recipient ${recp} \
 			${ALPINE_ENC} ${ALPINE_DEC}
 		failExit $? "Image decryption with PKCS7 failed: private key: ${privkey}"
 
