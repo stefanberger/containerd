@@ -829,8 +829,15 @@ func DecryptImage(ctx context.Context, cs content.Store, desc ocispec.Descriptor
 
 // CheckEntitlement checks whether a user has the right keys to be allowed to access an image (every layer)
 // It takes decrypting of the layers only as far as decrypting the asymmetrically encrypted data
-func CheckEntitlement(ctx context.Context, cs content.Store, desc ocispec.Descriptor, cc *encconfig.CryptoConfig) error {
-	_, _, err := cryptImage(ctx, cs, desc, cc, &encryption.LayerFilter{}, cryptoOpUnwrapOnly)
+// The decryption is only done for the current platform
+func CheckEntitlement(ctx context.Context, cs content.Store, desc ocispec.Descriptor, dc *encconfig.DecryptConfig) error {
+	cc := encconfig.CryptoConfig{
+		Dc: dc,
+	}
+	lf := encryption.LayerFilter{
+		Platforms: []ocispec.Platform{platforms.DefaultSpec()},
+	}
+	_, _, err := cryptImage(ctx, cs, desc, &cc, &lf, cryptoOpUnwrapOnly)
 	return err
 }
 
