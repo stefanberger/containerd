@@ -43,7 +43,7 @@ command. As part of this process, we do the following:
 2. Prepare the snapshot filesystem with the pulled resources.
 3. Register metadata for the image.
 `,
-	Flags: append(append(commands.RegistryFlags, append(commands.SnapshotterFlags, commands.LabelFlag)...),
+	Flags: append(append(append(commands.RegistryFlags, append(commands.SnapshotterFlags, commands.LabelFlag)...),
 		cli.StringSliceFlag{
 			Name:  "platform",
 			Usage: "Pull content from a specific platform",
@@ -53,16 +53,7 @@ command. As part of this process, we do the following:
 			Name:  "all-platforms",
 			Usage: "pull content from all platforms",
 		},
-		cli.StringFlag{
-			Name:  "gpg-homedir",
-			Usage: "The GPG homedir to use; by default gpg uses ~/.gnupg",
-		}, cli.StringFlag{
-			Name:  "gpg-version",
-			Usage: "The GPG version (\"v1\" or \"v2\"), default will make an educated guess",
-		}, cli.StringSliceFlag{
-			Name:  "key",
-			Usage: "A secret key's filename and an optional password separated by colon; may be provided multiple times",
-		},
+	), commands.ImageDecryptionFlags...,
 	),
 	Action: func(context *cli.Context) error {
 		var (
