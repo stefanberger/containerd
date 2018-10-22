@@ -249,7 +249,7 @@ func getImageLayerInfo(client *containerd.Client, ctx gocontext.Context, name st
 func createDcParameters(context *cli.Context, layerInfos []encryption.LayerInfo) (map[string][][]byte, error) {
 	dcparameters := make(map[string][][]byte)
 
-	// x509 cert is needed for PCS7 decryption
+	// x509 cert is needed for PKCS7 decryption
 	_, _, x509s, err := processRecipientKeys(context.StringSlice("dec-recipient"))
 	if err != nil {
 		return nil, err
