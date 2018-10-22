@@ -50,7 +50,7 @@ e.g.
 If foobar.tar contains an OCI ref named "latest" and anonymous ref "sha256:deadbeef", the command will create
 "foo/bar:latest" and "foo/bar@sha256:deadbeef" images in the containerd store.
 `,
-	Flags: append([]cli.Flag{
+	Flags: append(append([]cli.Flag{
 		cli.StringFlag{
 			Name:  "base-name",
 			Value: "",
@@ -64,17 +64,7 @@ If foobar.tar contains an OCI ref named "latest" and anonymous ref "sha256:deadb
 			Name:  "index-name",
 			Usage: "image name to keep index as, by default index is discarded",
 		},
-		cli.StringFlag{
-			Name:  "gpg-homedir",
-			Usage: "The GPG homedir to use; by default gpg uses ~/.gnupg",
-		}, cli.StringFlag{
-			Name:  "gpg-version",
-			Usage: "The GPG version (\"v1\" or \"v2\"), default will make an educated guess",
-		}, cli.StringSliceFlag{
-			Name:  "key",
-			Usage: "A secret key's filename and an optional password separated by colon; may be provided multiple times",
-		},
-	}, commands.SnapshotterFlags...),
+	}, commands.SnapshotterFlags...), commands.ImageDecryptionFlags...),
 
 	Action: func(context *cli.Context) error {
 		var (

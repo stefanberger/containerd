@@ -42,7 +42,7 @@ var encryptCommand = cli.Command{
 	to the list of recipients.
 	Once the image has been encrypted it may be pushed to a registry.
 `,
-	Flags: append(commands.RegistryFlags, cli.StringSliceFlag{
+	Flags: append(append(commands.RegistryFlags, cli.StringSliceFlag{
 		Name:  "recipient",
 		Usage: "Recipient of the image is the person who can decrypt it",
 	}, cli.IntSliceFlag{
@@ -51,19 +51,7 @@ var encryptCommand = cli.Command{
 	}, cli.StringSliceFlag{
 		Name:  "platform",
 		Usage: "For which platform to encrypt; by default encrytion is done for all platforms",
-	}, cli.StringFlag{
-		Name:  "gpg-homedir",
-		Usage: "The GPG homedir to use; by default gpg uses ~/.gnupg",
-	}, cli.StringFlag{
-		Name:  "gpg-version",
-		Usage: "The GPG version (\"v1\" or \"v2\"), default will make an educated guess",
-	}, cli.StringSliceFlag{
-		Name:  "key",
-		Usage: "A secret key's filename. The file suffix must be .pem or .der for JWE and anything else for OpenPGP; this option may be provided multiple times",
-	}, cli.StringSliceFlag{
-		Name:  "dec-recipient",
-		Usage: "Recipient of the image; needed for adding recpient; used only for PKCs7 and must be an x509 certificate",
-	}),
+	}), commands.ImageDecryptionFlags...),
 	Action: func(context *cli.Context) error {
 		local := context.Args().First()
 		if local == "" {
