@@ -44,6 +44,7 @@ import (
 	"github.com/containerd/containerd/events"
 	"github.com/containerd/containerd/images"
 	"github.com/containerd/containerd/images/encryption/utils"
+	encconfig "github.com/containerd/containerd/images/encryption/config"
 	"github.com/containerd/containerd/leases"
 	leasesproxy "github.com/containerd/containerd/leases/proxy"
 	"github.com/containerd/containerd/namespaces"
@@ -238,11 +239,32 @@ func (c *Client) NewContainer(ctx context.Context, id string, opts ...NewContain
 			return nil, err
 		}
 	}
+
+	err = c.checkEntitlement(ctx, container.Image, container.DcParameters)
+	if err != nil {
+		return nil, err
+	}
+
 	r, err := c.ContainerService().Create(ctx, container)
 	if err != nil {
 		return nil, err
 	}
 	return containerFromRecord(c, r), nil
+}
+
+// checkEntitlement checks whether the caller is entitled to use this image, meaning whether he has the
+// proper keys to decrypt it
+func (c *Client) checkEntitlement(ctx context.Context, imageName string, dcparameters map[string][][]byte) error {
+	image, err := c.ImageService().Get(ctx, imageName)
+	if err != nil {
+		return err
+	}
+
+	dc := encconfig.DecryptConfig{
+		Parameters: dcparameters,
+	}
+
+	return images.CheckEntitlement(ctx, c.ContentStore(), image.Target, &dc)
 }
 
 // LoadContainer loads an existing container from metadata
