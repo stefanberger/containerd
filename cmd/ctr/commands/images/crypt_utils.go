@@ -283,22 +283,3 @@ func createDcParameters(context *cli.Context, layerInfos []encryption.LayerInfo)
 
 	return dcparameters, nil
 }
-
-// CheckEntitlement checks whether the caller is entitled to use this image, meaning whether he has the
-// proper keys to decrypt it
-func CheckEntitlement(ctx gocontext.Context, client *containerd.Client, context *cli.Context, imageName string) error {
-	dcparameters, err := createDcParameters(context, nil)
-	if err != nil {
-		return err
-	}
-	dc := encconfig.DecryptConfig{
-		Parameters: dcparameters,
-	}
-
-	image, err := client.ImageService().Get(ctx, context.Args().First())
-	if err != nil {
-		return err
-	}
-
-	return images.CheckEntitlement(ctx, client.ContentStore(), image.Target, &dc)
-}
