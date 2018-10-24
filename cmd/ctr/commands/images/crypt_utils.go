@@ -285,4 +285,3 @@ func CreateDcParameters(context *cli.Context, layerInfos []encryption.LayerInfo)
 
 	return dcparameters, nil
 }
-
