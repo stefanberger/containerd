@@ -110,7 +110,7 @@ var Command = cli.Command{
 			Name:  "isolated",
 			Usage: "run the container with vm isolation",
 		},
-	}, append(commands.SnapshotterFlags, commands.ContainerFlags...)...),
+	}, append(append(commands.SnapshotterFlags, commands.ContainerFlags...), commands.ImageDecryptionFlags...)...),
 	Action: func(context *cli.Context) error {
 		var (
 			err error

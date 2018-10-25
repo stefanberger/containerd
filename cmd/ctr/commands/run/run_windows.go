@@ -22,9 +22,11 @@ import (
 	"github.com/containerd/console"
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/cmd/ctr/commands"
+	"github.com/containerd/containerd/cmd/ctr/commands/images"
 	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/oci"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 )
@@ -117,6 +119,12 @@ func NewContainer(ctx gocontext.Context, client *containerd.Client, context *cli
 	spec = containerd.WithSpec(&s, opts...)
 
 	cOpts = append(cOpts, spec)
+
+	dcparameters, err := images.CreateDcParameters(context, nil)
+	if err != nil {
+		return nil, err
+	}
+	cOpts = append(cOpts, containerd.WithDcParameters(dcparameters))
 
 	c, err := client.NewContainer(ctx, id, cOpts...)
 	if err != nil {
