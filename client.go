@@ -241,11 +241,6 @@ func (c *Client) NewContainer(ctx context.Context, id string, opts ...NewContain
 		}
 	}
 
-	err = c.checkAuthorization(ctx, container.Image, container.DcParameters)
-	if err != nil {
-		return nil, err
-	}
-
 	r, err := c.ContainerService().Create(ctx, container)
 	if err != nil {
 		return nil, err
