@@ -51,7 +51,7 @@ func NewContainer(ctx gocontext.Context, client *containerd.Client, context *cli
 		if err != nil {
 			return nil, err
 		}
-		return client.NewContainer(ctx, id, containerd.WithCheckpoint(im, id), containerd.WithRuntime(context.String("runtime"), nil))
+		return client.NewContainer(ctx, id, containerd.WithCheckpoint(im, id), containerd.WithRuntime(context.String("runtime"), nil), containerd.WithAuthorizationCheck())
 	}
 
 	var (
