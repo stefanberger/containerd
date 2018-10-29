@@ -63,9 +63,9 @@ func WithRuntime(name string, options interface{}) NewContainerOpts {
 
 // WithAuthorizationCheck checks the authorization of keys used for encrypted containers
 // be checked upon creation of a container
-func WithAuthorizationCheck() NewContainerOpts {
+func WithAuthorizationCheck(dcparameters map[string][][]byte) NewContainerOpts {
 	return func(ctx context.Context, client *Client, c *containers.Container) error {
-		return client.checkAuthorization(ctx, c.Image, c.DcParameters)
+		return client.checkAuthorization(ctx, c.Image, dcparameters)
 	}
 }
 
@@ -230,13 +230,5 @@ func WithSpec(s *oci.Spec, opts ...oci.SpecOpts) NewContainerOpts {
 		var err error
 		c.Spec, err = typeurl.MarshalAny(s)
 		return err
-	}
-}
-
-// WithDcParameters sets the image decryption parameters
-func WithDcParameters(dcparameters map[string][][]byte) NewContainerOpts {
-	return func(ctx context.Context, client *Client, c *containers.Container) error {
-		c.DcParameters = dcparameters
-		return nil
 	}
 }
