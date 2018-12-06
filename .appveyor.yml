@@ -7,7 +7,7 @@ clone_folder: c:\gopath\src\github.com\containerd\containerd
 branches:
   only:
     - master
-    - image-encryption.v3
+    - image-encryption.v4
 
 environment:
   GOPATH: C:\gopath
