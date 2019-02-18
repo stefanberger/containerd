@@ -25,9 +25,12 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/BurntSushi/toml"
+	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/containers"
+	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/runtime/linux/runctypes"
 	runcoptions "github.com/containerd/containerd/runtime/v2/runc/options"
 	"github.com/containerd/typeurl"
@@ -44,8 +47,9 @@ import (
 	runtimeoptions "github.com/containerd/cri/pkg/api/runtimeoptions/v1"
 	criconfig "github.com/containerd/cri/pkg/config"
 	"github.com/containerd/cri/pkg/store"
+	containerstore "github.com/containerd/cri/pkg/store/container"
 	imagestore "github.com/containerd/cri/pkg/store/image"
-	"github.com/containerd/cri/pkg/util"
+	sandboxstore "github.com/containerd/cri/pkg/store/sandbox"
 )
 
 const (
@@ -94,6 +98,8 @@ const (
 	devShm = "/dev/shm"
 	// etcHosts is the default path of /etc/hosts file.
 	etcHosts = "/etc/hosts"
+	// etcHostname is the default path of /etc/hostname file.
+	etcHostname = "/etc/hostname"
 	// resolvConfPath is the abs path of resolv.conf on host or container.
 	resolvConfPath = "/etc/resolv.conf"
 	// hostnameEnv is the key for HOSTNAME env.
@@ -194,6 +200,11 @@ func (c *criService) getVolatileContainerRootDir(id string) string {
 	return filepath.Join(c.config.StateDir, containersDir, id)
 }
 
+// getSandboxHostname returns the hostname file path inside the sandbox root directory.
+func (c *criService) getSandboxHostname(id string) string {
+	return filepath.Join(c.getSandboxRootDir(id), "hostname")
+}
+
 // getSandboxHosts returns the hosts file path inside the sandbox root directory.
 func (c *criService) getSandboxHosts(id string) string {
 	return filepath.Join(c.getSandboxRootDir(id), "hosts")
@@ -259,7 +270,7 @@ func (c *criService) localResolve(refOrID string) (imagestore.Image, error) {
 		return func(ref string) string {
 			// ref is not image id, try to resolve it locally.
 			// TODO(random-liu): Handle this error better for debugging.
-			normalized, err := util.NormalizeImageRef(ref)
+			normalized, err := reference.ParseDockerRef(ref)
 			if err != nil {
 				return ""
 			}
@@ -387,10 +398,51 @@ func buildLabels(configLabels map[string]string, containerType string) map[strin
 }
 
 // newSpecGenerator creates a new spec generator for the runtime spec.
-func newSpecGenerator(spec *runtimespec.Spec) generate.Generator {
+func newSpecGenerator(spec *runtimespec.Spec) generator {
 	g := generate.NewFromSpec(spec)
 	g.HostSpecific = true
-	return g
+	return newCustomGenerator(g)
+}
+
+// generator is a custom generator with some functions overridden
+// used by the cri plugin.
+// TODO(random-liu): Upstream this fix.
+type generator struct {
+	generate.Generator
+	envCache map[string]int
+}
+
+func newCustomGenerator(g generate.Generator) generator {
+	cg := generator{
+		Generator: g,
+		envCache:  make(map[string]int),
+	}
+	if g.Config != nil && g.Config.Process != nil {
+		for i, env := range g.Config.Process.Env {
+			kv := strings.SplitN(env, "=", 2)
+			cg.envCache[kv[0]] = i
+		}
+	}
+	return cg
+}
+
+// AddProcessEnv overrides the original AddProcessEnv. It uses
+// a map to cache and override envs.
+func (g *generator) AddProcessEnv(key, value string) {
+	if len(g.envCache) == 0 {
+		// Call AddProccessEnv once to initialize the spec.
+		g.Generator.AddProcessEnv(key, value)
+		g.envCache[key] = 0
+		return
+	}
+	spec := g.Config
+	env := fmt.Sprintf("%s=%s", key, value)
+	if idx, ok := g.envCache[key]; !ok {
+		spec.Process.Env = append(spec.Process.Env, env)
+		g.envCache[key] = len(spec.Process.Env) - 1
+	} else {
+		spec.Process.Env[idx] = env
+	}
 }
 
 func getPodCNILabels(id string, config *runtime.PodSandboxConfig) map[string]string {
@@ -523,4 +575,54 @@ func restrictOOMScoreAdj(preferredOOMScoreAdj int) (int, error) {
 		return currentOOMScoreAdj, nil
 	}
 	return preferredOOMScoreAdj, nil
+}
+
+const (
+	// unknownExitCode is the exit code when exit reason is unknown.
+	unknownExitCode = 255
+	// unknownExitReason is the exit reason when exit reason is unknown.
+	unknownExitReason = "Unknown"
+)
+
+// unknownContainerStatus returns the default container status when its status is unknown.
+func unknownContainerStatus() containerstore.Status {
+	return containerstore.Status{
+		CreatedAt:  0,
+		StartedAt:  0,
+		FinishedAt: 0,
+		ExitCode:   unknownExitCode,
+		Reason:     unknownExitReason,
+	}
+}
+
+// unknownSandboxStatus returns the default sandbox status when its status is unknown.
+func unknownSandboxStatus() sandboxstore.Status {
+	return sandboxstore.Status{
+		State: sandboxstore.StateUnknown,
+	}
+}
+
+// unknownExitStatus generates containerd.Status for container exited with unknown exit code.
+func unknownExitStatus() containerd.Status {
+	return containerd.Status{
+		Status:     containerd.Stopped,
+		ExitStatus: unknownExitCode,
+		ExitTime:   time.Now(),
+	}
+}
+
+// getTaskStatus returns status for a given task. It returns unknown exit status if
+// the task is nil or not found.
+func getTaskStatus(ctx context.Context, task containerd.Task) (containerd.Status, error) {
+	if task == nil {
+		return unknownExitStatus(), nil
+	}
+	status, err := task.Status(ctx)
+	if err != nil {
+		if !errdefs.IsNotFound(err) {
+			return containerd.Status{}, err
+		}
+		return unknownExitStatus(), nil
+	}
+	return status, nil
 }

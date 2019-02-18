@@ -28,6 +28,7 @@ import (
 	"github.com/containerd/containerd/oci"
 	cni "github.com/containerd/go-cni"
 	"github.com/containerd/typeurl"
+	"github.com/davecgh/go-spew/spew"
 	imagespec "github.com/opencontainers/image-spec/specs-go/v1"
 	runtimespec "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/pkg/errors"
@@ -55,6 +56,7 @@ func init() {
 // the sandbox is in ready state.
 func (c *criService) RunPodSandbox(ctx context.Context, r *runtime.RunPodSandboxRequest) (_ *runtime.RunPodSandboxResponse, retErr error) {
 	config := r.GetConfig()
+	logrus.Debugf("Sandbox config %+v", config)
 
 	// Generate unique id and name for the sandbox and reserve the name.
 	id := util.GenerateID()
@@ -85,7 +87,7 @@ func (c *criService) RunPodSandbox(ctx context.Context, r *runtime.RunPodSandbox
 			RuntimeHandler: r.GetRuntimeHandler(),
 		},
 		sandboxstore.Status{
-			State: sandboxstore.StateUnknown,
+			State: sandboxstore.StateInit,
 		},
 	)
 
@@ -149,7 +151,7 @@ func (c *criService) RunPodSandbox(ctx context.Context, r *runtime.RunPodSandbox
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to generate sandbox container spec")
 	}
-	logrus.Debugf("Sandbox container spec: %+v", spec)
+	logrus.Debugf("Sandbox container %q spec: %#+v", id, spew.NewFormatter(spec))
 
 	var specOpts []oci.SpecOpts
 	userstr, err := generateUserString(
@@ -233,7 +235,7 @@ func (c *criService) RunPodSandbox(ctx context.Context, r *runtime.RunPodSandbox
 		}
 	}()
 
-	// Setup sandbox /dev/shm, /etc/hosts and /etc/resolv.conf.
+	// Setup sandbox /dev/shm, /etc/hosts, /etc/resolv.conf and /etc/hostname.
 	if err = c.setupSandboxFiles(id, config); err != nil {
 		return nil, errors.Wrapf(err, "failed to setup sandbox files")
 	}
@@ -258,7 +260,7 @@ func (c *criService) RunPodSandbox(ctx context.Context, r *runtime.RunPodSandbox
 		return nil, errors.Wrap(err, "failed to update sandbox created timestamp")
 	}
 
-	// Add sandbox into sandbox store in UNKNOWN state.
+	// Add sandbox into sandbox store in INIT state.
 	sandbox.Container = container
 	if err := c.sandboxStore.Add(sandbox); err != nil {
 		return nil, errors.Wrapf(err, "failed to add sandbox %+v into store", sandbox)
@@ -269,7 +271,7 @@ func (c *criService) RunPodSandbox(ctx context.Context, r *runtime.RunPodSandbox
 			c.sandboxStore.Delete(id)
 		}
 	}()
-	// NOTE(random-liu): Sandbox state only stay in UNKNOWN state after this point
+	// NOTE(random-liu): Sandbox state only stay in INIT state after this point
 	// and before the end of this function.
 	// * If `Update` succeeds, sandbox state will become READY in one transaction.
 	// * If `Update` fails, sandbox will be removed from the store in the defer above.
@@ -279,8 +281,8 @@ func (c *criService) RunPodSandbox(ctx context.Context, r *runtime.RunPodSandbox
 	//   * If the task is running, sandbox state will be READY,
 	//   * Or else, sandbox state will be NOTREADY.
 	//
-	// In any case, sandbox will leave UNKNOWN state, so it's safe to ignore sandbox
-	// in UNKNOWN state in other functions.
+	// In any case, sandbox will leave INIT state, so it's safe to ignore sandbox
+	// in INIT state in other functions.
 
 	// Start sandbox container in one transaction to avoid race condition with
 	// event monitor.
@@ -293,8 +295,8 @@ func (c *criService) RunPodSandbox(ctx context.Context, r *runtime.RunPodSandbox
 		// see the sandbox disappear after the defer clean up, which may confuse
 		// them.
 		//
-		// Given so, we should keep the sandbox in UNKNOWN state if `Update` fails,
-		// and ignore sandbox in UNKNOWN state in all the inspection functions.
+		// Given so, we should keep the sandbox in INIT state if `Update` fails,
+		// and ignore sandbox in INIT state in all the inspection functions.
 
 		// Create sandbox task in containerd.
 		log.Tracef("Create sandbox container (id=%q, name=%q).",
@@ -456,9 +458,22 @@ func (c *criService) generateSandboxContainerSpec(id string, config *runtime.Pod
 	return g.Config, nil
 }
 
-// setupSandboxFiles sets up necessary sandbox files including /dev/shm, /etc/hosts
-// and /etc/resolv.conf.
+// setupSandboxFiles sets up necessary sandbox files including /dev/shm, /etc/hosts,
+// /etc/resolv.conf and /etc/hostname.
 func (c *criService) setupSandboxFiles(id string, config *runtime.PodSandboxConfig) error {
+	sandboxEtcHostname := c.getSandboxHostname(id)
+	hostname := config.GetHostname()
+	if hostname == "" {
+		var err error
+		hostname, err = c.os.Hostname()
+		if err != nil {
+			return errors.Wrap(err, "failed to get hostname")
+		}
+	}
+	if err := c.os.WriteFile(sandboxEtcHostname, []byte(hostname+"\n"), 0644); err != nil {
+		return errors.Wrapf(err, "failed to write hostname to %q", sandboxEtcHostname)
+	}
+
 	// TODO(random-liu): Consider whether we should maintain /etc/hosts and /etc/resolv.conf in kubelet.
 	sandboxEtcHosts := c.getSandboxHosts(id)
 	if err := c.os.CopyFile(etcHosts, sandboxEtcHosts, 0644); err != nil {
