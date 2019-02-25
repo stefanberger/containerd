@@ -23,8 +23,6 @@ import (
 	"hash"
 	"io"
 
-	"github.com/containerd/containerd/content"
-
 	miscreant "github.com/miscreant/miscreant-go"
 	digest "github.com/opencontainers/go-digest"
 	"github.com/pkg/errors"
@@ -33,7 +31,7 @@ import (
 // AESSIVLayerBlockCipher implements the AES SIV block cipher
 type AESSIVLayerBlockCipher struct {
 	bits      int // 256, 512
-	reader    content.ReaderAt
+	reader    io.ReaderAt
 	encryptor *miscreant.StreamEncryptor
 	decryptor *miscreant.StreamDecryptor
 	err       error  // error that occurred during operation
@@ -139,7 +137,7 @@ func (r *aessivcryptor) Hash() hash.Hash {
 }
 
 // init initializes an instance
-func (bc *AESSIVLayerBlockCipher) init(encrypt bool, reader content.ReaderAt, opt LayerBlockCipherOptions) (LayerBlockCipherOptions, error) {
+func (bc *AESSIVLayerBlockCipher) init(encrypt bool, reader io.ReaderAt, opt LayerBlockCipherOptions) (LayerBlockCipherOptions, error) {
 	var (
 		err   error
 		nonce []byte
@@ -201,7 +199,7 @@ func (bc *AESSIVLayerBlockCipher) init(encrypt bool, reader content.ReaderAt, op
 }
 
 // Encrypt takes in layer data and returns the ciphertext and relevant LayerBlockCipherOptions
-func (bc *AESSIVLayerBlockCipher) Encrypt(plainDataReader content.ReaderAt, opt LayerBlockCipherOptions) (CryptedDataReader, LayerBlockCipherOptions, error) {
+func (bc *AESSIVLayerBlockCipher) Encrypt(plainDataReader io.ReaderAt, opt LayerBlockCipherOptions) (CryptedDataReader, LayerBlockCipherOptions, error) {
 	lbco, err := bc.init(true, plainDataReader, opt)
 	if err != nil {
 		return nil, LayerBlockCipherOptions{}, err
@@ -211,7 +209,7 @@ func (bc *AESSIVLayerBlockCipher) Encrypt(plainDataReader content.ReaderAt, opt 
 }
 
 // Decrypt takes in layer ciphertext data and returns the plaintext and relevant LayerBlockCipherOptions
-func (bc *AESSIVLayerBlockCipher) Decrypt(encDataReader content.ReaderAt, opt LayerBlockCipherOptions) (CryptedDataReader, LayerBlockCipherOptions, error) {
+func (bc *AESSIVLayerBlockCipher) Decrypt(encDataReader io.ReaderAt, opt LayerBlockCipherOptions) (CryptedDataReader, LayerBlockCipherOptions, error) {
 	lbco, err := bc.init(false, encDataReader, opt)
 	if err != nil {
 		return nil, LayerBlockCipherOptions{}, err

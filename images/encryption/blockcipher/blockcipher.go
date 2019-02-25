@@ -17,6 +17,8 @@
 package blockcipher
 
 import (
+	"io"
+
 	"github.com/containerd/containerd/content"
 
 	"github.com/pkg/errors"
@@ -49,9 +51,9 @@ type LayerBlockCipherOptions struct {
 // for handling the layer data for a specific algorithm
 type LayerBlockCipher interface {
 	// Encrypt takes in layer data and returns the ciphertext and relevant LayerBlockCipherOptions
-	Encrypt(layerDataReader content.ReaderAt, opt LayerBlockCipherOptions) (CryptedDataReader, LayerBlockCipherOptions, error)
+	Encrypt(layerDataReader io.ReaderAt, opt LayerBlockCipherOptions) (CryptedDataReader, LayerBlockCipherOptions, error)
 	// Decrypt takes in layer ciphertext data and returns the plaintext and relevant LayerBlockCipherOptions
-	Decrypt(layerDataReader content.ReaderAt, opt LayerBlockCipherOptions) (CryptedDataReader, LayerBlockCipherOptions, error)
+	Decrypt(layerDataReader io.ReaderAt, opt LayerBlockCipherOptions) (CryptedDataReader, LayerBlockCipherOptions, error)
 }
 
 // LayerBlockCipherHandler is the handler for encrypt/decrypt for layers
@@ -60,7 +62,7 @@ type LayerBlockCipherHandler struct {
 }
 
 // Encrypt is the handler for the layer decryption routine
-func (h *LayerBlockCipherHandler) Encrypt(plainDataReader content.ReaderAt, typ LayerCipherType, opt LayerBlockCipherOptions) (CryptedDataReader, LayerBlockCipherOptions, error) {
+func (h *LayerBlockCipherHandler) Encrypt(plainDataReader io.ReaderAt, typ LayerCipherType, opt LayerBlockCipherOptions) (CryptedDataReader, LayerBlockCipherOptions, error) {
 
 	if c, ok := h.cipherMap[typ]; ok {
 		encDataReader, newopt, err := c.Encrypt(plainDataReader, opt)
@@ -73,7 +75,7 @@ func (h *LayerBlockCipherHandler) Encrypt(plainDataReader content.ReaderAt, typ 
 }
 
 // Decrypt is the handler for the layer decryption routine
-func (h *LayerBlockCipherHandler) Decrypt(encDataReader content.ReaderAt, opt LayerBlockCipherOptions) (CryptedDataReader, LayerBlockCipherOptions, error) {
+func (h *LayerBlockCipherHandler) Decrypt(encDataReader io.ReaderAt, opt LayerBlockCipherOptions) (CryptedDataReader, LayerBlockCipherOptions, error) {
 	typ, ok := opt.CipherOptions[CipherTypeOpt]
 	if !ok {
 		return nil, LayerBlockCipherOptions{}, errors.New("No cipher type provided")

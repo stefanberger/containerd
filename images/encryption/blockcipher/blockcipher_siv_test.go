@@ -17,11 +17,10 @@
 package blockcipher
 
 import (
+	"bytes"
 	_ "crypto/sha256"
 	"io"
 	"testing"
-
-	"github.com/containerd/containerd/content"
 )
 
 func TestBlockCipherAesSivCreateValid(t *testing.T) {
@@ -60,7 +59,7 @@ func TestBlockCipherAesSivEncryption(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	layerDataReader := content.BufReaderAt{int64(len(layerData)), layerData}
+	layerDataReader := bytes.NewReader(layerData)
 	ciphertextReader, lbco, err := bc.Encrypt(layerDataReader, opt)
 	if err != nil {
 		t.Fatal(err)
@@ -74,7 +73,7 @@ func TestBlockCipherAesSivEncryption(t *testing.T) {
 
 	ciphertext := make([]byte, 1024)
 	ciphertextReader.Read(ciphertext)
-	ciphertextReaderAt := content.BufReaderAt{ciphertextReader.Size(), ciphertext}
+	ciphertextReaderAt := bytes.NewReader(ciphertext[:ciphertextReader.Size()])
 
 	plaintextReader, _, err := bc2.Decrypt(ciphertextReaderAt, lbco)
 	if err != nil {
@@ -106,7 +105,7 @@ func TestBlockCipherAesSivEncryptionInvalidKey(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	layerDataReader := content.BufReaderAt{int64(len(layerData)), layerData}
+	layerDataReader := bytes.NewReader(layerData)
 	ciphertextReader, lbco, err := bc.Encrypt(layerDataReader, opt)
 	if err != nil {
 		t.Fatal(err)
@@ -122,7 +121,7 @@ func TestBlockCipherAesSivEncryptionInvalidKey(t *testing.T) {
 
 	ciphertext := make([]byte, 1024)
 	ciphertextReader.Read(ciphertext)
-	ciphertextReaderAt := content.BufReaderAt{ciphertextReader.Size(), ciphertext}
+	ciphertextReaderAt := bytes.NewReader(ciphertext[:ciphertextReader.Size()])
 
 	plaintextReader, _, err := bc2.Decrypt(ciphertextReaderAt, lbco)
 	if err != nil {
@@ -150,7 +149,7 @@ func TestBlockCipherAesSivEncryptionInvalidKeyLength(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	layerDataReader := content.BufReaderAt{int64(len(layerData)), layerData}
+	layerDataReader := bytes.NewReader(layerData)
 	_, _, err = bc.Encrypt(layerDataReader, opt)
 	if err == nil {
 		t.Fatal("Test should have failed due to invalid key length")
