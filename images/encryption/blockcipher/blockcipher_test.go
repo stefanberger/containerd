@@ -17,10 +17,9 @@
 package blockcipher
 
 import (
+	"bytes"
 	"io"
 	"testing"
-
-	"github.com/containerd/containerd/content"
 )
 
 func TestBlockCipherHandlerCreate(t *testing.T) {
@@ -44,7 +43,7 @@ func TestBlockCipherEncryption(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	layerDataReader := content.BufReaderAt{int64(len(layerData)), layerData}
+	layerDataReader := bytes.NewReader(layerData)
 
 	ciphertextReader, lbco, err := h.Encrypt(layerDataReader, AESSIVCMAC256, opt)
 	if err != nil {
@@ -56,7 +55,7 @@ func TestBlockCipherEncryption(t *testing.T) {
 	if err != nil && err != io.EOF {
 		t.Fatal("Reading the ciphertext should not have failed")
 	}
-	ciphertextReaderAt := content.BufReaderAt{ciphertextReader.Size(), ciphertext}
+	ciphertextReaderAt := bytes.NewReader(ciphertext[:ciphertextReader.Size()])
 
 	// Use a different instantiated object to indicate an invokation at a diff time
 	plaintextReader, _, err := h.Decrypt(ciphertextReaderAt, lbco)
@@ -89,7 +88,7 @@ func TestBlockCipherEncryptionInvalidKey(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	layerDataReader := content.BufReaderAt{int64(len(layerData)), layerData}
+	layerDataReader := bytes.NewReader(layerData)
 
 	ciphertextReader, lbco, err := h.Encrypt(layerDataReader, AESSIVCMAC512, opt)
 	if err != nil {
@@ -106,7 +105,7 @@ func TestBlockCipherEncryptionInvalidKey(t *testing.T) {
 
 	ciphertext := make([]byte, 1024)
 	ciphertextReader.Read(ciphertext)
-	ciphertextReaderAt := content.BufReaderAt{ciphertextReader.Size(), ciphertext}
+	ciphertextReaderAt := bytes.NewReader(ciphertext[:ciphertextReader.Size()])
 
 	plaintextReader, _, err := bc2.Decrypt(ciphertextReaderAt, lbco)
 	if err != nil {
@@ -134,7 +133,7 @@ func TestBlockCipherEncryptionInvalidKeyLength(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	layerDataReader := content.BufReaderAt{int64(len(layerData)), layerData}
+	layerDataReader := bytes.NewReader(layerData)
 
 	_, _, err = h.Encrypt(layerDataReader, AESSIVCMAC512, opt)
 	if err == nil {

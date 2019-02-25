@@ -17,10 +17,9 @@
 package encryption
 
 import (
+	"bytes"
 	"reflect"
 	"testing"
-
-	"github.com/containerd/containerd/content"
 
 	"github.com/containerd/containerd/images/encryption/config"
 	digest "github.com/opencontainers/go-digest"
@@ -100,7 +99,7 @@ func TestEncryptLayer(t *testing.T) {
 		Size:   int64(len(data)),
 	}
 
-	dataReader := content.BufReaderAt{int64(len(data)), data}
+	dataReader := bytes.NewReader(data)
 
 	encLayerReader, annotations, err := EncryptLayer(ec, dataReader, desc)
 	if err != nil {
@@ -119,7 +118,7 @@ func TestEncryptLayer(t *testing.T) {
 
 	encLayer := make([]byte, 1024)
 	encLayerReader.Read(encLayer)
-	encLayerReaderAt := content.BufReaderAt{encLayerReader.Size(), encLayer}
+	encLayerReaderAt := bytes.NewReader(encLayer[:encLayerReader.Size()])
 
 	decLayerReader, err := DecryptLayer(dc, encLayerReaderAt, newDesc, false)
 	if err != nil {
