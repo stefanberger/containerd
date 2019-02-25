@@ -92,7 +92,6 @@ func GetWrappedKeysMap(desc ocispec.Descriptor) map[string]string {
 func EncryptLayer(ec *config.EncryptConfig, encOrPlainLayerReader content.ReaderAt, desc ocispec.Descriptor) (content.ReaderDigester, map[string]string, error) {
 	var (
 		encLayerReader content.ReaderDigester
-		encLayer       []byte
 		err            error
 		optsData       []byte
 	)
@@ -115,11 +114,6 @@ func EncryptLayer(ec *config.EncryptConfig, encOrPlainLayerReader content.Reader
 				return nil, nil, err
 			}
 			// already encrypted!
-			encLayer = make([]byte, encOrPlainLayerReader.Size())
-			_, err = encOrPlainLayerReader.ReadAt(encLayer, 0)
-			if err != nil {
-				return nil, nil, err
-			}
 		}
 	}
 
