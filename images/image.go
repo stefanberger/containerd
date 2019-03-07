@@ -578,6 +578,7 @@ func cryptLayer(ctx context.Context, cs content.Store, desc ocispec.Descriptor, 
 func isDescriptorALayer(desc ocispec.Descriptor) bool {
 	switch desc.MediaType {
 	case MediaTypeDockerSchema2LayerGzip, MediaTypeDockerSchema2Layer,
+		ocispec.MediaTypeImageLayerGzip, ocispec.MediaTypeImageLayer,
 		MediaTypeDockerSchema2LayerGzipEnc, MediaTypeDockerSchema2LayerEnc:
 		return true
 	}
@@ -900,7 +901,8 @@ func getImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descr
 
 			lis = append(lis, tmp...)
 		}
-	case MediaTypeDockerSchema2Layer, MediaTypeDockerSchema2LayerGzip:
+	case MediaTypeDockerSchema2Layer, MediaTypeDockerSchema2LayerGzip,
+		ocispec.MediaTypeImageLayer, ocispec.MediaTypeImageLayerGzip:
 		li := encryption.LayerInfo{
 			Index: uint32(layerIndex),
 			Descriptor: ocispec.Descriptor{
