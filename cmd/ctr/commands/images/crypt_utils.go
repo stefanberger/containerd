@@ -137,7 +137,7 @@ func processPrivateKeyFiles(keyFilesAndPwds []string) ([][]byte, [][]byte, [][]b
 			gpgSecretKeyRingFiles = append(gpgSecretKeyRingFiles, tmp)
 			gpgSecretKeyPasswords = append(gpgSecretKeyPasswords, password)
 		} else {
-			return nil, nil, nil, nil, fmt.Errorf("Unidentified private key in file %s (password=%s)", keyfile, string(password))
+			return nil, nil, nil, nil, fmt.Errorf("unidentified private key in file %s (password=%s)", keyfile, string(password))
 		}
 	}
 	return gpgSecretKeyRingFiles, gpgSecretKeyPasswords, privkeys, privkeysPasswords, nil
