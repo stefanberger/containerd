@@ -173,7 +173,9 @@ testPGP() {
 	echo
 	echo "Testing image export and import using ${ALPINE_ENC}"
 
-	$CTR images export ${WORKDIR}/${ALPINE_ENC_EXPORT_NAME} ${ALPINE_ENC}
+	$CTR images export \
+		--all-platforms \
+		${WORKDIR}/${ALPINE_ENC_EXPORT_NAME} ${ALPINE_ENC}
 	failExit $? "Could not export ${ALPINE_ENC}"
 
 	# remove ${ALPINE} and ${ALPINE_ENC} to clear cached and so we need to decrypt
@@ -181,6 +183,7 @@ testPGP() {
 	sleep ${SLEEP_TIME}
 
 	$CTR images import \
+		--all-platforms \
 		--base-name ${ALPINE_ENC_IMPORT_BASE} \
 		${WORKDIR}/${ALPINE_ENC_EXPORT_NAME} &>/dev/null
 	if [ $? -eq 0 ]; then
@@ -190,6 +193,7 @@ testPGP() {
 	sleep ${SLEEP_TIME}
 
 	MSG=$($CTR images import \
+		--all-platforms \
 		--base-name ${ALPINE_ENC_IMPORT_BASE} \
 		--gpg-homedir ${GPGHOMEDIR} \
 		--gpg-version 2 \
