@@ -597,9 +597,10 @@ func countLayers(desc []ocispec.Descriptor) int32 {
 	return c
 }
 
-// isUserSelectedLayer checks whether the a layer is user selected given its number
-// A layer can be described with its (positive) index number or its negative number, which
-// is counted relative to the topmost one (-1)
+// isUserSelectedLayer checks whether a layer is user-selected given its number
+// A layer can be described with its (positive) index number or its negative number.
+// The latter is counted relative to the topmost one (-1), the former relative to
+// the bottommost one (0).
 func isUserSelectedLayer(layerIndex, layersTotal int32, layers []int32) bool {
 	if len(layers) == 0 {
 		// convenience for the user; none given means 'all'
@@ -616,7 +617,7 @@ func isUserSelectedLayer(layerIndex, layersTotal int32, layers []int32) bool {
 }
 
 // isUserSelectedPlatform determines whether the platform matches one in
-// the array of user provided platforms
+// the array of user-provided platforms
 func isUserSelectedPlatform(platform *ocispec.Platform, platformList []ocispec.Platform) bool {
 	if len(platformList) == 0 {
 		// convenience for the user; none given means 'all'
@@ -682,7 +683,7 @@ func cryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descripto
 			}
 			layerIndex = layerIndex + 1
 		case MediaTypeDockerSchema2LayerForeign, MediaTypeDockerSchema2LayerForeignGzip:
-			/* never encrypt/decrypt */
+			// never encrypt/decrypt
 			newLayers = append(newLayers, child)
 			layerIndex = layerIndex + 1
 		default:
@@ -773,7 +774,6 @@ func cryptManifestList(ctx context.Context, cs content.Store, desc ocispec.Descr
 
 	if modified {
 		// we need to update the index
-
 		newIndex := ocispec.Index{
 			Versioned: index.Versioned,
 			Manifests: newManifests,
@@ -849,7 +849,7 @@ func CheckAuthorization(ctx context.Context, cs content.Store, desc ocispec.Desc
 }
 
 // GetImageLayerInfo gets the image key Ids necessary for decrypting an image
-// We determine the KeyIds starting with  the given OCI Decriptor, recursing to lower-level descriptors
+// We determine the KeyIds starting with the given OCI Decriptor, recursing to lower-level descriptors
 // until we get them from the layer descriptors
 func GetImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descriptor, lf *encryption.LayerFilter, layerIndex int32) ([]encryption.LayerInfo, error) {
 	ds := platforms.DefaultSpec()
