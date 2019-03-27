@@ -174,10 +174,8 @@ func copyN(ctx context.Context, cw Writer, r io.Reader, expected digest.Digest, 
 	}
 
 	if ws.Offset > 0 {
-		r, err = seekReader(r, ws.Offset, 0)
-		if err != nil {
-			return 0, errors.Wrapf(err, "unable to resume write to %v", ws.Ref)
-		}
+		// not needed
+		return 0, errors.New("copyN: ws.Offset > 0 is not supported")
 	}
 
 	size, err := copyWithBuffer(cw, r)
