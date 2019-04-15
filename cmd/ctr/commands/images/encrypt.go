@@ -132,10 +132,10 @@ var encryptCommand = cli.Command{
 		dcparameters["x509s"] = decX509s
 
 		cc := &encconfig.CryptoConfig{
-			Ec: &encconfig.EncryptConfig{
+			EncryptConfig: &encconfig.EncryptConfig{
 				Parameters: parameters,
 				Operation:  encconfig.OperationAddRecipients,
-				Dc: encconfig.DecryptConfig{
+				DecryptConfig: encconfig.DecryptConfig{
 					Parameters: dcparameters,
 				},
 			},

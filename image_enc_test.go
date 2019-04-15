@@ -141,10 +141,10 @@ func TestImageEncryption(t *testing.T) {
 	dcparameters["privkeys-passwords"] = [][]byte{{}}
 
 	cc := &encconfig.CryptoConfig{
-		Ec: &encconfig.EncryptConfig{
+		EncryptConfig: &encconfig.EncryptConfig{
 			Parameters: parameters,
 			Operation:  encconfig.OperationAddRecipients,
-			Dc: encconfig.DecryptConfig{
+			DecryptConfig: encconfig.DecryptConfig{
 				Parameters: dcparameters,
 			},
 		},
@@ -164,7 +164,7 @@ func TestImageEncryption(t *testing.T) {
 	}
 
 	cc = &encconfig.CryptoConfig{
-		Dc: &encconfig.DecryptConfig{
+		DecryptConfig: &encconfig.DecryptConfig{
 			Parameters: dcparameters,
 		},
 	}

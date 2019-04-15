@@ -89,7 +89,7 @@ var decryptCommand = cli.Command{
 		}
 
 		cc := &encconfig.CryptoConfig{
-			Dc: &encconfig.DecryptConfig{
+			DecryptConfig: &encconfig.DecryptConfig{
 				Parameters: dcparameters,
 			},
 		}
