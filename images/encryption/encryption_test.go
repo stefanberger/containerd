@@ -145,8 +145,8 @@ func TestJSONDCParameters(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if mycc == nil || mycc.Dc == nil {
-		t.Fatalf("Expected mycc != nil and mycc.Dc != nil")
+	if mycc == nil || mycc.DecryptConfig == nil {
+		t.Fatalf("Expected mycc != nil and mycc.DecryptConfig != nil")
 	}
 
 	annotations["_dcparameters"], err = DCParametersToJSON(dc.Parameters)
@@ -158,7 +158,7 @@ func TestJSONDCParameters(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(mycc.Dc.Parameters, dc.Parameters) {
-		t.Fatalf("Expected %v, got %v", dc.Parameters, mycc.Dc.Parameters)
+	if !reflect.DeepEqual(mycc.DecryptConfig.Parameters, dc.Parameters) {
+		t.Fatalf("Expected %v, got %v", dc.Parameters, mycc.DecryptConfig.Parameters)
 	}
 }

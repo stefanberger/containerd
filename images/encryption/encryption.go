@@ -264,7 +264,7 @@ func GetCryptoConfigFromAnnotations(desc *ocispec.Descriptor) (*config.CryptoCon
 	var err error
 
 	cc := &config.CryptoConfig{
-		Dc: &config.DecryptConfig{},
+		DecryptConfig: &config.DecryptConfig{},
 	}
 
 	dcparametersStr := desc.Annotations["_dcparameters"]
@@ -273,7 +273,7 @@ func GetCryptoConfigFromAnnotations(desc *ocispec.Descriptor) (*config.CryptoCon
 	}
 	delete(desc.Annotations, "_dcparameters")
 
-	cc.Dc.Parameters, err = DCParametersFromJSON(dcparametersStr)
+	cc.DecryptConfig.Parameters, err = DCParametersFromJSON(dcparametersStr)
 	return cc, err
 }
 
