@@ -852,17 +852,12 @@ func CheckAuthorization(ctx context.Context, cs content.Store, desc ocispec.Desc
 // We determine the KeyIds starting with the given OCI Decriptor, recursing to lower-level descriptors
 // until we get them from the layer descriptors
 func GetImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descriptor, lf *encryption.LayerFilter) ([]encryption.LayerInfo, error) {
-	ds := platforms.DefaultSpec()
-	return getImageLayerInfo(ctx, cs, desc, lf, -1, &ds)
-}
-
-// getImageLayerInfo is the recursive version of GetImageLayerInfo that takes the platform
-// as additional parameter
-func getImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descriptor, lf *encryption.LayerFilter, layerIndex int32, platform *ocispec.Platform) ([]encryption.LayerInfo, error) {
 	var (
 		lis []encryption.LayerInfo
 		tmp []encryption.LayerInfo
 	)
+	ds := platforms.DefaultSpec()
+	platform := &ds
 
 	switch desc.MediaType {
 	case MediaTypeDockerSchema2ManifestList, ocispec.MediaTypeImageIndex,
@@ -888,7 +883,12 @@ func getImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descr
 			if isDescriptorALayer(child) {
 				layerIndex = layerIndex + 1
 				if isUserSelectedLayer(layerIndex, layersTotal, lf.Layers) {
-					tmp, err = getImageLayerInfo(ctx, cs, child, lf, layerIndex, platform)
+					li := encryption.LayerInfo{
+						Index:      uint32(layerIndex),
+						Descriptor: child,
+					}
+					li.Descriptor.Platform = platform
+					tmp = append(tmp, li)
 				} else {
 					continue
 				}
@@ -901,35 +901,9 @@ func getImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descr
 
 			lis = append(lis, tmp...)
 		}
-	case MediaTypeDockerSchema2Layer, MediaTypeDockerSchema2LayerGzip,
-		ocispec.MediaTypeImageLayer, ocispec.MediaTypeImageLayerGzip:
-		li := encryption.LayerInfo{
-			Index: uint32(layerIndex),
-			Descriptor: ocispec.Descriptor{
-				Annotations: make(map[string]string),
-				MediaType:   desc.MediaType,
-				Digest:      desc.Digest,
-				Size:        desc.Size,
-				Platform:    platform,
-			},
-		}
-		lis = append(lis, li)
 	case MediaTypeDockerSchema2Config, ocispec.MediaTypeImageConfig:
-	case MediaTypeDockerSchema2LayerEnc, MediaTypeDockerSchema2LayerGzipEnc:
-		li := encryption.LayerInfo{
-			Index: uint32(layerIndex),
-			Descriptor: ocispec.Descriptor{
-				Annotations: desc.Annotations,
-				MediaType:   desc.MediaType,
-				Digest:      desc.Digest,
-				Size:        desc.Size,
-				Platform:    platform,
-			},
-		}
-		lis = append(lis, li)
 	default:
-		return []encryption.LayerInfo{}, errors.Wrapf(errdefs.ErrInvalidArgument, "GetImageLayerInfo: Unhandled media type %s", desc.MediaType)
+		return nil, errors.Wrapf(errdefs.ErrInvalidArgument, "GetImageLayerInfo: Unhandled media type %s", desc.MediaType)
 	}
-
 	return lis, nil
 }
