@@ -242,7 +242,7 @@ func getImageLayerInfo(client *containerd.Client, ctx gocontext.Context, name st
 		Platforms: pl,
 	}
 
-	return images.GetImageLayerInfo(ctx, client.ContentStore(), image.Target, lf, -1)
+	return images.GetImageLayerInfo(ctx, client.ContentStore(), image.Target, lf)
 }
 
 // CreateDcParameters creates the decryption parameter map from command line options and possibly
