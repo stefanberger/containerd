@@ -851,9 +851,9 @@ func CheckAuthorization(ctx context.Context, cs content.Store, desc ocispec.Desc
 // GetImageLayerInfo gets the image key Ids necessary for decrypting an image
 // We determine the KeyIds starting with the given OCI Decriptor, recursing to lower-level descriptors
 // until we get them from the layer descriptors
-func GetImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descriptor, lf *encryption.LayerFilter, layerIndex int32) ([]encryption.LayerInfo, error) {
+func GetImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descriptor, lf *encryption.LayerFilter) ([]encryption.LayerInfo, error) {
 	ds := platforms.DefaultSpec()
-	return getImageLayerInfo(ctx, cs, desc, lf, layerIndex, &ds)
+	return getImageLayerInfo(ctx, cs, desc, lf, -1, &ds)
 }
 
 // getImageLayerInfo is the recursive version of GetImageLayerInfo that takes the platform
@@ -893,7 +893,7 @@ func getImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descr
 					continue
 				}
 			} else {
-				tmp, err = GetImageLayerInfo(ctx, cs, child, lf, -1)
+				tmp, err = GetImageLayerInfo(ctx, cs, child, lf)
 			}
 			if err != nil {
 				return []encryption.LayerInfo{}, err
