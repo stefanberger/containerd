@@ -67,6 +67,13 @@ func (s *fsApplier) Apply(ctx context.Context, desc ocispec.Descriptor, mounts [
 		}
 	}()
 
+	var config diff.ApplyConfig
+	for _, opt := range opts {
+		if err := opt(&config); err != nil {
+			return emptyDesc, err
+		}
+	}
+
 	isCompressed, err := images.IsCompressedDiff(ctx, desc.MediaType)
 	if err != nil {
 		return emptyDesc, errors.Wrapf(errdefs.ErrNotImplemented, "unsupported diff media type: %v", desc.MediaType)
@@ -83,10 +90,7 @@ func (s *fsApplier) Apply(ctx context.Context, desc ocispec.Descriptor, mounts [
 		r := content.NewReader(ra)
 
 		if images.IsEncryptedDiff(ctx, desc.MediaType) {
-			cc, err := encryption.GetCryptoConfigFromAnnotations(&desc)
-			if err != nil {
-				return err
-			}
+			cc := encryption.GetCryptoConfigFromDcParameters(config.DcParameters)
 
 			newDesc, plainLayerReader, err := images.DecryptBlob(cc, ra, desc, false)
 			if err != nil {

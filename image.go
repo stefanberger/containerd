@@ -149,20 +149,12 @@ func (i *image) Unpack(ctx context.Context, snapshotterName string) error {
 		a  = i.client.DiffService()
 		cs = i.client.ContentStore()
 
-		chain            []digest.Digest
-		unpacked         bool
-		dcparametersJSON string
+		chain    []digest.Digest
+		unpacked bool
 	)
 
-	if i.dcparameters != nil && len(i.dcparameters) > 0 {
-		dcparametersJSON, err = encryption.DCParametersToJSON(i.dcparameters)
-		if err != nil {
-			return err
-		}
-	}
-
 	for id, layer := range layers {
-		if len(dcparametersJSON) > 0 {
+		if len(i.dcparameters) > 0 {
 			ds := platforms.DefaultSpec()
 			layerInfo := encryption.LayerInfo{
 				Index: uint32(id),
@@ -178,11 +170,7 @@ func (i *image) Unpack(ctx context.Context, snapshotterName string) error {
 				return err
 			}
 
-			if layer.Blob.Annotations == nil {
-				layer.Blob.Annotations = make(map[string]string)
-			}
-
-			layer.Blob.Annotations["_dcparameters"] = dcparametersJSON
+			layer.DcParameters = i.dcparameters
 		}
 
 		unpacked, err = rootfs.ApplyLayer(ctx, layer, chain, sn, a)
