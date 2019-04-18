@@ -687,7 +687,7 @@ func cryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descripto
 			newLayers = append(newLayers, child)
 			layerIndex = layerIndex + 1
 		default:
-			return ocispec.Descriptor{}, false, errors.Errorf("Bad/unhandled MediaType %s in encryptChildren\n", child.MediaType)
+			return ocispec.Descriptor{}, false, errors.Errorf("bad/unhandled MediaType %s in encryptChildren\n", child.MediaType)
 		}
 	}
 
@@ -843,7 +843,7 @@ func CheckAuthorization(ctx context.Context, cs content.Store, desc ocispec.Desc
 	}
 	_, _, err := cryptImage(ctx, cs, desc, &cc, &lf, cryptoOpUnwrapOnly)
 	if err != nil {
-		return errors.Wrapf(err, "You are not authorized to used this image")
+		return errors.Wrapf(err, "you are not authorized to use this image")
 	}
 	return nil
 }
@@ -903,7 +903,7 @@ func GetImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descr
 		}
 	case MediaTypeDockerSchema2Config, ocispec.MediaTypeImageConfig:
 	default:
-		return nil, errors.Wrapf(errdefs.ErrInvalidArgument, "GetImageLayerInfo: Unhandled media type %s", desc.MediaType)
+		return nil, errors.Wrapf(errdefs.ErrInvalidArgument, "GetImageLayerInfo: unhandled media type %s", desc.MediaType)
 	}
 	return lis, nil
 }

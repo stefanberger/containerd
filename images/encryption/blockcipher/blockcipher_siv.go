@@ -153,7 +153,7 @@ func (bc *AESSIVLayerBlockCipher) init(encrypt bool, reader io.ReaderAt, opt Lay
 	if len(nonce) == 0 {
 		nonce = make([]byte, se.NonceSize())
 		if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
-			return LayerBlockCipherOptions{}, errors.Wrap(err, "Unable to generate random nonce")
+			return LayerBlockCipherOptions{}, errors.Wrap(err, "unable to generate random nonce")
 		}
 	}
 
@@ -169,14 +169,14 @@ func (bc *AESSIVLayerBlockCipher) init(encrypt bool, reader io.ReaderAt, opt Lay
 	if encrypt {
 		bc.encryptor, err = miscreant.NewStreamEncryptor("AES-SIV", key, nonce)
 		if err != nil {
-			return LayerBlockCipherOptions{}, errors.Wrap(err, "Unable to create AES-SIV stream encryptor")
+			return LayerBlockCipherOptions{}, errors.Wrap(err, "unable to create AES-SIV stream encryptor")
 		}
 		bc.toread -= bc.encryptor.Overhead()
 		bc.decryptor = nil
 	} else {
 		bc.decryptor, err = miscreant.NewStreamDecryptor("AES-SIV", key, nonce)
 		if err != nil {
-			return LayerBlockCipherOptions{}, errors.Wrap(err, "Unable to create AES-SIV stream decryptor")
+			return LayerBlockCipherOptions{}, errors.Wrap(err, "unable to create AES-SIV stream decryptor")
 		}
 		bc.encryptor = nil
 	}

@@ -337,7 +337,7 @@ func GPGGetPrivateKey(layerInfos []LayerInfo, gpgClient GPGClient, gpgVault GPGV
 			}
 			keywrapper := GetKeyWrapper(scheme)
 			if keywrapper == nil {
-				return errors.Errorf("Could not get KeyWrapper for %s\n", scheme)
+				return errors.Errorf("could not get KeyWrapper for %s\n", scheme)
 			}
 			keyIds, err := keywrapper.GetKeyIdsFromPacket(b64pgpPackets)
 			if err != nil {
@@ -390,13 +390,13 @@ func GPGGetPrivateKey(layerInfos []LayerInfo, gpgClient GPGClient, gpgVault GPGV
 					}
 					break
 				} else {
-					return errors.Wrapf(errdefs.ErrInvalidArgument, "No GPGVault or GPGClient passed.")
+					return errors.Wrapf(errdefs.ErrInvalidArgument, "no GPGVault or GPGClient passed.")
 				}
 			}
 			if !found && len(b64pgpPackets) > 0 && mustFindKey {
 				ids := uint64ToStringArray("0x%x", keyIds)
 
-				return errors.Wrapf(errdefs.ErrNotFound, "Missing key for decryption of layer %d of %s. Need one of the following keys: %s", layerInfo.Index, layerInfo.Descriptor.Platform, strings.Join(ids, ", "))
+				return errors.Wrapf(errdefs.ErrNotFound, "missing key for decryption of layer %d of %s. Need one of the following keys: %s", layerInfo.Index, layerInfo.Descriptor.Platform, strings.Join(ids, ", "))
 			}
 		}
 	}
