@@ -76,7 +76,7 @@ func processPwdString(pwdString string) ([]byte, error) {
 		fdStr := pwdString[3:]
 		fd, err := strconv.Atoi(fdStr)
 		if err != nil {
-			return nil, errors.Wrapf(err, "Could not parse file descriptor %s", fdStr)
+			return nil, errors.Wrapf(err, "could not parse file descriptor %s", fdStr)
 		}
 		f := os.NewFile(uintptr(fd), "pwdfile")
 		if f == nil {
@@ -86,7 +86,7 @@ func processPwdString(pwdString string) ([]byte, error) {
 		pwd := make([]byte, 64)
 		n, err := f.Read(pwd)
 		if err != nil {
-			return nil, errors.Wrapf(err, "Could not read from file descriptor")
+			return nil, errors.Wrapf(err, "could not read from file descriptor")
 		}
 		return pwd[:n], nil
 	}

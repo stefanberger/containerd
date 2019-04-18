@@ -128,7 +128,7 @@ func EncryptLayer(ec *config.EncryptConfig, encOrPlainLayerReader io.ReaderAt, d
 		}
 	}
 	if len(newAnnotations) == 0 {
-		err = errors.Errorf("No encryptor found to handle encryption")
+		err = errors.Errorf("no encryptor found to handle encryption")
 	}
 	// if nothing was encrypted, we just return encLayer = nil
 	return encLayerReader, newAnnotations, err
@@ -188,9 +188,9 @@ func decryptLayerKeyOptsData(dc *config.DecryptConfig, desc ocispec.Descriptor) 
 		}
 	}
 	if !privKeyGiven {
-		return nil, errors.New("Missing private key needed for decryption")
+		return nil, errors.New("missing private key needed for decryption")
 	}
-	return nil, errors.Errorf("No suitable key unwrapper found or none of the private keys could be used for decryption")
+	return nil, errors.Errorf("no suitable key unwrapper found or none of the private keys could be used for decryption")
 }
 
 // preUnwrapKey decodes the comma separated base64 strings and calls the Unwrap function
@@ -203,7 +203,7 @@ func preUnwrapKey(keywrapper keywrap.KeyWrapper, dc *config.DecryptConfig, b64An
 	for _, b64Annotation := range strings.Split(b64Annotations, ",") {
 		annotation, err := base64.StdEncoding.DecodeString(b64Annotation)
 		if err != nil {
-			return nil, errors.New("Could not base64 decode the annotation")
+			return nil, errors.New("could not base64 decode the annotation")
 		}
 		optsData, err := keywrapper.UnwrapKey(dc, annotation)
 		if err != nil {
@@ -211,7 +211,7 @@ func preUnwrapKey(keywrapper keywrap.KeyWrapper, dc *config.DecryptConfig, b64An
 		}
 		return optsData, nil
 	}
-	return nil, errors.New("No suitable key found for decrypting layer key")
+	return nil, errors.New("no suitable key found for decrypting layer key")
 }
 
 // commonEncryptLayer is a function to encrypt the plain layer using a new random
@@ -230,7 +230,7 @@ func commonEncryptLayer(plainLayerReader io.ReaderAt, typ blockcipher.LayerCiphe
 
 	optsData, err := json.Marshal(opts)
 	if err != nil {
-		return nil, nil, errors.Wrapf(err, "Could not JSON marshal opts")
+		return nil, nil, errors.Wrapf(err, "could not JSON marshal opts")
 	}
 
 	return encLayerReader, optsData, err
@@ -242,7 +242,7 @@ func commonDecryptLayer(encLayerReader io.ReaderAt, optsData []byte) (content.Re
 	opts := blockcipher.LayerBlockCipherOptions{}
 	err := json.Unmarshal(optsData, &opts)
 	if err != nil {
-		return nil, errors.Wrapf(err, "Could not JSON unmarshal optsData")
+		return nil, errors.Wrapf(err, "could not JSON unmarshal optsData")
 	}
 
 	lbch, err := blockcipher.NewLayerBlockCipherHandler()

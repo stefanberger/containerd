@@ -75,19 +75,19 @@ func (h *LayerBlockCipherHandler) Encrypt(plainDataReader io.ReaderAt, typ Layer
 		}
 		return encDataReader, newopt, err
 	}
-	return nil, LayerBlockCipherOptions{}, errors.New("Unsupported cipher type")
+	return nil, LayerBlockCipherOptions{}, errors.New("unsupported cipher type")
 }
 
 // Decrypt is the handler for the layer decryption routine
 func (h *LayerBlockCipherHandler) Decrypt(encDataReader io.ReaderAt, opt LayerBlockCipherOptions) (CryptedDataReader, LayerBlockCipherOptions, error) {
 	typ, ok := opt.CipherOptions[CipherTypeOpt]
 	if !ok {
-		return nil, LayerBlockCipherOptions{}, errors.New("No cipher type provided")
+		return nil, LayerBlockCipherOptions{}, errors.New("no cipher type provided")
 	}
 	if c, ok := h.cipherMap[LayerCipherType(typ)]; ok {
 		return c.Decrypt(encDataReader, opt)
 	}
-	return nil, LayerBlockCipherOptions{}, errors.New("Unsupported cipher type")
+	return nil, LayerBlockCipherOptions{}, errors.New("unsupported cipher type")
 }
 
 // NewLayerBlockCipherHandler returns a new default handler
@@ -99,12 +99,12 @@ func NewLayerBlockCipherHandler() (*LayerBlockCipherHandler, error) {
 	var err error
 	h.cipherMap[AESSIVCMAC256], err = NewAESSIVLayerBlockCipher(256)
 	if err != nil {
-		return nil, errors.Wrap(err, "Unable to set up Cipher AES-SIV-CMAC-256")
+		return nil, errors.Wrap(err, "unable to set up Cipher AES-SIV-CMAC-256")
 	}
 
 	h.cipherMap[AESSIVCMAC512], err = NewAESSIVLayerBlockCipher(512)
 	if err != nil {
-		return nil, errors.Wrap(err, "Unable to set up Cipher AES-SIV-CMAC-512")
+		return nil, errors.Wrap(err, "unable to set up Cipher AES-SIV-CMAC-512")
 	}
 
 	return &h, nil
