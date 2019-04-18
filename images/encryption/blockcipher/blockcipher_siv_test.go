@@ -87,7 +87,7 @@ func TestBlockCipherAesSivEncryption(t *testing.T) {
 	}
 
 	if string(plaintext[:plaintextReader.Size()]) != string(layerData) {
-		t.Fatal("Decrypted data is incorrect")
+		t.Fatalf("expected %q, got %q", layerData, plaintext[:plaintextReader.Size()])
 	}
 }
 
