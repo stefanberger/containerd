@@ -12,7 +12,10 @@ As most of the integration points would be transparent or consumed by other cont
 
 # Example End User Usage
 
-We have added 3 commands in the [`ctr`](https://github.com/containerd/containerd/tree/master/cmd/ctr) client under the image module. They are `ctr image encrypt/decrypt/layerinfo`.
+We have added 3 commands in the [`ctr`](https://github.com/containerd/containerd/tree/master/cmd/ctr) client under the image module. They are:
+- `ctr image encrypt`
+- `ctr image decrypt`
+- `ctr image layerinfo`
 
 ## Encrypt
 
@@ -52,7 +55,7 @@ $ ctr images layerinfo docker.io/library/alpine:enc
 
 ## Decrypt
 
-The following command performs an decryption of the encrypted image `docker.io/library/alpine:enc` to the image tag `docker.io/library/alpine:latest`.
+The following command performs an decryption of the encrypted image `docker.io/library/alpine:enc` to the image tag `docker.io/library/alpine:dec`.
 The decryption is done by passing in the private key that corresponds to at least one of the recipients of the encrypted image.
 
 ```
@@ -85,7 +88,7 @@ func CheckAuthorization(ctx context.Context, cs content.Store, desc ocispec.Desc
 // GetImageLayerInfo gets the image key Ids necessary for decrypting an image
 // We determine the KeyIds starting with  the given OCI Decriptor, recursing to lower-level descriptors
 // until we get them from the layer descriptors
-func GetImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descriptor, lf *encryption.LayerFilter, layerIndex int32) ([]encryption.LayerInfo, error)
+func GetImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descriptor, lf *encryption.LayerFilter) ([]encryption.LayerInfo, error)
 
 /* Cryptography Configuration Datastructures */
 
