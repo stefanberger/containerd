@@ -109,6 +109,13 @@ func (s windowsLcowDiff) Apply(ctx context.Context, desc ocispec.Descriptor, mou
 		}
 	}()
 
+	var config diff.ApplyConfig
+	for _, opt := range opts {
+		if err := opt(&config); err != nil {
+			return emptyDesc, err
+		}
+	}
+
 	layer, _, err := mountsToLayerAndParents(mounts)
 	if err != nil {
 		return emptyDesc, err
@@ -127,10 +134,7 @@ func (s windowsLcowDiff) Apply(ctx context.Context, desc ocispec.Descriptor, mou
 	rdr := content.NewReader(ra)
 
 	if images.IsEncryptedDiff(ctx, desc.MediaType) {
-		cc, err := encryption.GetCryptoConfigFromAnnotations(&desc)
-		if err != nil {
-			return emptyDesc, err
-		}
+		cc := encryption.GetCryptoConfigFromDcParameters(config.DcParameters)
 
 		newDesc, plainLayerReader, err := images.DecryptBlob(cc, ra, desc, false)
 		if err != nil {
