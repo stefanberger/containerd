@@ -852,10 +852,8 @@ func CheckAuthorization(ctx context.Context, cs content.Store, desc ocispec.Desc
 // We determine the KeyIds starting with the given OCI Decriptor, recursing to lower-level descriptors
 // until we get them from the layer descriptors
 func GetImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descriptor, lf *encryption.LayerFilter) ([]encryption.LayerInfo, error) {
-	var (
-		lis []encryption.LayerInfo
-		tmp []encryption.LayerInfo
-	)
+	var lis []encryption.LayerInfo
+
 	ds := platforms.DefaultSpec()
 	platform := &ds
 
@@ -880,6 +878,7 @@ func GetImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descr
 		layerIndex := int32(-1)
 
 		for _, child := range children {
+			var tmp []encryption.LayerInfo
 			if isDescriptorALayer(child) {
 				layerIndex = layerIndex + 1
 				if isUserSelectedLayer(layerIndex, layersTotal, lf.Layers) {
