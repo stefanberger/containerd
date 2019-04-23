@@ -24,7 +24,6 @@ import (
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/images"
-	"github.com/containerd/containerd/images/encryption"
 	encconfig "github.com/containerd/containerd/images/encryption/config"
 	"github.com/containerd/containerd/images/encryption/utils"
 	"github.com/containerd/containerd/platforms"
@@ -94,9 +93,27 @@ func TestImageEncryption(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	lf := &encryption.LayerFilter{
-		Layers:    []int32{},
-		Platforms: pl,
+	matcher := platforms.NewMatcher(pl[0])
+
+	alldescs, err := images.GetImageLayerDescriptors(ctx, client.ContentStore(), image.Target)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var descs []ocispec.Descriptor
+	for _, desc := range alldescs {
+		if matcher.Match(*desc.Platform) {
+			descs = append(descs, desc)
+		}
+	}
+
+	lf := func(d ocispec.Descriptor) bool {
+		for _, desc := range descs {
+			if desc.Digest.String() == d.Digest.String() {
+				return true
+			}
+		}
+		return false
 	}
 
 	dcparameters := make(map[string][][]byte)
@@ -136,6 +153,9 @@ func TestImageEncryption(t *testing.T) {
 
 	// Perform decryption of image
 	defer client.ImageService().Delete(ctx, imageName, images.SynchronousDelete())
+	lf = func(desc ocispec.Descriptor) bool {
+		return true
+	}
 	decSpec, modified, err := images.DecryptImage(ctx, client.ContentStore(), encSpec, cc, lf)
 	if err != nil {
 		t.Fatal(err)

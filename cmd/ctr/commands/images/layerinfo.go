@@ -73,7 +73,7 @@ var layerinfoCommand = cli.Command{
 
 		layers32 := commands.IntToInt32Array(context.IntSlice("layer"))
 
-		LayerInfos, err := getImageLayerInfo(client, ctx, local, layers32, context.StringSlice("platform"))
+		LayerInfos, _, err := getImageLayerInfos(client, ctx, local, layers32, context.StringSlice("platform"))
 		if err != nil {
 			return err
 		}

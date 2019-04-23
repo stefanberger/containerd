@@ -75,20 +75,19 @@ The current draft of exposed interfaces we believe will be used by consumers are
 /* Functions */
 
 // EncryptImage encrypts an image; it accepts either an OCI descriptor representing a manifest list or a single manifest
-func EncryptImage(ctx context.Context, cs content.Store, desc ocispec.Descriptor, cc *encconfig.CryptoConfig, lf *encryption.LayerFilter) (ocispec.Descriptor, bool, error)
+func EncryptImage(ctx context.Context, cs content.Store, desc ocispec.Descriptor, cc *encconfig.CryptoConfig, lf *LayerFilter) (ocispec.Descriptor, bool, error)
 
 // DecryptImage decrypts an image; it accepts either an OCI descriptor representing a manifest list or a single manifest
-func DecryptImage(ctx context.Context, cs content.Store, desc ocispec.Descriptor, cc *encconfig.CryptoConfig, lf *encryption.LayerFilter) (ocispec.Descriptor, bool, error)
+func DecryptImage(ctx context.Context, cs content.Store, desc ocispec.Descriptor, cc *encconfig.CryptoConfig, lf *LayerFilter) (ocispec.Descriptor, bool, error)
 
 // CheckAuthorization checks whether a user has the right keys to be allowed to access an image (every layer)
 // It takes decrypting of the layers only as far as decrypting the asymmetrically encrypted data
 // The decryption is only done for the current platform
 func CheckAuthorization(ctx context.Context, cs content.Store, desc ocispec.Descriptor, dc *encconfig.DecryptConfig) error
 
-// GetImageLayerInfo gets the image key Ids necessary for decrypting an image
-// We determine the KeyIds starting with  the given OCI Decriptor, recursing to lower-level descriptors
-// until we get them from the layer descriptors
-func GetImageLayerInfo(ctx context.Context, cs content.Store, desc ocispec.Descriptor, lf *encryption.LayerFilter) ([]encryption.LayerInfo, error)
+// GetImageLayerDescriptors gets the image layer Descriptors of an image; the array contains
+// a list of Descriptors belonging to one platform followed by lists of other platforms
+func GetImageLayerDescriptors(ctx context.Context, cs content.Store, desc ocispec.Descriptor) ([]ocispec.Descriptor, error)
 
 /* Cryptography Configuration Datastructures */
 
