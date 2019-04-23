@@ -34,22 +34,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-// LayerInfo holds information about an image layer
-type LayerInfo struct {
-	// The Number of this layer in the sequence; starting at 0
-	Index      uint32
-	Descriptor ocispec.Descriptor
-}
-
-// LayerFilter holds criteria for which layer to select
-type LayerFilter struct {
-	// IDs of layers to touch; may be negative number to start from topmost layer
-	// empty array means 'all layers'
-	Layers []int32
-	// Platforms to touch; empty array means 'all platforms'
-	Platforms []ocispec.Platform
-}
-
 func init() {
 	keyWrappers = make(map[string]keywrap.KeyWrapper)
 	keyWrapperAnnotations = make(map[string]string)

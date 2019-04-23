@@ -98,14 +98,14 @@ var encryptCommand = cli.Command{
 		parameters["pubkeys"] = pubKeys
 		parameters["x509s"] = x509s
 
-		layerInfos, err := getImageLayerInfo(client, ctx, local, layers32, context.StringSlice("platform"))
+		_, descs, err := getImageLayerInfos(client, ctx, local, layers32, context.StringSlice("platform"))
 		if err != nil {
 			return err
 		}
 
 		if len(privKeys) == 0 {
 			// Get pgp private keys from keyring only if no private key was passed
-			err = getGPGPrivateKeys(context, gpgSecretKeyRingFiles, layerInfos, true, dcparameters)
+			err = getGPGPrivateKeys(context, gpgSecretKeyRingFiles, descs, true, dcparameters)
 			if err != nil {
 				return err
 			}

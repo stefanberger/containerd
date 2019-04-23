@@ -72,18 +72,18 @@ var decryptCommand = cli.Command{
 
 		layers32 := commands.IntToInt32Array(context.IntSlice("layer"))
 
-		layerInfos, err := getImageLayerInfo(client, ctx, local, layers32, context.StringSlice("platform"))
+		_, descs, err := getImageLayerInfos(client, ctx, local, layers32, context.StringSlice("platform"))
 		if err != nil {
 			return err
 		}
 
-		isEncrypted := images.HasEncryptedLayer(ctx, layerInfos)
+		isEncrypted := images.HasEncryptedLayer(ctx, descs)
 		if !isEncrypted {
 			fmt.Printf("Nothing to decrypted.\n")
 			return nil
 		}
 
-		dcparameters, err := CreateDcParameters(context, layerInfos)
+		dcparameters, err := CreateDcParameters(context, descs)
 		if err != nil {
 			return err
 		}

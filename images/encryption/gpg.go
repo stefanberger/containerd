@@ -26,6 +26,7 @@ import (
 	"strings"
 
 	"github.com/containerd/containerd/errdefs"
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 	"golang.org/x/crypto/ssh/terminal"
 )
@@ -321,7 +322,7 @@ func uint64ToStringArray(format string, in []uint64) []string {
 // in the GPGVault or on this system and prompts for the passwords for those
 // that are available. If we do not find a private key on the system for
 // getting to the symmetric key of a layer then an error is generated.
-func GPGGetPrivateKey(layerInfos []LayerInfo, gpgClient GPGClient, gpgVault GPGVault, mustFindKey bool, dcparameters map[string][][]byte) error {
+func GPGGetPrivateKey(descs []ocispec.Descriptor, gpgClient GPGClient, gpgVault GPGVault, mustFindKey bool, dcparameters map[string][][]byte) error {
 	// PrivateKeyData describes a private key
 	type PrivateKeyData struct {
 		KeyData         []byte
@@ -330,8 +331,8 @@ func GPGGetPrivateKey(layerInfos []LayerInfo, gpgClient GPGClient, gpgVault GPGV
 	var pkd PrivateKeyData
 	keyIDPasswordMap := make(map[uint64]PrivateKeyData)
 
-	for _, layerInfo := range layerInfos {
-		for scheme, b64pgpPackets := range GetWrappedKeysMap(layerInfo.Descriptor) {
+	for _, desc := range descs {
+		for scheme, b64pgpPackets := range GetWrappedKeysMap(desc) {
 			if scheme != "pgp" {
 				continue
 			}
@@ -396,7 +397,7 @@ func GPGGetPrivateKey(layerInfos []LayerInfo, gpgClient GPGClient, gpgVault GPGV
 			if !found && len(b64pgpPackets) > 0 && mustFindKey {
 				ids := uint64ToStringArray("0x%x", keyIds)
 
-				return errors.Wrapf(errdefs.ErrNotFound, "missing key for decryption of layer %d of %s. Need one of the following keys: %s", layerInfo.Index, layerInfo.Descriptor.Platform, strings.Join(ids, ", "))
+				return errors.Wrapf(errdefs.ErrNotFound, "missing key for decryption of layer %x of %s. Need one of the following keys: %s", desc.Digest, desc.Platform, strings.Join(ids, ", "))
 			}
 		}
 	}
@@ -417,7 +418,7 @@ func GPGGetPrivateKey(layerInfos []LayerInfo, gpgClient GPGClient, gpgVault GPGV
 
 // GPGSetupPrivateKeys uses the gpg specific parameters in the dcparameters map
 // to get the private keys needed for decryption the give layers
-func GPGSetupPrivateKeys(dcparameters map[string][][]byte, layerInfos []LayerInfo) error {
+func GPGSetupPrivateKeys(dcparameters map[string][][]byte, descs []ocispec.Descriptor) error {
 	/* we have to find a GPG key until we also get other private keys passed */
 	var (
 		gpgVault   GPGVault
@@ -448,5 +449,5 @@ func GPGSetupPrivateKeys(dcparameters map[string][][]byte, layerInfos []LayerInf
 		}
 	}
 
-	return GPGGetPrivateKey(layerInfos, gpgClient, gpgVault, false, dcparameters)
+	return GPGGetPrivateKey(descs, gpgClient, gpgVault, false, dcparameters)
 }
