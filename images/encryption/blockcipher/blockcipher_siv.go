@@ -19,11 +19,9 @@ package blockcipher
 import (
 	"crypto/rand"
 	"fmt"
-	"hash"
 	"io"
 
 	miscreant "github.com/miscreant/miscreant-go"
-	digest "github.com/opencontainers/go-digest"
 	"github.com/pkg/errors"
 )
 
@@ -43,16 +41,9 @@ type AESSIVLayerBlockCipher struct {
 	outsize   int64  // output size
 }
 
-// AESSIVEncryptor implments the CryptedDataReader for en- and decrypting input
-// data and calculating the hash over the data
-type AESSIVEncryptor interface {
-	CryptedDataReader
-}
-
 type aessivcryptor struct {
 	bc           *AESSIVLayerBlockCipher
 	outputReader io.Reader
-	digester     digest.Digester
 }
 
 // NewAESSIVLayerBlockCipher returns a new AES SIV block cipher of 256 or 512 bits
@@ -73,7 +64,6 @@ func (r *aessivcryptor) Read(p []byte) (int, error) {
 		if r.bc.outbuffer != nil && r.bc.outoffset < len(r.bc.outbuffer) {
 			n := copy(p, r.bc.outbuffer[r.bc.outoffset:])
 			r.bc.outoffset += n
-			r.digester.Hash().Write(p[:n])
 
 			return n, nil
 		}
@@ -120,19 +110,6 @@ func (r *aessivcryptor) Read(p []byte) (int, error) {
 		r.bc.outoffset = 0
 		r.bc.outsize += int64(len(r.bc.outbuffer))
 	}
-}
-
-// Size returns the Size of the encrypted data
-func (r *aessivcryptor) Size() int64 {
-	return r.bc.outsize
-}
-
-func (r *aessivcryptor) Digest() digest.Digest {
-	return r.digester.Digest()
-}
-
-func (r *aessivcryptor) Hash() hash.Hash {
-	return r.digester.Hash()
 }
 
 // init initializes an instance
@@ -197,21 +174,21 @@ func (bc *AESSIVLayerBlockCipher) GenerateKey() []byte {
 }
 
 // Encrypt takes in layer data and returns the ciphertext and relevant LayerBlockCipherOptions
-func (bc *AESSIVLayerBlockCipher) Encrypt(plainDataReader io.ReaderAt, opt LayerBlockCipherOptions) (CryptedDataReader, LayerBlockCipherOptions, error) {
+func (bc *AESSIVLayerBlockCipher) Encrypt(plainDataReader io.ReaderAt, opt LayerBlockCipherOptions) (io.Reader, LayerBlockCipherOptions, error) {
 	lbco, err := bc.init(true, plainDataReader, opt)
 	if err != nil {
 		return nil, LayerBlockCipherOptions{}, err
 	}
 
-	return &aessivcryptor{bc, nil, digest.SHA256.Digester()}, lbco, nil
+	return &aessivcryptor{bc, nil}, lbco, nil
 }
 
 // Decrypt takes in layer ciphertext data and returns the plaintext and relevant LayerBlockCipherOptions
-func (bc *AESSIVLayerBlockCipher) Decrypt(encDataReader io.ReaderAt, opt LayerBlockCipherOptions) (CryptedDataReader, LayerBlockCipherOptions, error) {
+func (bc *AESSIVLayerBlockCipher) Decrypt(encDataReader io.ReaderAt, opt LayerBlockCipherOptions) (io.Reader, LayerBlockCipherOptions, error) {
 	lbco, err := bc.init(false, encDataReader, opt)
 	if err != nil {
 		return nil, LayerBlockCipherOptions{}, err
 	}
 
-	return &aessivcryptor{bc, nil, digest.SHA256.Digester()}, lbco, nil
+	return &aessivcryptor{bc, nil}, lbco, nil
 }
