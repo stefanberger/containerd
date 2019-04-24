@@ -447,7 +447,7 @@ func IsCompressedDiff(ctx context.Context, mediaType string) (bool, error) {
 // encryptLayer encrypts the layer using the CryptoConfig and creates a new OCI Descriptor.
 // A call to this function may also only manipulate the wrapped keys list.
 // The caller is expected to store the returned encrypted data and OCI Descriptor
-func encryptLayer(cc *encconfig.CryptoConfig, dataReader content.ReaderAt, desc ocispec.Descriptor) (ocispec.Descriptor, content.ReaderDigester, error) {
+func encryptLayer(cc *encconfig.CryptoConfig, dataReader content.ReaderAt, desc ocispec.Descriptor) (ocispec.Descriptor, io.Reader, error) {
 	var (
 		size int64
 		d    digest.Digest
@@ -527,7 +527,7 @@ func DecryptBlob(cc *encconfig.CryptoConfig, dataReader content.ReaderAt, desc o
 
 // decryptLayer decrypts the layer using the CryptoConfig and creates a new OCI Descriptor.
 // The caller is expected to store the returned plain data and OCI Descriptor
-func decryptLayer(cc *encconfig.CryptoConfig, dataReader content.ReaderAt, desc ocispec.Descriptor, unwrapOnly bool) (ocispec.Descriptor, content.ReaderDigester, error) {
+func decryptLayer(cc *encconfig.CryptoConfig, dataReader content.ReaderAt, desc ocispec.Descriptor, unwrapOnly bool) (ocispec.Descriptor, io.Reader, error) {
 	resultReader, err := encryption.DecryptLayer(cc.DecryptConfig, dataReader, desc, unwrapOnly)
 	if err != nil || unwrapOnly {
 		return ocispec.Descriptor{}, nil, err
@@ -552,7 +552,7 @@ func decryptLayer(cc *encconfig.CryptoConfig, dataReader content.ReaderAt, desc 
 // cryptLayer handles the changes due to encryption or decryption of a layer
 func cryptLayer(ctx context.Context, cs content.Store, desc ocispec.Descriptor, cc *encconfig.CryptoConfig, cryptoOp cryptoOp) (ocispec.Descriptor, error) {
 	var (
-		resultReader content.ReaderDigester
+		resultReader io.Reader
 		newDesc      ocispec.Descriptor
 	)
 
@@ -572,7 +572,7 @@ func cryptLayer(ctx context.Context, cs content.Store, desc ocispec.Descriptor, 
 	}
 	// some operations, such as changing recipients, may not touch the layer at all
 	if resultReader != nil {
-		newDesc.Size, newDesc.Digest, err = content.WriteLayer(ctx, cs, resultReader)
+		newDesc.Size, newDesc.Digest, err = content.WriteBlobUnchecked(ctx, cs, resultReader)
 	}
 	return newDesc, err
 }

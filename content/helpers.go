@@ -88,10 +88,11 @@ func WriteBlob(ctx context.Context, cs Ingester, ref string, r io.Reader, desc o
 	return Copy(ctx, cw, r, desc.Size, desc.Digest, opts...)
 }
 
-// WriteLayer writes a layer's data into the content store.
+// WriteBlobUnchecked writes a data into the content store and creates a ref itself. It does not
+// verify the hash or size of the data against an expected hash or size.
 //
 // This is useful when the size and digest are NOT known beforehand.
-func WriteLayer(ctx context.Context, cs Store, r ReaderDigester, opts ...Opt) (int64, digest.Digest, error) {
+func WriteBlobUnchecked(ctx context.Context, cs Ingester, r io.Reader, opts ...Opt) (int64, digest.Digest, error) {
 	ref := fmt.Sprintf("blob-%d-%d", rand.Int(), rand.Int())
 	cw, err := OpenWriter(ctx, cs, WithRef(ref))
 	if err != nil {
@@ -100,7 +101,7 @@ func WriteLayer(ctx context.Context, cs Store, r ReaderDigester, opts ...Opt) (i
 	defer cw.Close()
 
 	n, err := copyN(ctx, cw, r, "", opts...)
-	return n, r.Digest(), err
+	return n, cw.Digest(), err
 }
 
 // OpenWriter opens a new writer for the given reference, retrying if the writer
