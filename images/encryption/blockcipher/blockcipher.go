@@ -27,8 +27,8 @@ type LayerCipherType string
 
 // TODO: Should be obtained from OCI spec once included
 const (
-	AESSIVCMAC256 LayerCipherType = "AES-SIV-CMAC-256"
-	AESSIVCMAC512 LayerCipherType = "AES-SIV-CMAC-512"
+	AESSIVCMAC256 LayerCipherType = "AEAD_AES_SIV_CMAC_STREAM_256"
+	AESSIVCMAC512 LayerCipherType = "AEAD_AES_SIV_CMAC_STREAM_512"
 	CipherTypeOpt string          = "type"
 )
 
@@ -68,7 +68,7 @@ func (h *LayerBlockCipherHandler) Encrypt(plainDataReader io.ReaderAt, typ Layer
 		}
 		return encDataReader, newopt, err
 	}
-	return nil, LayerBlockCipherOptions{}, errors.New("unsupported cipher type")
+	return nil, LayerBlockCipherOptions{}, errors.Errorf("unsupported cipher type: %s", typ)
 }
 
 // Decrypt is the handler for the layer decryption routine
@@ -80,7 +80,7 @@ func (h *LayerBlockCipherHandler) Decrypt(encDataReader io.ReaderAt, opt LayerBl
 	if c, ok := h.cipherMap[LayerCipherType(typ)]; ok {
 		return c.Decrypt(encDataReader, opt)
 	}
-	return nil, LayerBlockCipherOptions{}, errors.New("unsupported cipher type")
+	return nil, LayerBlockCipherOptions{}, errors.Errorf("unsupported cipher type: %s", typ)
 }
 
 // NewLayerBlockCipherHandler returns a new default handler
