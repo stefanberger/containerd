@@ -25,6 +25,7 @@ import (
 
 	"github.com/containerd/containerd/gc"
 	"github.com/containerd/containerd/log"
+	"github.com/containerd/containerd/metadata/boltutil"
 	"github.com/pkg/errors"
 	bolt "go.etcd.io/bbolt"
 )
@@ -398,9 +399,26 @@ func remove(ctx context.Context, tx *bolt.Tx, node gc.Node) error {
 		cbkt := nsbkt.Bucket(bucketKeyObjectContent)
 		if cbkt != nil {
 			cbkt = cbkt.Bucket(bucketKeyObjectBlob)
+			if cbkt != nil {
+				// check for temporarily protected content
+				bbkt := cbkt.Bucket([]byte(node.Key))
+				if bbkt != nil {
+					l, err := boltutil.ReadLabels(bbkt)
+					if err != nil {
+						return err
+					}
+					if expV, ok := l[string(labelGCExpire)]; ok {
+						exp, err := time.Parse(time.RFC3339, string(expV))
+						if err != nil || !time.Now().After(exp) {
+							return err
+						}
+					}
+				}
+			}
 		}
 		if cbkt != nil {
 			log.G(ctx).WithField("key", node.Key).Debug("remove content")
+
 			return cbkt.DeleteBucket([]byte(node.Key))
 		}
 	case ResourceSnapshot:

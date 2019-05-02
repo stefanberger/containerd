@@ -572,7 +572,7 @@ func cryptLayer(ctx context.Context, cs content.Store, desc ocispec.Descriptor, 
 	}
 	// some operations, such as changing recipients, may not touch the layer at all
 	if resultReader != nil {
-		newDesc.Size, newDesc.Digest, err = content.WriteBlobUnchecked(ctx, cs, resultReader)
+		newDesc.Size, newDesc.Digest, err = content.WriteBlobUnchecked(ctx, cs, resultReader, content.WithExpiration(time.Minute * 5))
 	}
 	return newDesc, err
 }
@@ -667,7 +667,7 @@ func cryptChildren(ctx context.Context, cs content.Store, desc ocispec.Descripto
 		}
 
 		ref := fmt.Sprintf("manifest-%s", newDesc.Digest.String())
-		if err := content.WriteBlob(ctx, cs, ref, bytes.NewReader(mb), newDesc, content.WithLabels(labels)); err != nil {
+		if err := content.WriteBlob(ctx, cs, ref, bytes.NewReader(mb), newDesc, content.WithLabels(labels), content.WithExpiration(time.Minute * 5)); err != nil {
 			return ocispec.Descriptor{}, false, errors.Wrap(err, "failed to write config")
 		}
 		return newDesc, true, nil
