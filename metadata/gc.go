@@ -25,6 +25,7 @@ import (
 
 	"github.com/containerd/containerd/gc"
 	"github.com/containerd/containerd/log"
+	"github.com/containerd/containerd/metadata/boltutil"
 	"github.com/pkg/errors"
 	bolt "go.etcd.io/bbolt"
 )
@@ -382,6 +383,26 @@ func scanAll(ctx context.Context, tx *bolt.Tx, fn func(ctx context.Context, n gc
 	return nil
 }
 
+// isNodeExpired checks whether a node with the given digest is expired
+// to determine this it will read labels from the same bucket that also
+// getBlobBucket() would return
+func isNodeExpired(bkt *bolt.Bucket, dgst []byte) (bool, error) {
+	bbkt := bkt.Bucket(dgst)
+	if bbkt != nil {
+		l, err := boltutil.ReadLabels(bbkt)
+		if err != nil {
+			return false, err
+		}
+		if expV, ok := l[string(labelGCExpire)]; ok {
+			exp, err := time.Parse(time.RFC3339, expV)
+			if err != nil || !time.Now().After(exp) {
+				return false, err
+			}
+		}
+	}
+	return true, nil
+}
+
 func remove(ctx context.Context, tx *bolt.Tx, node gc.Node) error {
 	v1bkt := tx.Bucket(bucketKeyVersion)
 	if v1bkt == nil {
@@ -398,9 +419,17 @@ func remove(ctx context.Context, tx *bolt.Tx, node gc.Node) error {
 		cbkt := nsbkt.Bucket(bucketKeyObjectContent)
 		if cbkt != nil {
 			cbkt = cbkt.Bucket(bucketKeyObjectBlob)
+			if cbkt != nil {
+				// check for temporarily protected content
+				expired, err := isNodeExpired(cbkt, []byte(node.Key))
+				if !expired || err != nil {
+					return err
+				}
+			}
 		}
 		if cbkt != nil {
 			log.G(ctx).WithField("key", node.Key).Debug("remove content")
+
 			return cbkt.DeleteBucket([]byte(node.Key))
 		}
 	case ResourceSnapshot:
