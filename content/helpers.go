@@ -88,20 +88,35 @@ func WriteBlob(ctx context.Context, cs Ingester, ref string, r io.Reader, desc o
 	return Copy(ctx, cw, r, desc.Size, desc.Digest, opts...)
 }
 
-// WriteBlobUnchecked writes a data into the content store and creates a ref itself. It does not
-// verify the hash or size of the data against an expected hash or size.
+// WriteUnknownBlobUncommited writes a data into the content store and creates a ref itself. It does not
+// verify the hash or size of the data against an expected hash or size. It writes the content
+// and returns the writer so the consumer can get details of the blob for lease management
+// before a commit is made.
 //
 // This is useful when the size and digest are NOT known beforehand.
-func WriteBlobUnchecked(ctx context.Context, cs Ingester, r io.Reader, opts ...Opt) (int64, digest.Digest, error) {
+func WriteUnknownBlobUncommited(ctx context.Context, cs Ingester, r io.Reader) (Writer, digest.Digest, int64, error) {
 	ref := fmt.Sprintf("blob-%d-%d", rand.Int(), rand.Int())
 	cw, err := OpenWriter(ctx, cs, WithRef(ref))
 	if err != nil {
-		return 0, "", errors.Wrap(err, "failed to open writer")
+		return nil, "", 0, errors.Wrap(err, "failed to open writer")
 	}
-	defer cw.Close()
 
-	n, err := copyN(ctx, cw, r, "", opts...)
-	return n, cw.Digest(), err
+	ws, err := cw.Status()
+	if err != nil {
+		return nil, "", 0, errors.Wrap(err, "failed to get status")
+	}
+
+	if ws.Offset > 0 {
+		// not needed
+		return nil, "", 0, errors.New("ws.Offset > 0 is not supported")
+	}
+
+	size, err := copyWithBuffer(cw, r)
+	if err != nil {
+		return nil, "", 0, errors.Wrap(err, "failed to copy")
+	}
+
+	return cw, cw.Digest(), size, err
 }
 
 // OpenWriter opens a new writer for the given reference, retrying if the writer
@@ -172,32 +187,6 @@ func Copy(ctx context.Context, cw Writer, r io.Reader, size int64, expected dige
 	}
 
 	return nil
-}
-
-// copyN works like Copy except that the size need not be given
-func copyN(ctx context.Context, cw Writer, r io.Reader, expected digest.Digest, opts ...Opt) (int64, error) {
-	ws, err := cw.Status()
-	if err != nil {
-		return 0, errors.Wrap(err, "failed to get status")
-	}
-
-	if ws.Offset > 0 {
-		// not needed
-		return 0, errors.New("copyN: ws.Offset > 0 is not supported")
-	}
-
-	size, err := copyWithBuffer(cw, r)
-	if err != nil {
-		return 0, errors.Wrap(err, "failed to copy")
-	}
-
-	if err := cw.Commit(ctx, size, expected, opts...); err != nil {
-		if !errdefs.IsAlreadyExists(err) {
-			return 0, errors.Wrapf(err, "failed commit on ref %q", ws.Ref)
-		}
-	}
-
-	return size, nil
 }
 
 // CopyReaderAt copies to a writer from a given reader at for the given

@@ -20,12 +20,14 @@ import (
 	"context"
 	"runtime"
 	"testing"
+	"time"
 
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/images"
 	encconfig "github.com/containerd/containerd/images/encryption/config"
 	"github.com/containerd/containerd/images/encryption/utils"
+	"github.com/containerd/containerd/leases"
 	"github.com/containerd/containerd/platforms"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )
@@ -72,6 +74,7 @@ func TestImageEncryption(t *testing.T) {
 	}
 
 	const imageName = "docker.io/library/busybox:latest"
+	const encImageName = "docker.io/library/busybox:enc"
 	ctx, cancel := testContext()
 	defer cancel()
 
@@ -82,6 +85,7 @@ func TestImageEncryption(t *testing.T) {
 	defer client.Close()
 
 	s := client.ImageService()
+	ls := client.LeasesService()
 
 	image, err := s.Get(ctx, imageName)
 	if err != nil {
@@ -132,8 +136,17 @@ func TestImageEncryption(t *testing.T) {
 		},
 	}
 
+	var (
+		l leases.Lease
+	)
+
+	l, err = ls.Create(ctx, leases.WithRandomID(), leases.WithExpiration(5*time.Minute))
+	if err != nil {
+		t.Fatal("Unable to create lease for encryption")
+	}
+
 	// Perform encryption of image
-	encSpec, modified, err := images.EncryptImage(ctx, client.ContentStore(), image.Target, cc, lf)
+	encSpec, modified, err := images.EncryptImage(ctx, client.ContentStore(), ls, l, image.Target, cc, lf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,6 +157,12 @@ func TestImageEncryption(t *testing.T) {
 	if !hasEncryption(ctx, client.ContentStore(), encSpec) {
 		t.Fatal("Encrypted image does not have encrypted layers")
 	}
+	image.Name = encImageName
+	image.Target = encSpec
+	if _, err := s.Create(ctx, image); err != nil {
+		t.Fatalf("Unable to create image: %v", err)
+	}
+	ls.Delete(ctx, l, leases.SynchronousDelete)
 
 	cc = &encconfig.CryptoConfig{
 		DecryptConfig: &encconfig.DecryptConfig{
@@ -153,10 +172,17 @@ func TestImageEncryption(t *testing.T) {
 
 	// Perform decryption of image
 	defer client.ImageService().Delete(ctx, imageName, images.SynchronousDelete())
+	defer client.ImageService().Delete(ctx, encImageName, images.SynchronousDelete())
 	lf = func(desc ocispec.Descriptor) bool {
 		return true
 	}
-	decSpec, modified, err := images.DecryptImage(ctx, client.ContentStore(), encSpec, cc, lf)
+
+	l, err = ls.Create(ctx, leases.WithRandomID(), leases.WithExpiration(5*time.Minute))
+	if err != nil {
+		t.Fatal("Unable to create lease for decryption")
+	}
+
+	decSpec, modified, err := images.DecryptImage(ctx, client.ContentStore(), ls, l, encSpec, cc, lf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -167,6 +193,7 @@ func TestImageEncryption(t *testing.T) {
 	if hasEncryption(ctx, client.ContentStore(), decSpec) {
 		t.Fatal("Decrypted image has encrypted layers")
 	}
+	ls.Delete(ctx, l, leases.SynchronousDelete)
 }
 
 func hasEncryption(ctx context.Context, provider content.Provider, spec ocispec.Descriptor) bool {

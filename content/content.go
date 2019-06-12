@@ -151,18 +151,6 @@ func WithLabels(labels map[string]string) Opt {
 	}
 }
 
-// WithExpiration sets an expiration label
-func WithExpiration(d time.Duration) Opt {
-	return func(info *Info) error {
-		if info.Labels == nil {
-			info.Labels = map[string]string{}
-		}
-		info.Labels["containerd.io/gc.expire"] = time.Now().Add(d).Format(time.RFC3339)
-
-		return nil
-	}
-}
-
 // WriterOpts is internally used by WriterOpt.
 type WriterOpts struct {
 	Ref  string
