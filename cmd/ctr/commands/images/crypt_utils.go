@@ -258,6 +258,7 @@ func cryptImage(client *containerd.Client, ctx gocontext.Context, name, newName 
 	if err != nil {
 		return images.Image{}, err
 	}
+	defer ls.Delete(ctx, l, leases.SynchronousDelete)
 
 	if encrypt {
 		newSpec, modified, err = images.EncryptImage(ctx, client.ContentStore(), ls, l, image.Target, cc, lf)
@@ -267,7 +268,6 @@ func cryptImage(client *containerd.Client, ctx gocontext.Context, name, newName 
 	if err != nil {
 		return image, err
 	}
-	defer ls.Delete(ctx, l, leases.SynchronousDelete)
 	if !modified {
 		return image, nil
 	}

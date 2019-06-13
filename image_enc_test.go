@@ -136,14 +136,11 @@ func TestImageEncryption(t *testing.T) {
 		},
 	}
 
-	var (
-		l leases.Lease
-	)
-
-	l, err = ls.Create(ctx, leases.WithRandomID(), leases.WithExpiration(5*time.Minute))
+	l, err := ls.Create(ctx, leases.WithRandomID(), leases.WithExpiration(5*time.Minute))
 	if err != nil {
 		t.Fatal("Unable to create lease for encryption")
 	}
+	defer ls.Delete(ctx, l, leases.SynchronousDelete)
 
 	// Perform encryption of image
 	encSpec, modified, err := images.EncryptImage(ctx, client.ContentStore(), ls, l, image.Target, cc, lf)
@@ -162,6 +159,7 @@ func TestImageEncryption(t *testing.T) {
 	if _, err := s.Create(ctx, image); err != nil {
 		t.Fatalf("Unable to create image: %v", err)
 	}
+	// Force deletion of lease early to check for proper referencing
 	ls.Delete(ctx, l, leases.SynchronousDelete)
 
 	cc = &encconfig.CryptoConfig{
@@ -181,6 +179,7 @@ func TestImageEncryption(t *testing.T) {
 	if err != nil {
 		t.Fatal("Unable to create lease for decryption")
 	}
+	defer ls.Delete(ctx, l, leases.SynchronousDelete)
 
 	decSpec, modified, err := images.DecryptImage(ctx, client.ContentStore(), ls, l, encSpec, cc, lf)
 	if err != nil {
@@ -193,7 +192,6 @@ func TestImageEncryption(t *testing.T) {
 	if hasEncryption(ctx, client.ContentStore(), decSpec) {
 		t.Fatal("Decrypted image has encrypted layers")
 	}
-	ls.Delete(ctx, l, leases.SynchronousDelete)
 }
 
 func hasEncryption(ctx context.Context, provider content.Provider, spec ocispec.Descriptor) bool {

@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/containerd/containerd/errdefs"
+	"github.com/containerd/containerd/leases"
 	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
@@ -86,6 +87,81 @@ func WriteBlob(ctx context.Context, cs Ingester, ref string, r io.Reader, desc o
 	defer cw.Close()
 
 	return Copy(ctx, cw, r, desc.Size, desc.Digest, opts...)
+}
+
+// WriteBlobLeased writes data with the expected digest into the content store. If
+// expected already exists, the method returns immediately and the reader will
+// not be consumed. It also adds the object as a reference to a lease.
+//
+// This is useful when the digest and size are known beforehand.
+//
+// Copy is buffered, so no need to wrap reader in buffered io.
+func WriteBlobLeased(ctx context.Context, cs Ingester, ls leases.Manager, l leases.Lease, ref string, r io.Reader, desc ocispec.Descriptor, opts ...Opt) error {
+	rsrc := leases.Resource{
+		ID:   desc.Digest.String(),
+		Type: "content",
+	}
+	if err := ls.AddResource(ctx, l, rsrc); err != nil {
+		return errors.Wrap(err, "Unable to add resource to lease")
+	}
+
+	cw, err := OpenWriter(ctx, cs, WithRef(ref), WithDescriptor(desc))
+	if err != nil {
+		if !errdefs.IsAlreadyExists(err) {
+			return errors.Wrap(err, "failed to open writer")
+		}
+
+		return nil // all ready present
+	}
+	defer cw.Close()
+
+	return Copy(ctx, cw, r, desc.Size, desc.Digest, opts...)
+}
+
+// WriteBlindBlobLeased  writes a data into the content store and creates a ref itself. It does not
+// verify the hash or size of the data against an expected hash or size. It writes the content
+// and adds it to a lease before returning.
+//
+// This is useful when the size and digest are NOT known beforehand.
+func WriteBlindBlobLeased(ctx context.Context, cs Ingester, ls leases.Manager, l leases.Lease, r io.Reader) (digest.Digest, int64, error) {
+	ref := fmt.Sprintf("blob-%d-%d", rand.Int(), rand.Int())
+	cw, err := OpenWriter(ctx, cs, WithRef(ref))
+	if err != nil {
+		return "", 0, errors.Wrap(err, "failed to open writer")
+	}
+	defer cw.Close()
+
+	ws, err := cw.Status()
+	if err != nil {
+		return "", 0, errors.Wrap(err, "failed to get status")
+	}
+
+	if ws.Offset > 0 {
+		// not needed
+		return "", 0, errors.New("ws.Offset > 0 is not supported")
+	}
+
+	size, err := copyWithBuffer(cw, r)
+	if err != nil {
+		return "", 0, errors.Wrap(err, "failed to copy")
+	}
+
+	digest := cw.Digest()
+	rsrc := leases.Resource{
+		ID:   digest.String(),
+		Type: "content",
+	}
+	if err := ls.AddResource(ctx, l, rsrc); err != nil {
+		return "", 0, errors.Wrap(err, "Unable to add resource to lease")
+	}
+
+	if err := cw.Commit(ctx, size, digest); err != nil {
+		if !errdefs.IsAlreadyExists(err) {
+			return "", 0, errors.Wrapf(err, "failed commit block")
+		}
+	}
+
+	return digest, size, err
 }
 
 // WriteUnknownBlobUncommited writes a data into the content store and creates a ref itself. It does not
