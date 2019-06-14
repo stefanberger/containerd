@@ -164,37 +164,6 @@ func WriteBlindBlobLeased(ctx context.Context, cs Ingester, ls leases.Manager, l
 	return digest, size, err
 }
 
-// WriteUnknownBlobUncommited writes a data into the content store and creates a ref itself. It does not
-// verify the hash or size of the data against an expected hash or size. It writes the content
-// and returns the writer so the consumer can get details of the blob for lease management
-// before a commit is made.
-//
-// This is useful when the size and digest are NOT known beforehand.
-func WriteUnknownBlobUncommited(ctx context.Context, cs Ingester, r io.Reader) (Writer, digest.Digest, int64, error) {
-	ref := fmt.Sprintf("blob-%d-%d", rand.Int(), rand.Int())
-	cw, err := OpenWriter(ctx, cs, WithRef(ref))
-	if err != nil {
-		return nil, "", 0, errors.Wrap(err, "failed to open writer")
-	}
-
-	ws, err := cw.Status()
-	if err != nil {
-		return nil, "", 0, errors.Wrap(err, "failed to get status")
-	}
-
-	if ws.Offset > 0 {
-		// not needed
-		return nil, "", 0, errors.New("ws.Offset > 0 is not supported")
-	}
-
-	size, err := copyWithBuffer(cw, r)
-	if err != nil {
-		return nil, "", 0, errors.Wrap(err, "failed to copy")
-	}
-
-	return cw, cw.Digest(), size, err
-}
-
 // OpenWriter opens a new writer for the given reference, retrying if the writer
 // is locked until the reference is available or returns an error.
 func OpenWriter(ctx context.Context, cs Ingester, opts ...WriterOpt) (Writer, error) {

@@ -787,8 +787,6 @@ func cryptImage(ctx context.Context, cs content.Store, ls leases.Manager, l leas
 	}
 }
 
-type addLeaseResourceFunc func(r leases.Resource) error
-
 // EncryptImage encrypts an image; it accepts either an OCI descriptor representing a manifest list or a single manifest
 func EncryptImage(ctx context.Context, cs content.Store, ls leases.Manager, l leases.Lease, desc ocispec.Descriptor, cc *encconfig.CryptoConfig, lf LayerFilter) (ocispec.Descriptor, bool, error) {
 	return cryptImage(ctx, cs, ls, l, desc, cc, lf, cryptoOpEncrypt)
