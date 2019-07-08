@@ -455,7 +455,7 @@ func encryptLayer(cc *encconfig.CryptoConfig, dataReader content.ReaderAt, desc 
 		err  error
 	)
 
-	encLayerReader, annotations, err := encryption.EncryptLayer(cc.EncryptConfig, dataReader, desc)
+	encLayerReader, annotations, err := encryption.EncryptLayer(cc.EncryptConfig, encryption.ReaderFromReaderAt(dataReader), desc)
 	if err != nil {
 		return ocispec.Descriptor{}, nil, err
 	}
@@ -505,7 +505,7 @@ func DecryptBlob(cc *encconfig.CryptoConfig, dataReader content.ReaderAt, desc o
 	if cc == nil {
 		return ocispec.Descriptor{}, nil, errors.Wrapf(errdefs.ErrInvalidArgument, "CryptoConfig must not be nil")
 	}
-	resultReader, err := encryption.DecryptLayer(cc.DecryptConfig, dataReader, desc, unwrapOnly)
+	resultReader, err := encryption.DecryptLayer(cc.DecryptConfig, encryption.ReaderFromReaderAt(dataReader), desc, unwrapOnly)
 	if err != nil || unwrapOnly {
 		return ocispec.Descriptor{}, nil, err
 	}
@@ -529,7 +529,7 @@ func DecryptBlob(cc *encconfig.CryptoConfig, dataReader content.ReaderAt, desc o
 // decryptLayer decrypts the layer using the CryptoConfig and creates a new OCI Descriptor.
 // The caller is expected to store the returned plain data and OCI Descriptor
 func decryptLayer(cc *encconfig.CryptoConfig, dataReader content.ReaderAt, desc ocispec.Descriptor, unwrapOnly bool) (ocispec.Descriptor, io.Reader, error) {
-	resultReader, err := encryption.DecryptLayer(cc.DecryptConfig, dataReader, desc, unwrapOnly)
+	resultReader, err := encryption.DecryptLayer(cc.DecryptConfig, encryption.ReaderFromReaderAt(dataReader), desc, unwrapOnly)
 	if err != nil || unwrapOnly {
 		return ocispec.Descriptor{}, nil, err
 	}

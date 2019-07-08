@@ -45,9 +45,9 @@ type LayerBlockCipher interface {
 	// GenerateKey creates a symmetric key
 	GenerateKey() []byte
 	// Encrypt takes in layer data and returns the ciphertext and relevant LayerBlockCipherOptions
-	Encrypt(layerDataReader io.ReaderAt, opt LayerBlockCipherOptions) (io.Reader, LayerBlockCipherOptions, error)
+	Encrypt(layerDataReader io.Reader, opt LayerBlockCipherOptions) (io.Reader, LayerBlockCipherOptions, error)
 	// Decrypt takes in layer ciphertext data and returns the plaintext and relevant LayerBlockCipherOptions
-	Decrypt(layerDataReader io.ReaderAt, opt LayerBlockCipherOptions) (io.Reader, LayerBlockCipherOptions, error)
+	Decrypt(layerDataReader io.Reader, opt LayerBlockCipherOptions) (io.Reader, LayerBlockCipherOptions, error)
 }
 
 // LayerBlockCipherHandler is the handler for encrypt/decrypt for layers
@@ -56,7 +56,7 @@ type LayerBlockCipherHandler struct {
 }
 
 // Encrypt is the handler for the layer decryption routine
-func (h *LayerBlockCipherHandler) Encrypt(plainDataReader io.ReaderAt, typ LayerCipherType) (io.Reader, LayerBlockCipherOptions, error) {
+func (h *LayerBlockCipherHandler) Encrypt(plainDataReader io.Reader, typ LayerCipherType) (io.Reader, LayerBlockCipherOptions, error) {
 
 	if c, ok := h.cipherMap[typ]; ok {
 		opt := LayerBlockCipherOptions{
@@ -72,7 +72,7 @@ func (h *LayerBlockCipherHandler) Encrypt(plainDataReader io.ReaderAt, typ Layer
 }
 
 // Decrypt is the handler for the layer decryption routine
-func (h *LayerBlockCipherHandler) Decrypt(encDataReader io.ReaderAt, opt LayerBlockCipherOptions) (io.Reader, LayerBlockCipherOptions, error) {
+func (h *LayerBlockCipherHandler) Decrypt(encDataReader io.Reader, opt LayerBlockCipherOptions) (io.Reader, LayerBlockCipherOptions, error) {
 	typ, ok := opt.CipherOptions[CipherTypeOpt]
 	if !ok {
 		return nil, LayerBlockCipherOptions{}, errors.New("no cipher type provided")

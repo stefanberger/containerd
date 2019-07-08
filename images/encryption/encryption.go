@@ -69,7 +69,7 @@ func GetWrappedKeysMap(desc ocispec.Descriptor) map[string]string {
 }
 
 // EncryptLayer encrypts the layer by running one encryptor after the other
-func EncryptLayer(ec *config.EncryptConfig, encOrPlainLayerReader io.ReaderAt, desc ocispec.Descriptor) (io.Reader, map[string]string, error) {
+func EncryptLayer(ec *config.EncryptConfig, encOrPlainLayerReader io.Reader, desc ocispec.Descriptor) (io.Reader, map[string]string, error) {
 	var (
 		encLayerReader io.Reader
 		err            error
@@ -134,7 +134,7 @@ func preWrapKeys(keywrapper keywrap.KeyWrapper, ec *config.EncryptConfig, b64Ann
 // DecryptLayer decrypts a layer trying one keywrap.KeyWrapper after the other to see whether it
 // can apply the provided private key
 // If unwrapOnly is set we will only try to decrypt the layer encryption key and return
-func DecryptLayer(dc *config.DecryptConfig, encLayerReader io.ReaderAt, desc ocispec.Descriptor, unwrapOnly bool) (io.Reader, error) {
+func DecryptLayer(dc *config.DecryptConfig, encLayerReader io.Reader, desc ocispec.Descriptor, unwrapOnly bool) (io.Reader, error) {
 	if dc == nil {
 		return nil, errors.Wrapf(errdefs.ErrInvalidArgument, "DecryptConfig must not be nil")
 	}
@@ -200,7 +200,7 @@ func preUnwrapKey(keywrapper keywrap.KeyWrapper, dc *config.DecryptConfig, b64An
 // commonEncryptLayer is a function to encrypt the plain layer using a new random
 // symmetric key and return the LayerBlockCipherHandler's JSON in string form for
 // later use during decryption
-func commonEncryptLayer(plainLayerReader io.ReaderAt, typ blockcipher.LayerCipherType) (io.Reader, []byte, error) {
+func commonEncryptLayer(plainLayerReader io.Reader, typ blockcipher.LayerCipherType) (io.Reader, []byte, error) {
 	lbch, err := blockcipher.NewLayerBlockCipherHandler()
 	if err != nil {
 		return nil, nil, err
@@ -221,7 +221,7 @@ func commonEncryptLayer(plainLayerReader io.ReaderAt, typ blockcipher.LayerCiphe
 
 // commonDecryptLayer decrypts an encrypted layer previously encrypted with commonEncryptLayer
 // by passing along the optsData
-func commonDecryptLayer(encLayerReader io.ReaderAt, optsData []byte) (io.Reader, error) {
+func commonDecryptLayer(encLayerReader io.Reader, optsData []byte) (io.Reader, error) {
 	opts := blockcipher.LayerBlockCipherOptions{}
 	err := json.Unmarshal(optsData, &opts)
 	if err != nil {
