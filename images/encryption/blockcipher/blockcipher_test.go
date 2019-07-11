@@ -51,10 +51,10 @@ func TestBlockCipherEncryption(t *testing.T) {
 	if err != nil && err != io.EOF {
 		t.Fatal("Reading the ciphertext should not have failed")
 	}
-	ciphertextReaderAt := bytes.NewReader(ciphertext[:encsize])
+	ciphertextTestReader := bytes.NewReader(ciphertext[:encsize])
 
 	// Use a different instantiated object to indicate an invokation at a diff time
-	plaintextReader, _, err := h.Decrypt(ciphertextReaderAt, lbco)
+	plaintextReader, _, err := h.Decrypt(ciphertextTestReader, lbco)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,9 +100,9 @@ func TestBlockCipherEncryptionInvalidKey(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ciphertextReaderAt := bytes.NewReader(ciphertext[:encsize])
+	ciphertextTestReader := bytes.NewReader(ciphertext[:encsize])
 
-	plaintextReader, _, err := bc2.Decrypt(ciphertextReaderAt, lbco)
+	plaintextReader, _, err := bc2.Decrypt(ciphertextTestReader, lbco)
 	if err != nil {
 		t.Fatal(err)
 	}

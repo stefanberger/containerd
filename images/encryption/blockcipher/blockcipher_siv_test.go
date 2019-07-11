@@ -76,9 +76,9 @@ func TestBlockCipherAesSivEncryption(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ciphertextReaderAt := bytes.NewReader(ciphertext[:encsize])
+	ciphertextTestReader := bytes.NewReader(ciphertext[:encsize])
 
-	plaintextReader, _, err := bc2.Decrypt(ciphertextReaderAt, lbco)
+	plaintextReader, _, err := bc2.Decrypt(ciphertextTestReader, lbco)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,9 +127,9 @@ func TestBlockCipherAesSivEncryptionInvalidKey(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ciphertextReaderAt := bytes.NewReader(ciphertext[:encsize])
+	ciphertextTestReader := bytes.NewReader(ciphertext[:encsize])
 
-	plaintextReader, _, err := bc2.Decrypt(ciphertextReaderAt, lbco)
+	plaintextReader, _, err := bc2.Decrypt(ciphertextTestReader, lbco)
 	if err != nil {
 		t.Fatal(err)
 	}
