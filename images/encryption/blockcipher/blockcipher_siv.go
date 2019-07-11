@@ -76,7 +76,7 @@ func (r *aessivcryptor) Read(p []byte) (int, error) {
 		numbytes := 0
 		for numbytes < r.bc.toread {
 			var n int
-			n, r.bc.err = r.bc.reader.Read(r.bc.inbuffer[numbytes : r.bc.toread-numbytes])
+			n, r.bc.err = r.bc.reader.Read(r.bc.inbuffer[numbytes:r.bc.toread])
 			numbytes += n
 			if r.bc.err != nil {
 				if r.bc.err == io.EOF {
