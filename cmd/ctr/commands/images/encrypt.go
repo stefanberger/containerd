@@ -103,7 +103,9 @@ var encryptCommand = cli.Command{
 			return err
 		}
 
-		if len(privKeys) == 0 {
+		_, err = createGPGClient(context)
+		gpgInstalled := err == nil
+		if len(privKeys) == 0 && gpgInstalled {
 			// Get pgp private keys from keyring only if no private key was passed
 			err = getGPGPrivateKeys(context, gpgSecretKeyRingFiles, descs, true, dcparameters)
 			if err != nil {
@@ -111,7 +113,7 @@ var encryptCommand = cli.Command{
 			}
 		}
 
-		if len(gpgRecipients) > 0 {
+		if len(gpgRecipients) > 0 && gpgInstalled {
 			parameters["gpg-recipients"] = gpgRecipients
 
 			gpgClient, err := createGPGClient(context)

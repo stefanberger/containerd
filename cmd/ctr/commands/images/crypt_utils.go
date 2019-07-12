@@ -377,23 +377,26 @@ func CreateDcParameters(context *cli.Context, descs []ocispec.Descriptor) (map[s
 		return nil, err
 	}
 
-	if len(gpgSecretKeyRingFiles) == 0 && len(privKeys) == 0 && descs != nil {
-		// Get pgp private keys from keyring only if no private key was passed
-		err = getGPGPrivateKeys(context, gpgSecretKeyRingFiles, descs, true, dcparameters)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		if len(gpgSecretKeyRingFiles) == 0 {
-			dcparameters["gpg-client"] = [][]byte{[]byte("1")}
-			dcparameters["gpg-client-version"] = [][]byte{[]byte(context.String("gpg-version"))}
-			dcparameters["gpg-client-homedir"] = [][]byte{[]byte(context.String("gpg-homedir"))}
+	_, err = createGPGClient(context)
+	gpgInstalled := err == nil
+	if gpgInstalled {
+		if len(gpgSecretKeyRingFiles) == 0 && len(privKeys) == 0 && descs != nil {
+			// Get pgp private keys from keyring only if no private key was passed
+			err = getGPGPrivateKeys(context, gpgSecretKeyRingFiles, descs, true, dcparameters)
+			if err != nil {
+				return nil, err
+			}
 		} else {
-			dcparameters["gpg-privatekeys"] = gpgSecretKeyRingFiles
-			dcparameters["gpg-privatekeys-passwords"] = gpgSecretKeyPasswords
+			if len(gpgSecretKeyRingFiles) == 0 {
+				dcparameters["gpg-client"] = [][]byte{[]byte("1")}
+				dcparameters["gpg-client-version"] = [][]byte{[]byte(context.String("gpg-version"))}
+				dcparameters["gpg-client-homedir"] = [][]byte{[]byte(context.String("gpg-homedir"))}
+			} else {
+				dcparameters["gpg-privatekeys"] = gpgSecretKeyRingFiles
+				dcparameters["gpg-privatekeys-passwords"] = gpgSecretKeyPasswords
+			}
 		}
 	}
-
 	dcparameters["privkeys"] = privKeys
 	dcparameters["privkeys-passwords"] = privKeysPasswords
 	dcparameters["x509s"] = x509s
