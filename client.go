@@ -46,10 +46,12 @@ import (
 	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/events"
 	"github.com/containerd/containerd/images"
+	"github.com/containerd/containerd/images/encryption"
 	"github.com/containerd/containerd/leases"
 	leasesproxy "github.com/containerd/containerd/leases/proxy"
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/containerd/pkg/dialer"
+	encconfig "github.com/containerd/containerd/pkg/encryption/config"
 	"github.com/containerd/containerd/platforms"
 	"github.com/containerd/containerd/plugin"
 	"github.com/containerd/containerd/remotes"
@@ -268,6 +270,24 @@ func (c *Client) NewContainer(ctx context.Context, id string, opts ...NewContain
 		return nil, err
 	}
 	return containerFromRecord(c, r), nil
+}
+
+// checkAuthorization checks whether the caller is authorized to use this image, meaning whether he has the
+// proper keys to decrypt it
+func (c *Client) checkAuthorization(ctx context.Context, imageName string, dcparameters map[string][][]byte) error {
+	image, err := c.ImageService().Get(ctx, imageName)
+	if errdefs.IsNotFound(err) {
+		// allow creation of container without a existing image
+		return nil
+	} else if err != nil {
+		return err
+	}
+
+	dc := encconfig.DecryptConfig{
+		Parameters: dcparameters,
+	}
+
+	return encryption.CheckAuthorization(ctx, c.ContentStore(), image.Target, &dc)
 }
 
 // LoadContainer loads an existing container from metadata
