@@ -264,7 +264,16 @@ func cryptChildren(ctx context.Context, cs content.Store, ls leases.Manager, l l
 			return ocispec.Descriptor{}, false, errors.New("Unexpected write to object without lease")
 		}
 
-		if err := content.WriteBlobLeased(ctx, cs, ls, l, ref, bytes.NewReader(mb), newDesc, content.WithLabels(labels)); err != nil {
+		rsrc := leases.Resource{
+			ID:   desc.Digest.String(),
+			Type: "content",
+		}
+
+		if err := ls.AddResource(ctx, l, rsrc); err != nil {
+			return ocispec.Descriptor{}, false, errors.Wrap(err, "Unable to add resource to lease")
+		}
+
+		if err := content.WriteBlob(ctx, cs, ref, bytes.NewReader(mb), newDesc, content.WithLabels(labels)); err != nil {
 			return ocispec.Descriptor{}, false, errors.Wrap(err, "failed to write config")
 		}
 		return newDesc, true, nil
@@ -346,7 +355,16 @@ func cryptManifestList(ctx context.Context, cs content.Store, ls leases.Manager,
 			return ocispec.Descriptor{}, false, errors.New("Unexpected write to object without lease")
 		}
 
-		if err = content.WriteBlobLeased(ctx, cs, ls, l, ref, bytes.NewReader(mb), newDesc, content.WithLabels(labels)); err != nil {
+		rsrc := leases.Resource{
+			ID:   desc.Digest.String(),
+			Type: "content",
+		}
+
+		if err := ls.AddResource(ctx, l, rsrc); err != nil {
+			return ocispec.Descriptor{}, false, errors.Wrap(err, "Unable to add resource to lease")
+		}
+
+		if err = content.WriteBlob(ctx, cs, ref, bytes.NewReader(mb), newDesc, content.WithLabels(labels)); err != nil {
 			return ocispec.Descriptor{}, false, errors.Wrap(err, "failed to write index")
 		}
 		return newDesc, true, nil

@@ -89,35 +89,6 @@ func WriteBlob(ctx context.Context, cs Ingester, ref string, r io.Reader, desc o
 	return Copy(ctx, cw, r, desc.Size, desc.Digest, opts...)
 }
 
-// WriteBlobLeased writes data with the expected digest into the content store. If
-// expected already exists, the method returns immediately and the reader will
-// not be consumed. It also adds the object as a reference to a lease.
-//
-// This is useful when the digest and size are known beforehand.
-//
-// Copy is buffered, so no need to wrap reader in buffered io.
-func WriteBlobLeased(ctx context.Context, cs Ingester, ls leases.Manager, l leases.Lease, ref string, r io.Reader, desc ocispec.Descriptor, opts ...Opt) error {
-	rsrc := leases.Resource{
-		ID:   desc.Digest.String(),
-		Type: "content",
-	}
-	if err := ls.AddResource(ctx, l, rsrc); err != nil {
-		return errors.Wrap(err, "Unable to add resource to lease")
-	}
-
-	cw, err := OpenWriter(ctx, cs, WithRef(ref), WithDescriptor(desc))
-	if err != nil {
-		if !errdefs.IsAlreadyExists(err) {
-			return errors.Wrap(err, "failed to open writer")
-		}
-
-		return nil // all ready present
-	}
-	defer cw.Close()
-
-	return Copy(ctx, cw, r, desc.Size, desc.Digest, opts...)
-}
-
 // WriteBlindBlobLeased  writes a data into the content store and creates a ref itself. It does not
 // verify the hash or size of the data against an expected hash or size. It writes the content
 // and adds it to a lease before returning.
