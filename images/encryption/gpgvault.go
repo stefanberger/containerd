@@ -40,7 +40,7 @@ type GPGVault interface {
 // gpgVault wraps an array of gpgSecretKeyRing
 type gpgVault struct {
 	entityLists []openpgp.EntityList
-	keyDataList [][]byte // the raw data originall passed in
+	keyDataList [][]byte // the raw data original passed in
 }
 
 // NewGPGVault creates an empty GPGVault

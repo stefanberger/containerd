@@ -195,7 +195,7 @@ func cryptChildren(ctx context.Context, cs content.Store, ls leases.Manager, l l
 	modified := false
 
 	for _, child := range children {
-		// we only encrypt child layers and have to update their parents if encyrption happened
+		// we only encrypt child layers and have to update their parents if encryption happened
 		switch child.MediaType {
 		case MediaTypeDockerSchema2Config, ocispec.MediaTypeImageConfig:
 			config = child

@@ -128,7 +128,7 @@ func CreateTestCA() (*rsa.PrivateKey, *x509.Certificate, error) {
 }
 
 // CertifyKey certifies a public key using the given CA's private key and cert;
-// The certificate tempalte for the public key is optional
+// The certificate template for the public key is optional
 func CertifyKey(pubbytes []byte, template *x509.Certificate, caKey *rsa.PrivateKey, caCert *x509.Certificate) (*x509.Certificate, error) {
 	pubKey, err := ParsePublicKey(pubbytes, "CertifyKey")
 	if err != nil {

@@ -35,8 +35,8 @@ const (
 // LayerBlockCipherOptions includes the information required to encrypt/decrypt
 // an image
 type LayerBlockCipherOptions struct {
-	SymmetricKey  []byte            `json:'symkey'`
-	CipherOptions map[string][]byte `json:'cipheroptions'`
+	SymmetricKey  []byte            `json:"symkey"`
+	CipherOptions map[string][]byte `json:"cipheroptions"`
 }
 
 // LayerBlockCipher returns a provider for encrypt/decrypt functionality
