@@ -91,13 +91,12 @@ func TestImageEncryption(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	pl, err := platforms.ParseArray([]string{"linux/amd64"})
+	pl, err := platforms.Parse("linux/amd64")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	matcher := platforms.NewMatcher(pl[0])
+	matcher := platforms.NewMatcher(pl)
 
 	alldescs, err := images.GetImageLayerDescriptors(ctx, client.ContentStore(), image.Target)
 	if err != nil {

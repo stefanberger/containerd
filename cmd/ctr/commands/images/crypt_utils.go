@@ -238,7 +238,7 @@ func cryptImage(client *containerd.Client, ctx gocontext.Context, name, newName 
 		return images.Image{}, err
 	}
 
-	pl, err := platforms.ParseArray(platformList)
+	pl, err := parsePlatformArray(platformList)
 	if err != nil {
 		return images.Image{}, err
 	}
@@ -305,7 +305,7 @@ func getImageLayerInfos(client *containerd.Client, ctx gocontext.Context, name s
 		return nil, nil, err
 	}
 
-	pl, err := platforms.ParseArray(platformList)
+	pl, err := parsePlatformArray(platformList)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -402,4 +402,18 @@ func CreateDcParameters(context *cli.Context, descs []ocispec.Descriptor) (map[s
 	dcparameters["x509s"] = x509s
 
 	return dcparameters, nil
+}
+
+// parsePlatformArray parses an array of specifiers and converts them into an array of specs.Platform
+func parsePlatformArray(specifiers []string) ([]ocispec.Platform, error) {
+	var speclist []ocispec.Platform
+
+	for _, specifier := range specifiers {
+		spec, err := platforms.Parse(specifier)
+		if err != nil {
+			return []ocispec.Platform{}, err
+		}
+		speclist = append(speclist, spec)
+	}
+	return speclist, nil
 }
