@@ -14,7 +14,7 @@
    limitations under the License.
 */
 
-package images
+package encryption
 
 import (
 	"bytes"
@@ -24,6 +24,7 @@ import (
 	"io"
 	"math/rand"
 
+	"github.com/containerd/containerd/images"
 	"github.com/containerd/containerd/pkg/encryption"
 	encconfig "github.com/containerd/containerd/pkg/encryption/config"
 
@@ -38,10 +39,21 @@ import (
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
+type cryptoOp int
+
+const (
+	cryptoOpEncrypt    cryptoOp = iota
+	cryptoOpDecrypt             = iota
+	cryptoOpUnwrapOnly          = iota
+)
+
+// LayerFilter allows to select Layers by certain criteria
+type LayerFilter func(desc ocispec.Descriptor) bool
+
 // IsEncryptedDiff returns true if mediaType is a known encrypted media type.
 func IsEncryptedDiff(ctx context.Context, mediaType string) bool {
 	switch mediaType {
-	case MediaTypeDockerSchema2LayerGzipEnc, MediaTypeDockerSchema2LayerEnc:
+	case images.MediaTypeDockerSchema2LayerGzipEnc, images.MediaTypeDockerSchema2LayerEnc:
 		return true
 	}
 	return false
@@ -89,20 +101,20 @@ func encryptLayer(cc *encconfig.CryptoConfig, dataReader content.ReaderAt, desc 
 	}
 
 	switch desc.MediaType {
-	case MediaTypeDockerSchema2LayerGzip:
-		newDesc.MediaType = MediaTypeDockerSchema2LayerGzipEnc
-	case MediaTypeDockerSchema2Layer:
-		newDesc.MediaType = MediaTypeDockerSchema2LayerEnc
-	case MediaTypeDockerSchema2LayerGzipEnc:
-		newDesc.MediaType = MediaTypeDockerSchema2LayerGzipEnc
-	case MediaTypeDockerSchema2LayerEnc:
-		newDesc.MediaType = MediaTypeDockerSchema2LayerEnc
+	case images.MediaTypeDockerSchema2LayerGzip:
+		newDesc.MediaType = images.MediaTypeDockerSchema2LayerGzipEnc
+	case images.MediaTypeDockerSchema2Layer:
+		newDesc.MediaType = images.MediaTypeDockerSchema2LayerEnc
+	case images.MediaTypeDockerSchema2LayerGzipEnc:
+		newDesc.MediaType = images.MediaTypeDockerSchema2LayerGzipEnc
+	case images.MediaTypeDockerSchema2LayerEnc:
+		newDesc.MediaType = images.MediaTypeDockerSchema2LayerEnc
 
-		// TODO: Mediatypes to be added in ocispec
+	// TODO: Mediatypes to be added in ocispec
 	case ocispec.MediaTypeImageLayerGzip:
-		newDesc.MediaType = MediaTypeDockerSchema2LayerGzipEnc
+		newDesc.MediaType = images.MediaTypeDockerSchema2LayerGzipEnc
 	case ocispec.MediaTypeImageLayer:
-		newDesc.MediaType = MediaTypeDockerSchema2LayerEnc
+		newDesc.MediaType = images.MediaTypeDockerSchema2LayerEnc
 
 	default:
 		return ocispec.Descriptor{}, nil, errors.Errorf("Encryption: unsupporter layer MediaType: %s\n", desc.MediaType)
@@ -126,10 +138,10 @@ func decryptLayer(cc *encconfig.CryptoConfig, dataReader content.ReaderAt, desc 
 	}
 
 	switch desc.MediaType {
-	case MediaTypeDockerSchema2LayerGzipEnc:
-		newDesc.MediaType = MediaTypeDockerSchema2LayerGzip
-	case MediaTypeDockerSchema2LayerEnc:
-		newDesc.MediaType = MediaTypeDockerSchema2Layer
+	case images.MediaTypeDockerSchema2LayerGzipEnc:
+		newDesc.MediaType = images.MediaTypeDockerSchema2LayerGzip
+	case images.MediaTypeDockerSchema2LayerEnc:
+		newDesc.MediaType = images.MediaTypeDockerSchema2Layer
 	default:
 		return ocispec.Descriptor{}, nil, errors.Errorf("Decryption: unsupporter layer MediaType: %s\n", desc.MediaType)
 	}
@@ -227,20 +239,9 @@ func ingestReader(ctx context.Context, cs content.Ingester, ref string, r io.Rea
 	return cw.Digest(), st.Offset, nil
 }
 
-// isDecriptorALayer determines whether the given Descriptor describes an image layer
-func isDescriptorALayer(desc ocispec.Descriptor) bool {
-	switch desc.MediaType {
-	case MediaTypeDockerSchema2LayerGzip, MediaTypeDockerSchema2Layer,
-		ocispec.MediaTypeImageLayerGzip, ocispec.MediaTypeImageLayer,
-		MediaTypeDockerSchema2LayerGzipEnc, MediaTypeDockerSchema2LayerEnc:
-		return true
-	}
-	return false
-}
-
 // Encrypt or decrypt all the Children of a given descriptor
 func cryptChildren(ctx context.Context, cs content.Store, ls leases.Manager, l leases.Lease, desc ocispec.Descriptor, cc *encconfig.CryptoConfig, lf LayerFilter, cryptoOp cryptoOp, thisPlatform *ocispec.Platform) (ocispec.Descriptor, bool, error) {
-	children, err := Children(ctx, cs, desc)
+	children, err := images.Children(ctx, cs, desc)
 	if err != nil {
 		if errdefs.IsNotFound(err) {
 			return desc, false, nil
@@ -255,9 +256,9 @@ func cryptChildren(ctx context.Context, cs content.Store, ls leases.Manager, l l
 	for _, child := range children {
 		// we only encrypt child layers and have to update their parents if encryption happened
 		switch child.MediaType {
-		case MediaTypeDockerSchema2Config, ocispec.MediaTypeImageConfig:
+		case images.MediaTypeDockerSchema2Config, ocispec.MediaTypeImageConfig:
 			config = child
-		case MediaTypeDockerSchema2LayerGzip, MediaTypeDockerSchema2Layer,
+		case images.MediaTypeDockerSchema2LayerGzip, images.MediaTypeDockerSchema2Layer,
 			ocispec.MediaTypeImageLayerGzip, ocispec.MediaTypeImageLayer:
 			if cryptoOp == cryptoOpEncrypt && lf(child) {
 				nl, err := cryptLayer(ctx, cs, ls, l, child, cc, cryptoOp)
@@ -269,7 +270,7 @@ func cryptChildren(ctx context.Context, cs content.Store, ls leases.Manager, l l
 			} else {
 				newLayers = append(newLayers, child)
 			}
-		case MediaTypeDockerSchema2LayerGzipEnc, MediaTypeDockerSchema2LayerEnc:
+		case images.MediaTypeDockerSchema2LayerGzipEnc, images.MediaTypeDockerSchema2LayerEnc:
 			// this one can be decrypted but also its recipients list changed
 			if lf(child) {
 				nl, err := cryptLayer(ctx, cs, ls, l, child, cc, cryptoOp)
@@ -281,7 +282,7 @@ func cryptChildren(ctx context.Context, cs content.Store, ls leases.Manager, l l
 			} else {
 				newLayers = append(newLayers, child)
 			}
-		case MediaTypeDockerSchema2LayerForeign, MediaTypeDockerSchema2LayerForeignGzip:
+		case images.MediaTypeDockerSchema2LayerForeign, images.MediaTypeDockerSchema2LayerForeignGzip:
 			// never encrypt/decrypt
 			newLayers = append(newLayers, child)
 		default:
@@ -438,9 +439,9 @@ func cryptImage(ctx context.Context, cs content.Store, ls leases.Manager, l leas
 		return ocispec.Descriptor{}, false, errors.Wrapf(errdefs.ErrInvalidArgument, "CryptoConfig must not be nil")
 	}
 	switch desc.MediaType {
-	case ocispec.MediaTypeImageIndex, MediaTypeDockerSchema2ManifestList:
+	case ocispec.MediaTypeImageIndex, images.MediaTypeDockerSchema2ManifestList:
 		return cryptManifestList(ctx, cs, ls, l, desc, cc, lf, cryptoOp)
-	case ocispec.MediaTypeImageManifest, MediaTypeDockerSchema2Manifest:
+	case ocispec.MediaTypeImageManifest, images.MediaTypeDockerSchema2Manifest:
 		return cryptManifest(ctx, cs, ls, l, desc, cc, lf, cryptoOp)
 	default:
 		return ocispec.Descriptor{}, false, errors.Errorf("CryptImage: Unhandled media type: %s", desc.MediaType)

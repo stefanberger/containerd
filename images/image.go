@@ -64,9 +64,6 @@ type DeleteOptions struct {
 // DeleteOpt allows configuring a delete operation
 type DeleteOpt func(context.Context, *DeleteOptions) error
 
-// LayerFilter allows to select Layers by certain criteria
-type LayerFilter func(desc ocispec.Descriptor) bool
-
 // SynchronousDelete is used to indicate that an image deletion and removal of
 // the image resources should occur synchronously before returning a result.
 func SynchronousDelete() DeleteOpt {
@@ -88,14 +85,6 @@ type Store interface {
 
 	Delete(ctx context.Context, name string, opts ...DeleteOpt) error
 }
-
-type cryptoOp int
-
-const (
-	cryptoOpEncrypt    cryptoOp = iota
-	cryptoOpDecrypt             = iota
-	cryptoOpUnwrapOnly          = iota
-)
 
 // TODO(stevvooe): Many of these functions make strong platform assumptions,
 // which are untrue in a lot of cases. More refactoring must be done here to
@@ -445,13 +434,17 @@ func GetImageLayerDescriptors(ctx context.Context, cs content.Store, desc ocispe
 		for _, child := range children {
 			var tmp []ocispec.Descriptor
 
-			if isDescriptorALayer(child) {
+			switch child.MediaType {
+			case MediaTypeDockerSchema2LayerGzip, MediaTypeDockerSchema2Layer,
+				ocispec.MediaTypeImageLayerGzip, ocispec.MediaTypeImageLayer,
+				MediaTypeDockerSchema2LayerGzipEnc, MediaTypeDockerSchema2LayerEnc:
 				tdesc := child
 				tdesc.Platform = platform
 				tmp = append(tmp, tdesc)
-			} else {
+			default:
 				tmp, err = GetImageLayerDescriptors(ctx, cs, child)
 			}
+
 			if err != nil {
 				return []ocispec.Descriptor{}, err
 			}
