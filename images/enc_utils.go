@@ -193,13 +193,38 @@ func cryptLayer(ctx context.Context, cs content.Store, ls leases.Manager, l leas
 				return ocispec.Descriptor{}, errors.Wrap(err, "failed to write config")
 			}
 		} else {
-			newDesc.Digest, newDesc.Size, err = content.WriteBlobBlind(ctx, cs, ref, resultReader)
+			newDesc.Digest, newDesc.Size, err = ingestReader(ctx, cs, ref, resultReader)
 			if err != nil {
 				return ocispec.Descriptor{}, err
 			}
 		}
 	}
 	return newDesc, err
+}
+
+func ingestReader(ctx context.Context, cs content.Ingester, ref string, r io.Reader) (digest.Digest, int64, error) {
+	cw, err := content.OpenWriter(ctx, cs, content.WithRef(ref))
+	if err != nil {
+		return "", 0, errors.Wrap(err, "failed to open writer")
+	}
+	defer cw.Close()
+
+	if _, err := content.CopyReader(cw, r); err != nil {
+		return "", 0, errors.Wrap(err, "copy failed")
+	}
+
+	st, err := cw.Status()
+	if err != nil {
+		return "", 0, errors.Wrap(err, "failed to get state")
+	}
+
+	if err := cw.Commit(ctx, st.Offset, ""); err != nil {
+		if !errdefs.IsAlreadyExists(err) {
+			return "", 0, errors.Wrapf(err, "failed commit on ref %q", ref)
+		}
+	}
+
+	return cw.Digest(), st.Offset, nil
 }
 
 // isDecriptorALayer determines whether the given Descriptor describes an image layer
