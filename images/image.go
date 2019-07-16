@@ -395,7 +395,7 @@ func RootFS(ctx context.Context, provider content.Provider, configDesc ocispec.D
 func IsCompressedDiff(ctx context.Context, mediaType string) (bool, error) {
 	switch mediaType {
 	case ocispec.MediaTypeImageLayer, MediaTypeDockerSchema2Layer:
-	case ocispec.MediaTypeImageLayerGzip, MediaTypeDockerSchema2LayerGzip, MediaTypeDockerSchema2LayerGzipEnc:
+	case ocispec.MediaTypeImageLayerGzip, MediaTypeDockerSchema2LayerGzip:
 		return true, nil
 	default:
 		// Still apply all generic media types *.tar[.+]gzip and *.tar
