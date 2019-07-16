@@ -120,7 +120,7 @@ func TestEncryptLayer(t *testing.T) {
 	}
 	encLayerReaderAt := bytes.NewReader(encLayer[:encsize])
 
-	decLayerReader, err := DecryptLayer(dc, encLayerReaderAt, newDesc, false)
+	decLayerReader, _, err := DecryptLayer(dc, encLayerReaderAt, newDesc, false)
 	if err != nil {
 		t.Fatal(err)
 	}

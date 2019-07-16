@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/rand"
 
 	"github.com/containerd/containerd/images/encryption"
 	encconfig "github.com/containerd/containerd/images/encryption/config"
@@ -113,12 +114,13 @@ func encryptLayer(cc *encconfig.CryptoConfig, dataReader content.ReaderAt, desc 
 // decryptLayer decrypts the layer using the CryptoConfig and creates a new OCI Descriptor.
 // The caller is expected to store the returned plain data and OCI Descriptor
 func decryptLayer(cc *encconfig.CryptoConfig, dataReader content.ReaderAt, desc ocispec.Descriptor, unwrapOnly bool) (ocispec.Descriptor, io.Reader, error) {
-	resultReader, err := encryption.DecryptLayer(cc.DecryptConfig, encryption.ReaderFromReaderAt(dataReader), desc, unwrapOnly)
+	resultReader, d, err := encryption.DecryptLayer(cc.DecryptConfig, encryption.ReaderFromReaderAt(dataReader), desc, unwrapOnly)
 	if err != nil || unwrapOnly {
 		return ocispec.Descriptor{}, nil, err
 	}
 
 	newDesc := ocispec.Descriptor{
+		Digest:   d,
 		Size:     0,
 		Platform: desc.Platform,
 	}
@@ -161,9 +163,40 @@ func cryptLayer(ctx context.Context, cs content.Store, ls leases.Manager, l leas
 			return ocispec.Descriptor{}, errors.New("Unexpected write to object without lease")
 		}
 
-		newDesc.Digest, newDesc.Size, err = content.WriteBlindBlobLeased(ctx, cs, ls, l, resultReader)
-		if err != nil {
-			return ocispec.Descriptor{}, err
+		var rsrc leases.Resource
+		var ref string
+
+		// If we have the digest, write blob with checks
+		haveDigest := newDesc.Digest.String() != ""
+		if haveDigest {
+			ref = fmt.Sprintf("layer-%s", newDesc.Digest.String())
+			rsrc = leases.Resource{
+				ID:   newDesc.Digest.String(),
+				Type: "content",
+			}
+		} else {
+			ref = fmt.Sprintf("blob-%d-%d", rand.Int(), rand.Int())
+			rsrc = leases.Resource{
+				ID:   ref,
+				Type: "ingests",
+			}
+
+		}
+
+		// Add resource to lease and write blob
+		if err := ls.AddResource(ctx, l, rsrc); err != nil {
+			return ocispec.Descriptor{}, errors.Wrap(err, "Unable to add resource to lease")
+		}
+
+		if haveDigest {
+			if err := content.WriteBlob(ctx, cs, ref, resultReader, newDesc); err != nil {
+				return ocispec.Descriptor{}, errors.Wrap(err, "failed to write config")
+			}
+		} else {
+			newDesc.Digest, newDesc.Size, err = content.WriteBlobBlind(ctx, cs, ref, resultReader)
+			if err != nil {
+				return ocispec.Descriptor{}, err
+			}
 		}
 	}
 	return newDesc, err

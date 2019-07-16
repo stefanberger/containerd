@@ -18,7 +18,6 @@ package content
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"math/rand"
@@ -26,7 +25,6 @@ import (
 	"time"
 
 	"github.com/containerd/containerd/errdefs"
-	"github.com/containerd/containerd/leases"
 	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
@@ -89,13 +87,14 @@ func WriteBlob(ctx context.Context, cs Ingester, ref string, r io.Reader, desc o
 	return Copy(ctx, cw, r, desc.Size, desc.Digest, opts...)
 }
 
-// WriteBlindBlobLeased  writes a data into the content store and creates a ref itself. It does not
-// verify the hash or size of the data against an expected hash or size. It writes the content
-// and adds it to a lease before returning.
+// WriteBlobBlind writes data without expected digest into the content store. If
+// expected already exists, the method returns immediately and the reader will
+// not be consumed.
 //
-// This is useful when the size and digest are NOT known beforehand.
-func WriteBlindBlobLeased(ctx context.Context, cs Ingester, ls leases.Manager, l leases.Lease, r io.Reader) (digest.Digest, int64, error) {
-	ref := fmt.Sprintf("blob-%d-%d", rand.Int(), rand.Int())
+// This is useful when the digest and size are NOT known beforehand.
+//
+// Copy is buffered, so no need to wrap reader in buffered io.
+func WriteBlobBlind(ctx context.Context, cs Ingester, ref string, r io.Reader, opts ...Opt) (digest.Digest, int64, error) {
 	cw, err := OpenWriter(ctx, cs, WithRef(ref))
 	if err != nil {
 		return "", 0, errors.Wrap(err, "failed to open writer")
@@ -118,13 +117,6 @@ func WriteBlindBlobLeased(ctx context.Context, cs Ingester, ls leases.Manager, l
 	}
 
 	digest := cw.Digest()
-	rsrc := leases.Resource{
-		ID:   digest.String(),
-		Type: "content",
-	}
-	if err := ls.AddResource(ctx, l, rsrc); err != nil {
-		return "", 0, errors.Wrap(err, "Unable to add resource to lease")
-	}
 
 	if err := cw.Commit(ctx, size, digest); err != nil {
 		if !errdefs.IsAlreadyExists(err) {

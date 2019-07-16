@@ -29,6 +29,7 @@ import (
 	"github.com/containerd/containerd/images/encryption/keywrap/jwe"
 	"github.com/containerd/containerd/images/encryption/keywrap/pgp"
 	"github.com/containerd/containerd/images/encryption/keywrap/pkcs7"
+	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 )
@@ -96,7 +97,7 @@ func EncryptLayer(ec *config.EncryptConfig, encOrPlainLayerReader io.Reader, des
 	for annotationsID, scheme := range keyWrapperAnnotations {
 		b64Annotations := desc.Annotations[annotationsID]
 		if b64Annotations == "" && optsData == nil {
-			encLayerReader, optsData, err = commonEncryptLayer(encOrPlainLayerReader, blockcipher.AESSIVCMAC512)
+			encLayerReader, optsData, err = commonEncryptLayer(encOrPlainLayerReader, desc.Digest, blockcipher.AESSIVCMAC512)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -134,13 +135,13 @@ func preWrapKeys(keywrapper keywrap.KeyWrapper, ec *config.EncryptConfig, b64Ann
 // DecryptLayer decrypts a layer trying one keywrap.KeyWrapper after the other to see whether it
 // can apply the provided private key
 // If unwrapOnly is set we will only try to decrypt the layer encryption key and return
-func DecryptLayer(dc *config.DecryptConfig, encLayerReader io.Reader, desc ocispec.Descriptor, unwrapOnly bool) (io.Reader, error) {
+func DecryptLayer(dc *config.DecryptConfig, encLayerReader io.Reader, desc ocispec.Descriptor, unwrapOnly bool) (io.Reader, digest.Digest, error) {
 	if dc == nil {
-		return nil, errors.Wrapf(errdefs.ErrInvalidArgument, "DecryptConfig must not be nil")
+		return nil, "", errors.Wrapf(errdefs.ErrInvalidArgument, "DecryptConfig must not be nil")
 	}
 	optsData, err := decryptLayerKeyOptsData(dc, desc)
 	if err != nil || unwrapOnly {
-		return nil, err
+		return nil, "", err
 	}
 
 	return commonDecryptLayer(encLayerReader, optsData)
@@ -200,7 +201,7 @@ func preUnwrapKey(keywrapper keywrap.KeyWrapper, dc *config.DecryptConfig, b64An
 // commonEncryptLayer is a function to encrypt the plain layer using a new random
 // symmetric key and return the LayerBlockCipherHandler's JSON in string form for
 // later use during decryption
-func commonEncryptLayer(plainLayerReader io.Reader, typ blockcipher.LayerCipherType) (io.Reader, []byte, error) {
+func commonEncryptLayer(plainLayerReader io.Reader, d digest.Digest, typ blockcipher.LayerCipherType) (io.Reader, []byte, error) {
 	lbch, err := blockcipher.NewLayerBlockCipherHandler()
 	if err != nil {
 		return nil, nil, err
@@ -210,6 +211,7 @@ func commonEncryptLayer(plainLayerReader io.Reader, typ blockcipher.LayerCipherT
 	if err != nil {
 		return nil, nil, err
 	}
+	opts.Digest = d
 
 	optsData, err := json.Marshal(opts)
 	if err != nil {
@@ -221,22 +223,22 @@ func commonEncryptLayer(plainLayerReader io.Reader, typ blockcipher.LayerCipherT
 
 // commonDecryptLayer decrypts an encrypted layer previously encrypted with commonEncryptLayer
 // by passing along the optsData
-func commonDecryptLayer(encLayerReader io.Reader, optsData []byte) (io.Reader, error) {
+func commonDecryptLayer(encLayerReader io.Reader, optsData []byte) (io.Reader, digest.Digest, error) {
 	opts := blockcipher.LayerBlockCipherOptions{}
 	err := json.Unmarshal(optsData, &opts)
 	if err != nil {
-		return nil, errors.Wrapf(err, "could not JSON unmarshal optsData")
+		return nil, "", errors.Wrapf(err, "could not JSON unmarshal optsData")
 	}
 
 	lbch, err := blockcipher.NewLayerBlockCipherHandler()
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	plainLayerReader, opts, err := lbch.Decrypt(encLayerReader, opts)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
-	return plainLayerReader, nil
+	return plainLayerReader, opts.Digest, nil
 }
