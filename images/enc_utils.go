@@ -24,8 +24,8 @@ import (
 	"io"
 	"math/rand"
 
-	"github.com/containerd/containerd/images/encryption"
-	encconfig "github.com/containerd/containerd/images/encryption/config"
+	"github.com/containerd/containerd/pkg/encryption"
+	encconfig "github.com/containerd/containerd/pkg/encryption/config"
 
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/errdefs"

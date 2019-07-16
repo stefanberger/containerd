@@ -28,10 +28,10 @@ import (
 
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/images"
-	"github.com/containerd/containerd/images/encryption"
-	encconfig "github.com/containerd/containerd/images/encryption/config"
-	encutils "github.com/containerd/containerd/images/encryption/utils"
 	"github.com/containerd/containerd/leases"
+	"github.com/containerd/containerd/pkg/encryption"
+	encconfig "github.com/containerd/containerd/pkg/encryption/config"
+	encutils "github.com/containerd/containerd/pkg/encryption/utils"
 	"github.com/containerd/containerd/platforms"
 
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
