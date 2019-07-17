@@ -99,8 +99,9 @@ func TestEncryptLayer(t *testing.T) {
 	}
 
 	dataReader := bytes.NewReader(data)
+	var hmac *[]byte
 
-	encLayerReader, annotations, err := EncryptLayer(ec, dataReader, desc)
+	encLayerReader, annotations, err := EncryptLayer(ec, dataReader, desc, &hmac)
 	if err != nil {
 		t.Fatal(err)
 	}

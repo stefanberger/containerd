@@ -19,6 +19,7 @@ package encryption
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -72,14 +73,14 @@ func HasEncryptedLayer(ctx context.Context, layerInfos []ocispec.Descriptor) boo
 // encryptLayer encrypts the layer using the CryptoConfig and creates a new OCI Descriptor.
 // A call to this function may also only manipulate the wrapped keys list.
 // The caller is expected to store the returned encrypted data and OCI Descriptor
-func encryptLayer(cc *encconfig.CryptoConfig, dataReader content.ReaderAt, desc ocispec.Descriptor) (ocispec.Descriptor, io.Reader, error) {
+func encryptLayer(cc *encconfig.CryptoConfig, dataReader content.ReaderAt, desc ocispec.Descriptor, hmac **[]byte) (ocispec.Descriptor, io.Reader, error) {
 	var (
 		size int64
 		d    digest.Digest
 		err  error
 	)
 
-	encLayerReader, annotations, err := encryption.EncryptLayer(cc.EncryptConfig, encryption.ReaderFromReaderAt(dataReader), desc)
+	encLayerReader, annotations, err := encryption.EncryptLayer(cc.EncryptConfig, encryption.ReaderFromReaderAt(dataReader), desc, hmac)
 	if err != nil {
 		return ocispec.Descriptor{}, nil, err
 	}
@@ -180,6 +181,7 @@ func cryptLayer(ctx context.Context, cs content.Store, ls leases.Manager, l leas
 	var (
 		resultReader io.Reader
 		newDesc      ocispec.Descriptor
+		hmac         *[]byte
 	)
 
 	dataReader, err := cs.ReaderAt(ctx, desc)
@@ -189,7 +191,7 @@ func cryptLayer(ctx context.Context, cs content.Store, ls leases.Manager, l leas
 	defer dataReader.Close()
 
 	if cryptoOp == cryptoOpEncrypt {
-		newDesc, resultReader, err = encryptLayer(cc, dataReader, desc)
+		newDesc, resultReader, err = encryptLayer(cc, dataReader, desc, &hmac)
 	} else {
 		newDesc, resultReader, err = decryptLayer(cc, dataReader, desc, cryptoOp == cryptoOpUnwrapOnly)
 	}
@@ -236,6 +238,13 @@ func cryptLayer(ctx context.Context, cs content.Store, ls leases.Manager, l leas
 			if err != nil {
 				return ocispec.Descriptor{}, err
 			}
+		}
+		// now hmac must be ready
+		if hmac != nil {
+			if newDesc.Annotations == nil {
+				newDesc.Annotations = make(map[string]string)
+			}
+			newDesc.Annotations["org.opencontainers.image.enc.hmac"] = base64.StdEncoding.EncodeToString(*hmac)
 		}
 	}
 	return newDesc, err

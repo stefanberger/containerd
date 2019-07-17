@@ -32,6 +32,7 @@ func TestBlockCipherHandlerCreate(t *testing.T) {
 func TestBlockCipherEncryption(t *testing.T) {
 	var (
 		layerData = []byte("this is some data")
+		hmac      *[]byte
 	)
 
 	h, err := NewLayerBlockCipherHandler()
@@ -41,7 +42,7 @@ func TestBlockCipherEncryption(t *testing.T) {
 
 	layerDataReader := bytes.NewReader(layerData)
 
-	ciphertextReader, lbco, err := h.Encrypt(layerDataReader, AESSIVCMAC256)
+	ciphertextReader, lbco, err := h.Encrypt(layerDataReader, AESSIVCMAC256, &hmac)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,7 +55,7 @@ func TestBlockCipherEncryption(t *testing.T) {
 	ciphertextTestReader := bytes.NewReader(ciphertext[:encsize])
 
 	// Use a different instantiated object to indicate an invokation at a diff time
-	plaintextReader, _, err := h.Decrypt(ciphertextTestReader, lbco)
+	plaintextReader, _, err := h.Decrypt(ciphertextTestReader, lbco, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,6 +74,7 @@ func TestBlockCipherEncryption(t *testing.T) {
 func TestBlockCipherEncryptionInvalidKey(t *testing.T) {
 	var (
 		layerData = []byte("this is some data")
+		hmac      *[]byte
 	)
 
 	h, err := NewLayerBlockCipherHandler()
@@ -82,7 +84,7 @@ func TestBlockCipherEncryptionInvalidKey(t *testing.T) {
 
 	layerDataReader := bytes.NewReader(layerData)
 
-	ciphertextReader, lbco, err := h.Encrypt(layerDataReader, AESSIVCMAC512)
+	ciphertextReader, lbco, err := h.Encrypt(layerDataReader, AESSIVCMAC512, &hmac)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +104,7 @@ func TestBlockCipherEncryptionInvalidKey(t *testing.T) {
 	}
 	ciphertextTestReader := bytes.NewReader(ciphertext[:encsize])
 
-	plaintextReader, _, err := bc2.Decrypt(ciphertextTestReader, lbco)
+	plaintextReader, _, err := bc2.Decrypt(ciphertextTestReader, lbco, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
