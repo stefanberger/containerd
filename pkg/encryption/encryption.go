@@ -34,6 +34,8 @@ import (
 	"github.com/pkg/errors"
 )
 
+// EncryptLayerFinalizer is a finalizer run to return the annotations to set for
+// the encrypted layer
 type EncryptLayerFinalizer func() (map[string]string, error)
 
 func init() {
