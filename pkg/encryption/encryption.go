@@ -34,6 +34,8 @@ import (
 	"github.com/pkg/errors"
 )
 
+type EncryptLayerFinalizer func() (map[string]string, error)
+
 func init() {
 	keyWrappers = make(map[string]keywrap.KeyWrapper)
 	keyWrapperAnnotations = make(map[string]string)
@@ -70,10 +72,12 @@ func GetWrappedKeysMap(desc ocispec.Descriptor) map[string]string {
 }
 
 // EncryptLayer encrypts the layer by running one encryptor after the other
-func EncryptLayer(ec *config.EncryptConfig, encOrPlainLayerReader io.Reader, desc ocispec.Descriptor) (io.Reader, map[string]string, error) {
+func EncryptLayer(ec *config.EncryptConfig, encOrPlainLayerReader io.Reader, desc ocispec.Descriptor) (io.Reader, EncryptLayerFinalizer, error) {
 	var (
 		encLayerReader io.Reader
 		err            error
+		encrypted      bool
+		bcFin          blockcipher.Finalizer
 		optsData       []byte
 	)
 
@@ -89,37 +93,58 @@ func EncryptLayer(ec *config.EncryptConfig, encOrPlainLayerReader io.Reader, des
 				return nil, nil, err
 			}
 			// already encrypted!
+			encrypted = true
 		}
 	}
 
-	newAnnotations := make(map[string]string)
-
-	setHmac := func(hmac []byte) {
-		newAnnotations["org.opencontainers.image.enc.hmac"] = base64.StdEncoding.EncodeToString(hmac)
-	}
-
-	for annotationsID, scheme := range keyWrapperAnnotations {
-		b64Annotations := desc.Annotations[annotationsID]
-		if b64Annotations == "" && optsData == nil {
-			encLayerReader, optsData, err = commonEncryptLayer(encOrPlainLayerReader, desc.Digest, blockcipher.AES256CTR, setHmac)
-			if err != nil {
-				return nil, nil, err
-			}
-		}
-		keywrapper := GetKeyWrapper(scheme)
-		b64Annotations, err = preWrapKeys(keywrapper, ec, b64Annotations, optsData)
+	if !encrypted {
+		encLayerReader, bcFin, err = commonEncryptLayer(encOrPlainLayerReader, desc.Digest, blockcipher.AES256CTR)
 		if err != nil {
 			return nil, nil, err
 		}
-		if b64Annotations != "" {
-			newAnnotations[annotationsID] = b64Annotations
+	}
+
+	encLayerFinalizer := func() (map[string]string, error) {
+		// TODO(lumjjb): Handle already encrypted case
+		_ = optsData
+		opts, err := bcFin()
+		if err != nil {
+			return nil, err
 		}
+		privOptsData, err := json.Marshal(opts.Private)
+		if err != nil {
+			return nil, errors.Wrapf(err, "could not JSON marshal opts")
+		}
+		pubOptsData, err := json.Marshal(opts.Public)
+		if err != nil {
+			return nil, errors.Wrapf(err, "could not JSON marshal opts")
+		}
+
+		newAnnotations := make(map[string]string)
+		for annotationsID, scheme := range keyWrapperAnnotations {
+			b64Annotations := desc.Annotations[annotationsID]
+			keywrapper := GetKeyWrapper(scheme)
+			b64Annotations, err = preWrapKeys(keywrapper, ec, b64Annotations, privOptsData)
+			if err != nil {
+				return nil, err
+			}
+			if b64Annotations != "" {
+				newAnnotations[annotationsID] = b64Annotations
+			}
+		}
+
+		newAnnotations["org.opencontainers.image.enc.pubopts"] = base64.StdEncoding.EncodeToString(pubOptsData)
+
+		if len(newAnnotations) == 0 {
+			return nil, errors.New("no encryptor found to handle encryption")
+		}
+
+		return newAnnotations, err
 	}
-	if len(newAnnotations) == 0 {
-		err = errors.Errorf("no encryptor found to handle encryption")
-	}
+
 	// if nothing was encrypted, we just return encLayer = nil
-	return encLayerReader, newAnnotations, err
+	return encLayerReader, encLayerFinalizer, err
+
 }
 
 // preWrapKeys calls WrapKeys and handles the base64 encoding and concatenation of the
@@ -205,24 +230,27 @@ func preUnwrapKey(keywrapper keywrap.KeyWrapper, dc *config.DecryptConfig, b64An
 // commonEncryptLayer is a function to encrypt the plain layer using a new random
 // symmetric key and return the LayerBlockCipherHandler's JSON in string form for
 // later use during decryption
-func commonEncryptLayer(plainLayerReader io.Reader, d digest.Digest, typ blockcipher.LayerCipherType, setHmac blockcipher.SetHmac) (io.Reader, []byte, error) {
+func commonEncryptLayer(plainLayerReader io.Reader, d digest.Digest, typ blockcipher.LayerCipherType) (io.Reader, blockcipher.Finalizer, error) {
 	lbch, err := blockcipher.NewLayerBlockCipherHandler()
 	if err != nil {
 		return nil, nil, err
 	}
 
-	encLayerReader, opts, err := lbch.Encrypt(plainLayerReader, typ, setHmac)
+	encLayerReader, bcFin, err := lbch.Encrypt(plainLayerReader, typ)
 	if err != nil {
 		return nil, nil, err
 	}
-	opts.Digest = d
 
-	optsData, err := json.Marshal(opts)
-	if err != nil {
-		return nil, nil, errors.Wrapf(err, "could not JSON marshal opts")
+	bcFin = func() (blockcipher.LayerBlockCipherOptions, error) {
+		lbco, err := bcFin()
+		if err != nil {
+			return blockcipher.LayerBlockCipherOptions{}, err
+		}
+		lbco.Private.Digest = d
+		return lbco, nil
 	}
 
-	return encLayerReader, optsData, err
+	return encLayerReader, bcFin, err
 }
 
 // commonDecryptLayer decrypts an encrypted layer previously encrypted with commonEncryptLayer
@@ -252,5 +280,5 @@ func commonDecryptLayer(encLayerReader io.Reader, optsData []byte, b64hmac strin
 		return nil, "", err
 	}
 
-	return plainLayerReader, opts.Digest, nil
+	return plainLayerReader, opts.Private.Digest, nil
 }
