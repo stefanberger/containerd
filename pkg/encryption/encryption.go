@@ -139,7 +139,7 @@ func EncryptLayer(ec *config.EncryptConfig, encOrPlainLayerReader io.Reader, des
 			}
 		}
 
-		newAnnotations["org.opencontainers.image.encpubopts.pubopts"] = base64.StdEncoding.EncodeToString(pubOptsData)
+		newAnnotations["org.opencontainers.image.enc.pubopts"] = base64.StdEncoding.EncodeToString(pubOptsData)
 
 		if len(newAnnotations) == 0 {
 			return nil, errors.New("no encryptor found to handle encryption")
@@ -261,7 +261,7 @@ func commonEncryptLayer(plainLayerReader io.Reader, d digest.Digest, typ blockci
 		return nil, nil, err
 	}
 
-	bcFin = func() (blockcipher.LayerBlockCipherOptions, error) {
+	newBcFin := func() (blockcipher.LayerBlockCipherOptions, error) {
 		lbco, err := bcFin()
 		if err != nil {
 			return blockcipher.LayerBlockCipherOptions{}, err
@@ -270,7 +270,7 @@ func commonEncryptLayer(plainLayerReader io.Reader, d digest.Digest, typ blockci
 		return lbco, nil
 	}
 
-	return encLayerReader, bcFin, err
+	return encLayerReader, newBcFin, err
 }
 
 // commonDecryptLayer decrypts an encrypted layer previously encrypted with commonEncryptLayer

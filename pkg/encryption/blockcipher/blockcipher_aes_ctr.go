@@ -113,9 +113,6 @@ func (bc *AESCTRLayerBlockCipher) init(encrypt bool, reader io.Reader, opts Laye
 
 	nonce, ok := opts.GetOpt("nonce")
 	if !ok {
-		return LayerBlockCipherOptions{}, errors.New("nonce not provided in options")
-	}
-	if len(nonce) == 0 {
 		nonce = make([]byte, aes.BlockSize)
 		if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
 			return LayerBlockCipherOptions{}, errors.Wrap(err, "unable to generate random nonce")
@@ -167,6 +164,9 @@ func (bc *AESCTRLayerBlockCipher) Encrypt(plainDataReader io.Reader, opt LayerBl
 		if !bc.doneEncrypting {
 			return LayerBlockCipherOptions{}, errors.New("Writing not done, unable to finalize")
 		}
+        if lbco.Public.CipherOptions == nil {
+            lbco.Public.CipherOptions = map[string][]byte{}
+        }
 		lbco.Public.CipherOptions["hmac"] = bc.hmac.Sum(nil)
 		return lbco, nil
 	}
