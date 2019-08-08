@@ -78,7 +78,8 @@ func EncryptLayer(ec *config.EncryptConfig, encOrPlainLayerReader io.Reader, des
 		err            error
 		encrypted      bool
 		bcFin          blockcipher.Finalizer
-		optsData       []byte
+		privOptsData   []byte
+		pubOptsData    []byte
 	)
 
 	if ec == nil {
@@ -88,7 +89,11 @@ func EncryptLayer(ec *config.EncryptConfig, encOrPlainLayerReader io.Reader, des
 	for annotationsID := range keyWrapperAnnotations {
 		annotation := desc.Annotations[annotationsID]
 		if annotation != "" {
-			optsData, err = decryptLayerKeyOptsData(&ec.DecryptConfig, desc)
+			privOptsData, err = decryptLayerKeyOptsData(&ec.DecryptConfig, desc)
+			if err != nil {
+				return nil, nil, err
+			}
+			pubOptsData, err = getLayerPubOpts(desc)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -105,19 +110,20 @@ func EncryptLayer(ec *config.EncryptConfig, encOrPlainLayerReader io.Reader, des
 	}
 
 	encLayerFinalizer := func() (map[string]string, error) {
-		// TODO(lumjjb): Handle already encrypted case
-		_ = optsData
-		opts, err := bcFin()
-		if err != nil {
-			return nil, err
-		}
-		privOptsData, err := json.Marshal(opts.Private)
-		if err != nil {
-			return nil, errors.Wrapf(err, "could not JSON marshal opts")
-		}
-		pubOptsData, err := json.Marshal(opts.Public)
-		if err != nil {
-			return nil, errors.Wrapf(err, "could not JSON marshal opts")
+		// If layer was already encrypted, bcFin should be nil, use existing optsData
+		if bcFin != nil {
+			opts, err := bcFin()
+			if err != nil {
+				return nil, err
+			}
+			privOptsData, err = json.Marshal(opts.Private)
+			if err != nil {
+				return nil, errors.Wrapf(err, "could not JSON marshal opts")
+			}
+			pubOptsData, err = json.Marshal(opts.Public)
+			if err != nil {
+				return nil, errors.Wrapf(err, "could not JSON marshal opts")
+			}
 		}
 
 		newAnnotations := make(map[string]string)
@@ -133,7 +139,7 @@ func EncryptLayer(ec *config.EncryptConfig, encOrPlainLayerReader io.Reader, des
 			}
 		}
 
-		newAnnotations["org.opencontainers.image.enc.pubopts"] = base64.StdEncoding.EncodeToString(pubOptsData)
+		newAnnotations["org.opencontainers.image.encpubopts.pubopts"] = base64.StdEncoding.EncodeToString(pubOptsData)
 
 		if len(newAnnotations) == 0 {
 			return nil, errors.New("no encryptor found to handle encryption")
@@ -168,12 +174,18 @@ func DecryptLayer(dc *config.DecryptConfig, encLayerReader io.Reader, desc ocisp
 	if dc == nil {
 		return nil, "", errors.Wrapf(errdefs.ErrInvalidArgument, "DecryptConfig must not be nil")
 	}
-	optsData, err := decryptLayerKeyOptsData(dc, desc)
+	privOptsData, err := decryptLayerKeyOptsData(dc, desc)
 	if err != nil || unwrapOnly {
 		return nil, "", err
 	}
 
-	return commonDecryptLayer(encLayerReader, optsData, desc.Annotations["org.opencontainers.image.enc.hmac"])
+	var pubOptsData []byte
+	pubOptsData, err = getLayerPubOpts(desc)
+	if err != nil {
+		return nil, "", err
+	}
+
+	return commonDecryptLayer(encLayerReader, privOptsData, pubOptsData)
 }
 
 func decryptLayerKeyOptsData(dc *config.DecryptConfig, desc ocispec.Descriptor) ([]byte, error) {
@@ -204,6 +216,14 @@ func decryptLayerKeyOptsData(dc *config.DecryptConfig, desc ocispec.Descriptor) 
 		return nil, errors.New("missing private key needed for decryption")
 	}
 	return nil, errors.Errorf("no suitable key unwrapper found or none of the private keys could be used for decryption")
+}
+
+func getLayerPubOpts(desc ocispec.Descriptor) ([]byte, error) {
+	pubOptsString := desc.Annotations["org.opencontainers.image.enc.pubopts"]
+	if pubOptsString == "" {
+		return json.Marshal(blockcipher.PublicLayerBlockCipherOptions{})
+	}
+	return base64.StdEncoding.DecodeString(pubOptsString)
 }
 
 // preUnwrapKey decodes the comma separated base64 strings and calls the Unwrap function
@@ -255,11 +275,11 @@ func commonEncryptLayer(plainLayerReader io.Reader, d digest.Digest, typ blockci
 
 // commonDecryptLayer decrypts an encrypted layer previously encrypted with commonEncryptLayer
 // by passing along the optsData
-func commonDecryptLayer(encLayerReader io.Reader, optsData []byte, b64hmac string) (io.Reader, digest.Digest, error) {
-	opts := blockcipher.LayerBlockCipherOptions{}
-	err := json.Unmarshal(optsData, &opts)
+func commonDecryptLayer(encLayerReader io.Reader, privOptsData []byte, pubOptsData []byte) (io.Reader, digest.Digest, error) {
+	privOpts := blockcipher.PrivateLayerBlockCipherOptions{}
+	err := json.Unmarshal(privOptsData, &privOpts)
 	if err != nil {
-		return nil, "", errors.Wrapf(err, "could not JSON unmarshal optsData")
+		return nil, "", errors.Wrapf(err, "could not JSON unmarshal privOptsData")
 	}
 
 	lbch, err := blockcipher.NewLayerBlockCipherHandler()
@@ -267,15 +287,20 @@ func commonDecryptLayer(encLayerReader io.Reader, optsData []byte, b64hmac strin
 		return nil, "", err
 	}
 
-	var hmac []byte
-	if len(b64hmac) > 0 {
-		hmac, err = base64.StdEncoding.DecodeString(b64hmac)
+	pubOpts := blockcipher.PublicLayerBlockCipherOptions{}
+	if len(pubOptsData) > 0 {
+		err := json.Unmarshal(pubOptsData, &pubOpts)
 		if err != nil {
-			return nil, "", errors.Wrapf(err, "could not bas64 decode HMAC")
+			return nil, "", errors.Wrapf(err, "could not JSON unmarshal pubOptsData")
 		}
 	}
 
-	plainLayerReader, opts, err := lbch.Decrypt(encLayerReader, opts, hmac)
+	opts := blockcipher.LayerBlockCipherOptions{
+		Private: privOpts,
+		Public:  pubOpts,
+	}
+
+	plainLayerReader, opts, err := lbch.Decrypt(encLayerReader, opts)
 	if err != nil {
 		return nil, "", err
 	}

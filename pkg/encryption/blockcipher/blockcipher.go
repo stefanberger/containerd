@@ -137,7 +137,7 @@ func (h *LayerBlockCipherHandler) Encrypt(plainDataReader io.Reader, typ LayerCi
 }
 
 // Decrypt is the handler for the layer decryption routine
-func (h *LayerBlockCipherHandler) Decrypt(encDataReader io.Reader, opt LayerBlockCipherOptions, hmac []byte) (io.Reader, LayerBlockCipherOptions, error) {
+func (h *LayerBlockCipherHandler) Decrypt(encDataReader io.Reader, opt LayerBlockCipherOptions) (io.Reader, LayerBlockCipherOptions, error) {
 	typ, ok := opt.GetOpt(CipherTypeOpt)
 	if !ok {
 		return nil, LayerBlockCipherOptions{}, errors.New("no cipher type provided")
