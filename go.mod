@@ -74,3 +74,6 @@ replace (
 	google.golang.org/genproto => google.golang.org/genproto v0.0.0-20200224152610-e50cd9704f63
 	google.golang.org/grpc => google.golang.org/grpc v1.27.1
 )
+
+replace github.com/containers/ocicrypt => /home/stefanb/go/src/github.com/containers/ocicrypt
+replace github.com/containerd/imgcrypt => /home/stefanb/go/src/github.com/containerd/imgcrypt
